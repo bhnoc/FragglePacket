@@ -1,0 +1,158 @@
+# MTU Detective Target List
+# Format: target,description,port
+# Lines starting with # are comments
+# Port 0 = ICMP only (no TCP test)
+
+# ===========================================
+# TIER 1: Critical Infrastructure (always test)
+# ===========================================
+
+# DNS Providers - baseline connectivity
+8.8.8.8,Google DNS,0
+1.1.1.1,Cloudflare DNS,0
+9.9.9.9,Quad9 DNS,0
+208.67.222.222,OpenDNS,0
+
+# Microsoft 365 - enterprise critical
+outlook.office365.com,M365 Outlook,443
+outlook.office.com,Outlook Web,443
+teams.microsoft.com,MS Teams,443
+login.microsoftonline.com,M365 Auth,443
+graph.microsoft.com,MS Graph API,443
+smtp.office365.com,M365 SMTP,587
+
+# Google Workspace
+mail.google.com,Gmail,443
+drive.google.com,Google Drive,443
+meet.google.com,Google Meet,443
+calendar.google.com,Google Calendar,443
+
+# ===========================================
+# TIER 2: Cloud Providers
+# ===========================================
+
+# AWS
+aws.amazon.com,AWS Console,443
+s3.amazonaws.com,AWS S3,443
+ec2.amazonaws.com,AWS EC2 API,443
+dynamodb.us-east-1.amazonaws.com,AWS DynamoDB,443
+
+# Azure
+azure.microsoft.com,Azure Portal,443
+management.azure.com,Azure Management,443
+mystorageaccount.blob.core.windows.net,Azure Blob,443
+login.microsoftonline.com,Azure AD,443
+
+# GCP
+cloud.google.com,GCP Console,443
+storage.googleapis.com,GCP Storage,443
+compute.googleapis.com,GCP Compute,443
+
+# ===========================================
+# TIER 3: Developer & DevOps
+# ===========================================
+
+github.com,GitHub,443
+api.github.com,GitHub API,443
+gitlab.com,GitLab,443
+bitbucket.org,Bitbucket,443
+stackoverflow.com,StackOverflow,443
+npmjs.com,NPM Registry,443
+registry.npmjs.org,NPM Registry API,443
+pypi.org,PyPI,443
+hub.docker.com,Docker Hub,443
+registry-1.docker.io,Docker Registry,443
+index.docker.io,Docker Index,443
+
+# CI/CD
+circleci.com,CircleCI,443
+travis-ci.com,Travis CI,443
+app.datadoghq.com,Datadog,443
+newrelic.com,New Relic,443
+
+# ===========================================
+# TIER 4: Collaboration & Communication
+# ===========================================
+
+slack.com,Slack,443
+api.slack.com,Slack API,443
+zoom.us,Zoom,443
+webex.com,Webex,443
+discord.com,Discord,443
+
+# ===========================================
+# TIER 5: Security & Zero Trust
+# ===========================================
+
+# Zscaler
+zscaler.com,Zscaler,443
+gateway.zscaler.net,Zscaler Gateway,443
+mobile.zscaler.net,Zscaler Mobile,443
+
+# Other SASE/Security
+paloaltonetworks.com,Palo Alto,443
+fortinet.com,Fortinet,443
+cisco.com,Cisco,443
+okta.com,Okta,443
+duo.com,Duo Security,443
+
+# ===========================================
+# TIER 6: CDN & Performance
+# ===========================================
+
+cloudflare.com,Cloudflare,443
+akamai.com,Akamai,443
+fastly.com,Fastly,443
+cdn.jsdelivr.net,jsDelivr CDN,443
+cdnjs.cloudflare.com,cdnjs,443
+
+# ===========================================
+# TIER 7: Common Consumer (path diversity)
+# ===========================================
+
+amazon.com,Amazon,443
+netflix.com,Netflix,443
+youtube.com,YouTube,443
+facebook.com,Facebook,443
+twitter.com,Twitter,443
+linkedin.com,LinkedIn,443
+apple.com,Apple,443
+microsoft.com,Microsoft,443
+dropbox.com,Dropbox,443
+box.com,Box,443
+
+# ===========================================
+# TIER 8: Security Research / Conference
+# ===========================================
+
+hackerone.com,HackerOne,443
+bugcrowd.com,Bugcrowd,443
+portswigger.net,PortSwigger,443
+owasp.org,OWASP,443
+blackhat.com,Black Hat,443
+defcon.org,DEF CON,443
+sans.org,SANS,443
+
+# ===========================================
+# TIER 9: Regional / Geographic Diversity
+# ===========================================
+
+# Europe
+bbc.co.uk,BBC UK,443
+spiegel.de,Spiegel DE,443
+
+# Asia
+baidu.com,Baidu CN,443
+rakuten.co.jp,Rakuten JP,443
+
+# ===========================================
+# TIER 10: Specialized Testing
+# ===========================================
+
+# Speed test servers
+speed.cloudflare.com,Cloudflare Speed,443
+fast.com,Netflix Speed,443
+
+# IP echo services (verify connectivity)
+ifconfig.me,IP Echo,443
+ipinfo.io,IP Info,443

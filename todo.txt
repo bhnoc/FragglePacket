@@ -1,0 +1,151 @@
+# TODO
+
+## COMPLETED ✓
+- MTU tests (ICMP, TCP, UDP, QUIC, tracepath)
+- RustPacketFuzz MVP (5 fuzzers: segment_size, length_mismatch, tcp_options, fragmentation, checksum)
+- PCAP generation & export
+- TUI fuzzing panel ([F] key)
+- CLI fuzzing subcommand
+- HTTPS stage-by-stage testing (DNS, TCP, TLS, HTTP, TTFB)
+- MTU blackhole detection (TCP OK + TLS timeout)
+- JSON report generation
+- Unit tests (13 passing)
+- Project structure refactor (src/bin/, src/network_tests/, src/fuzzing/)
+
+## HIGH PRIORITY
+
+### TCP Segmentation Detection
+[ ] Send packets with varying MSS (536, 1024, 1460)
+[ ] Measure actual segment sizes received
+[ ] Detect artificial limits (e.g., 100-byte firewall restriction)
+[ ] Cross-reference with RustPacketFuzz results
+[ ] Add diagnosis rule
+[ ] CLI integration
+
+### Test Framework Refactoring
+[ ] Create NetworkTest trait (name, category, run)
+[ ] TestCategory enum (MTU, RTT, Loss, PathAnalysis, TCPHealth, DNS, HTTPS, IPv6, Application, Fuzzing)
+[ ] TestResult unified structure (category, status, metrics, diagnosis)
+[ ] TestOrchestrator for selective execution
+[ ] Migrate MTU tests to framework
+[ ] Migrate fuzzing tests to framework
+[ ] Per-target, per-category result storage HashMap
+
+### TUI Enhancements
+[ ] Test category buttons [1] MTU [2] RTT [3] Loss etc
+[ ] Selective test execution (don't auto-run everything)
+[ ] Dashboard view (single target focus)
+[ ] All Targets view (overview table)
+[ ] Smart execution: ALL tests on single target, batch buttons for multi-target
+[ ] Split tui into modules (app.rs, dashboard.rs, all_targets.rs, detail_views.rs, events.rs)
+[ ] Collapsible detail panels
+[ ] Copy-to-clipboard for commands
+
+## MEDIUM PRIORITY
+
+### RTT/Latency Tests
+[ ] 100-packet ping statistics
+[ ] Min/max/avg/stddev calculation
+[ ] Jitter detection
+[ ] Per-hop latency (mtr-style)
+[ ] Bufferbloat detection
+
+### Packet Loss Tests
+[ ] ICMP packet loss percentage
+[ ] TCP connection success rate
+[ ] Per-hop loss detection
+[ ] Loss pattern analysis (random vs burst)
+
+### DNS Tests
+[ ] DNS resolution timing
+[ ] Multiple DNS server comparison
+[ ] Timeout detection
+[ ] IPv4 vs IPv6 DNS (AAAA records)
+[ ] Reverse DNS lookup
+
+### Path Analysis
+[ ] Full traceroute with MTU per hop
+[ ] TTL analysis
+[ ] Routing loop detection
+[ ] AS path lookup
+[ ] MTU drop point identification
+
+### TCP Health Tests
+[ ] TCP handshake timing
+[ ] Retransmission detection
+[ ] Window size analysis
+[ ] Zero window detection
+[ ] Port connectivity matrix
+[ ] Bandwidth estimation
+
+## LOW PRIORITY
+
+### IPv6 Support
+[ ] IPv6 reachability test
+[ ] IPv6 MTU discovery
+[ ] IPv6 vs IPv4 latency comparison
+[ ] Dual-stack behavior
+[ ] IPv6 DNS (AAAA)
+
+### Application Tests
+[ ] HTTP/2 support detection
+[ ] HTTP/3/QUIC support
+[ ] WebSocket connectivity
+[ ] Custom port testing
+
+### Diagnosis Engine Enhancement
+[ ] DiagnosisRule trait
+[ ] Port blocking rule (ping OK + TCP fail)
+[ ] DNS issues rule (slow/failed resolution)
+[ ] Path MTU mismatch rule (ICMP vs TCP MTU)
+[ ] Cross-test correlation logic
+[ ] Issue severity ranking
+[ ] Recommendation generation
+
+### RustPacketFuzz Enhancements
+[ ] Parser stress testing (Suricata/Snort validation)
+[ ] Firewall parser testing
+[ ] IDS/IPS bypass detection
+[ ] Regression test suite generation
+[ ] Live packet injection mode
+[ ] Interactive fuzzing with feedback
+[ ] Integration with tcpdump for response analysis
+
+## MVP (v1.0) RELEASE CRITERIA
+[ ] All 10 test categories implemented
+[ ] TUI with dashboard + all targets modes
+[ ] Diagnosis engine with 5+ rules
+[ ] HTTPS blackhole detection working
+[ ] TCP segmentation detection working
+[ ] IPv6 support working
+[ ] RustPacketFuzz core functionality (segment size, header mismatch, PCAP export)
+[ ] JSON report export
+[ ] Works without root (degraded)
+[ ] < 30s for full test suite
+[ ] Clear documentation
+
+## FUTURE (Post-MVP)
+- Continuous monitoring mode
+- Historical trend tracking
+- Prometheus metrics export
+- Alert system
+- Scheduled testing
+- API for integration
+- BGP path analysis
+- Geolocation of hops
+- Performance baselines
+- Anomaly detection
+- HTML reports with graphs
+- AI/ML-driven mutation strategies
+- Grammar-based protocol fuzzing
+- State machine fuzzing for TCP handshakes
+- Multi-protocol fuzzing (UDP, ICMP, QUIC)
+- Distributed fuzzing campaigns
+- Automatic crash analysis & triage
+
+## NOTES
+- Phase 1 (RustPacketFuzz) complete
+- Currently in Phase 2: test framework + critical network tests
+- Estimated time to MVP: 6-8 weeks from now
+- Focus on practical network troubleshooting first, polish later
+

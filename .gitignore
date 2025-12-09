@@ -1,0 +1,19 @@
+# Build artifacts
+/target/
+Cargo.lock
+
+# Reports
+/reports/
+*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
