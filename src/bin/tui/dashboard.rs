@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use super::types::{App, TestStatus};
+use super::app::{App, TestStatus};
 use super::colors::*;
 
 pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {

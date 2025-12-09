@@ -7,16 +7,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui_app::App;
+use super::app::{App, TERM_BLACK, TERM_GREEN, TERM_GREEN_DIM, TERM_GREEN_DARK, TERM_AMBER, TERM_RED, TERM_CYAN};
 use fraggle_packet::network_tests::HttpsDiagnosis;
-
-// Color constants
-const TERM_BLACK: Color = Color::Rgb(5, 15, 5);
-const TERM_GREEN: Color = Color::Rgb(0, 255, 65);
-const TERM_GREEN_DIM: Color = Color::Rgb(0, 180, 45);
-const TERM_CYAN: Color = Color::Rgb(0, 255, 200);
-const TERM_AMBER: Color = Color::Rgb(255, 176, 0);
-const TERM_RED: Color = Color::Rgb(255, 50, 50);
 
 pub fn render_https_panel(frame: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()

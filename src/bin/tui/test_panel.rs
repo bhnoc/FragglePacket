@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-use super::*;
+use super::app::{App, TERM_BLACK, TERM_GREEN, TERM_GREEN_DIM, TERM_GREEN_DARK, TERM_CYAN, TERM_AMBER, TERM_RED};
 
 const CATEGORIES: &[(&str, usize)] = &[
     ("DNS", 1),

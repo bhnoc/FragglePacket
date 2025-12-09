@@ -2,21 +2,10 @@
 //! 
 //! Retro green-on-black aesthetic with full interactive capabilities
 
-#[path = "fuzzing_panel.rs"]
-pub mod fuzzing_panel;
-use fuzzing_panel::render_fuzzing_panel;
-
-#[path = "https_panel.rs"]
-pub mod https_panel;
-use https_panel::render_https_panel;
-
-#[path = "test_registration.rs"]
-mod test_registration;
-use test_registration::register_all_tests;
-
-#[path = "test_panel.rs"]
-pub mod test_panel;
-use test_panel::render_test_panel;
+use super::fuzzing_panel::render_fuzzing_panel;
+use super::https_panel::render_https_panel;
+use super::test_registration::register_all_tests;
+use super::test_panel::render_test_panel;
 
 #[path = "../../../tests/test_runner.rs"]
 mod test_runner_mod;
@@ -55,13 +44,13 @@ use fraggle_packet::diagnosis::{DiagnosisEngine, DiagnosisEvidence, Diagnosis};
 // COLOR THEME - Retro Terminal Green
 // =============================================================================
 
-const TERM_GREEN: Color = Color::Rgb(0, 255, 65);      // Classic phosphor green
-const TERM_GREEN_DIM: Color = Color::Rgb(0, 180, 45);  // Dimmed green
-const TERM_GREEN_DARK: Color = Color::Rgb(0, 100, 25); // Dark green
-const TERM_AMBER: Color = Color::Rgb(255, 176, 0);     // Warning amber
-const TERM_RED: Color = Color::Rgb(255, 50, 50);       // Error red
-const TERM_BLACK: Color = Color::Rgb(5, 15, 5);        // Not pure black, slight green tint
-const TERM_CYAN: Color = Color::Rgb(0, 255, 200);      // Highlight cyan
+pub const TERM_GREEN: Color = Color::Rgb(0, 255, 65);      // Classic phosphor green
+pub const TERM_GREEN_DIM: Color = Color::Rgb(0, 180, 45);  // Dimmed green
+pub const TERM_GREEN_DARK: Color = Color::Rgb(0, 100, 25); // Dark green
+pub const TERM_AMBER: Color = Color::Rgb(255, 176, 0);     // Warning amber
+pub const TERM_RED: Color = Color::Rgb(255, 50, 50);       // Error red
+pub const TERM_BLACK: Color = Color::Rgb(5, 15, 5);        // Not pure black, slight green tint
+pub const TERM_CYAN: Color = Color::Rgb(0, 255, 200);      // Highlight cyan
 
 // =============================================================================
 // APPLICATION STATE
@@ -199,8 +188,25 @@ pub enum TestUpdate {
 
 impl Default for AppState {
     fn default() -> Self {
+        // Load targets from targets.txt or use defaults
+        let targets = load_targets();
+        let results: Vec<TargetResult> = targets.iter().map(|(t, d, _)| {
+            TargetResult {
+                target: t.clone(),
+                desc: d.clone(),
+                icmp_mtu: None,
+                tcp_mtu: None,
+                udp_mtu: None,
+                quic_mtu: None,
+                tcp_mss: None,
+                status: TestStatus::Pending,
+                last_tested: None,
+                hops: Vec::new(),
+            }
+        }).collect();
+        
         Self {
-            results: Vec::new(),
+            results,
             hops: Vec::new(),
             testing: false,
             progress: 0.0,
@@ -401,8 +407,6 @@ impl App {
                 index, 
                 hop_count: hops.len() 
             });
-            
-            eprintln!("[TRACEPATH] Complete: parsed {} hops", hops.len());
         });
     }
     
@@ -503,11 +507,21 @@ impl App {
     // HTTPS testing methods
     pub fn run_https_test(&mut self, target: &str) {
         self.https_testing = true;
-        let target = target.to_string();
+        let target_str = target.to_string();
+        let state_clone = self.state.clone();
+        
+        self.log_messages.push(format!("Running HTTPS test on {}...", target));
+        self.show_popup = true;
+        self.popup_message = format!("Testing HTTPS to {}...", target);
         
         thread::spawn(move || {
-            let result = test_https_stages(&target, 5000);
-            eprintln!("[HTTPS] Test complete for {}: success={}", target, result.tcp_success && result.tls_success);
+            let result = test_https_stages(&target_str, 10);
+            
+            // Store result in state
+            let mut state = state_clone.lock().unwrap();
+            state.https_results.insert(target_str.clone(), result.clone());
+            
+            // Result is now stored in state for TUI to display
         });
     }
     
@@ -544,13 +558,48 @@ impl App {
                 .unwrap_or_else(|| "example.com".to_string())
         };
         
-        let category_clone = category.clone();
-        let target_clone = target.clone();
+        self.log_messages.push(format!("Running {:?} test on {}...", category, target));
+        self.show_popup = true;
+        self.popup_message = format!("Running {:?} test on {}...", category, target);
         
-        // Run the test asynchronously
-        thread::spawn(move || {
-            eprintln!("[TEST] Running {:?} for {}", category_clone, target_clone);
-        });
+        // Run tests and store results
+        let results = self.orchestrator.run_category(&target, category);
+        
+        // Store in framework_results
+        self.framework_results
+            .entry(target.clone())
+            .or_insert_with(Vec::new)
+            .extend(results.clone());
+        
+        // Add to log messages
+        for result in results {
+            let status_str = match result.status {
+                FrameworkTestStatus::Success => "✓ PASS",
+                FrameworkTestStatus::Failed => "✗ FAIL",
+                FrameworkTestStatus::Skipped => "- SKIP",
+                FrameworkTestStatus::Warning => "⚠ WARN",
+                FrameworkTestStatus::Running => "⋯ RUN",
+                FrameworkTestStatus::Pending => "⋯ PEND",
+            };
+            
+            let summary = result.metadata.get("summary")
+                .or_else(|| result.metadata.get("error"))
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            
+            let msg = format!("{} {}: {} ({:.2}s)", 
+                status_str,
+                result.name,
+                summary,
+                result.duration.as_secs_f64()
+            );
+            
+            self.log_messages.push(msg.clone());
+        }
+        
+        // Update popup to show completion
+        self.popup_message = format!("Completed {:?} tests on {}\n{}", 
+            category, target, self.log_messages.last().unwrap_or(&"Done".to_string()));
     }
     
     pub fn run_all_tests_on_current_target(&mut self) {
@@ -561,7 +610,7 @@ impl App {
                 .unwrap_or_else(|| "example.com".to_string())
         };
         
-        eprintln!("[TEST] Running ALL tests for {}", target);
+        self.log_messages.push(format!("Running ALL tests for {}", target));
         
         // Run all 10 test categories
         let categories = vec![
@@ -591,18 +640,32 @@ impl App {
             state.results.iter().map(|r| r.target.clone()).collect()
         };
         
-        eprintln!("[TEST] Running {:?} on {} targets", category, targets.len());
+        self.log_messages.push(format!("Running {:?} on {} targets", category, targets.len()));
         
-        for target in targets {
-            let category_clone = category.clone();
-            let target_clone = target.clone();
+        for target in &targets {
+            let results = self.orchestrator.run_category(target, category);
             
-            thread::spawn(move || {
-                eprintln!("[TEST] Running {:?} for {}", category_clone, target_clone);
-            });
+            // Store results
+            self.framework_results
+                .entry(target.clone())
+                .or_insert_with(Vec::new)
+                .extend(results.clone());
+            
+            // Log results
+            for result in results {
+                let status_str = match result.status {
+                    FrameworkTestStatus::Success => "✓",
+                    FrameworkTestStatus::Failed => "✗",
+                    FrameworkTestStatus::Skipped => "-",
+                    FrameworkTestStatus::Warning => "⚠",
+                    FrameworkTestStatus::Running => "⋯",
+                    FrameworkTestStatus::Pending => "⋯",
+                };
+                self.log_messages.push(format!("{} {} on {}", status_str, result.name, target));
+            }
         }
         
-        self.popup_message = format!("Running {:?} on all targets", category);
+        self.popup_message = format!("Completed {:?} on {} targets", category, targets.len());
         self.show_popup = true;
     }
 
@@ -835,7 +898,7 @@ impl App {
     
     pub fn run_selected_fuzzer(&mut self) {
         let modes = vec!["segment-size", "length-mismatch", "tcp-options", "fragmentation", "checksum"];
-        let mode = modes[self.selected_fuzz_mode];
+        let mode_str = modes[self.selected_fuzz_mode];
         
         // Get first target or use default
         let target = {
@@ -844,41 +907,56 @@ impl App {
         };
         
         self.show_popup = true;
-        self.popup_message = format!("Running {} fuzzer on {}...", mode, target);
+        self.popup_message = format!("Running {} fuzzer on {}...", mode_str, target);
+        self.log_messages.push(format!("Starting {} fuzzer on {}", mode_str, target));
         
-        // Run fuzzer in background
-        let output = format!("/tmp/fuzz_{}.pcap", mode);
+        // Prepare output path
+        let output = format!("reports/fuzz_{}.pcap", mode_str);
         let state_clone = self.state.clone();
-        let mode_str = mode.to_string();
+        let mode_str_owned = mode_str.to_string();
+        let target_owned = target.clone();
         
+        // Run fuzzer in background using library directly
         thread::spawn(move || {
-            use std::process::Command;
-            let result = Command::new("./target/debug/fraggle-packet")
-                .args(&["fuzz", &target, "--mode", &mode_str, "--output", &output])
-                .output();
+            use fraggle_packet::fuzzing::{FuzzMode, PacketContext, run_campaign};
             
-            let mut state = state_clone.lock().unwrap();
-            if let Ok(output_data) = result {
-                if output_data.status.success() {
-                    // Parse output to get stats
-                    let output_str = String::from_utf8_lossy(&output_data.stdout);
-                    let packets = output_str.lines()
-                        .find(|l| l.contains("Packets generated"))
-                        .and_then(|l| l.split(':').nth(1))
-                        .and_then(|s| s.trim().parse().ok())
-                        .unwrap_or(0);
-                    
-                    let file_size = std::fs::metadata(&output)
-                        .map(|m| m.len())
-                        .unwrap_or(0);
-                    
-                    state.fuzzing_results.insert(mode_str.clone(), FuzzingResult {
-                        mode: mode_str,
-                        packets_generated: packets,
-                        pcap_path: output,
-                        file_size_bytes: file_size,
-                        duration_ms: 1,
+            // Parse mode
+            let mode = match FuzzMode::from_str(&mode_str_owned) {
+                Ok(m) => m,
+                Err(_) => return,
+            };
+            
+            // Create packet context
+            let ctx = match PacketContext::for_target(&target_owned) {
+                Ok(c) => c,
+                Err(_) => return,
+            };
+            
+            // Ensure reports directory exists
+            std::fs::create_dir_all("reports").ok();
+            
+            // Run fuzzing campaign
+            match run_campaign(&ctx, mode, &output) {
+                Ok(fuzz_result) => {
+                    let mut state = state_clone.lock().unwrap();
+                    state.fuzzing_results.insert(mode_str_owned.clone(), FuzzingResult {
+                        mode: mode_str_owned,
+                        packets_generated: fuzz_result.packets_generated,
+                        pcap_path: fuzz_result.pcap_path.to_string_lossy().to_string(),
+                        file_size_bytes: fuzz_result.file_size_bytes,
+                        duration_ms: fuzz_result.duration_ms,
                         status: FuzzingStatus::Complete,
+                    });
+                }
+                Err(_) => {
+                    let mut state = state_clone.lock().unwrap();
+                    state.fuzzing_results.insert(mode_str_owned.clone(), FuzzingResult {
+                        mode: mode_str_owned,
+                        packets_generated: 0,
+                        pcap_path: output.clone(),
+                        file_size_bytes: 0,
+                        duration_ms: 0,
+                        status: FuzzingStatus::Failed("Fuzzing failed".to_string()),
                     });
                 }
             }
@@ -1243,11 +1321,11 @@ fn render_target_detail(frame: &mut Frame, area: Rect, app: &App) {
             details.push(Line::from(vec![
                 Span::raw("         "),
                 Span::styled("↳ ", Style::default().fg(TERM_GREEN_DIM)),
-                Span::styled("20", Style::default().fg(Color::Cyan)),
+                Span::styled("20", Style::default().fg(TERM_CYAN)),
                 Span::raw(" IP + "),
-                Span::styled("8", Style::default().fg(Color::Cyan)),
+                Span::styled("8", Style::default().fg(TERM_CYAN)),
                 Span::raw(" ICMP + "),
-                Span::styled(format!("{}", payload), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{}", payload), Style::default().fg(TERM_AMBER)),
                 Span::raw(" payload"),
             ]));
         } else {
@@ -1267,11 +1345,11 @@ fn render_target_detail(frame: &mut Frame, area: Rect, app: &App) {
             details.push(Line::from(vec![
                 Span::raw("         "),
                 Span::styled("↳ ", Style::default().fg(TERM_GREEN_DIM)),
-                Span::styled("20", Style::default().fg(Color::Cyan)),
+                Span::styled("20", Style::default().fg(TERM_CYAN)),
                 Span::raw(" IP + "),
-                Span::styled("20", Style::default().fg(Color::Cyan)),
+                Span::styled("20", Style::default().fg(TERM_CYAN)),
                 Span::raw(" TCP + "),
-                Span::styled(format!("{}", payload), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{}", payload), Style::default().fg(TERM_AMBER)),
                 Span::raw(" payload"),
             ]));
         } else {
@@ -1291,11 +1369,11 @@ fn render_target_detail(frame: &mut Frame, area: Rect, app: &App) {
             details.push(Line::from(vec![
                 Span::raw("         "),
                 Span::styled("↳ ", Style::default().fg(TERM_GREEN_DIM)),
-                Span::styled("20", Style::default().fg(Color::Cyan)),
+                Span::styled("20", Style::default().fg(TERM_CYAN)),
                 Span::raw(" IP + "),
-                Span::styled("8", Style::default().fg(Color::Cyan)),
+                Span::styled("8", Style::default().fg(TERM_CYAN)),
                 Span::raw(" UDP + "),
-                Span::styled(format!("{}", payload), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{}", payload), Style::default().fg(TERM_AMBER)),
                 Span::raw(" payload"),
             ]));
         } else {
@@ -2086,6 +2164,45 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
         }
     }
     Ok(false)
+}
+
+
+// =============================================================================
+// MAIN RENDER DISPATCH
+// =============================================================================
+
+pub fn render(frame: &mut Frame, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),    // Header
+            Constraint::Min(0),       // Content
+            Constraint::Length(3),    // Footer (needs 3 lines for borders + content)
+        ])
+        .split(frame.area());
+
+    render_header(frame, chunks[0], app);
+    
+    match app.mode {
+        AppMode::Dashboard => render_dashboard(frame, chunks[1], app),
+        AppMode::TargetDetail => render_target_detail(frame, chunks[1], app),
+        AppMode::Simulator => render_simulator(frame, chunks[1], app),
+        AppMode::FuzzingPanel => render_fuzzing_panel(frame, chunks[1], app),
+        AppMode::HttpsPanel => render_https_panel(frame, chunks[1], app),
+        AppMode::TestPanel => render_test_panel(frame, app, chunks[1]),
+        AppMode::Help => render_help(frame, chunks[1]),
+    }
+    
+    render_footer(frame, chunks[2], app);
+    
+    if app.show_popup {
+        let message = if !app.tracepath_output.is_empty() {
+            app.tracepath_output.join("\n")
+        } else {
+            app.popup_message.clone()
+        };
+        render_popup(frame, &message, app.popup_scroll);
+    }
 }
 
 // =============================================================================

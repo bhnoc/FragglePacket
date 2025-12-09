@@ -28,11 +28,8 @@ mod cli_fuzzing;
 #[path = "src/bin/cli/test_cmd.rs"]
 mod cli_test_cmd;
 
-#[path = "src/bin/tui/app.rs"]
+#[path = "src/bin/tui/mod.rs"]
 mod tui_app;
-
-#[path = "src/bin/tui/fuzzing_panel.rs"]
-mod tui_fuzzing_panel;
 
 // =============================================================================
 // JSON REPORT STRUCTURES
@@ -143,6 +140,9 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Launch interactive TUI
+    Tui,
+    
     /// Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison)
     Diagnose {
         /// Target hostname or IP (e.g., github.com, 8.8.8.8)
@@ -254,6 +254,9 @@ fn main() {
     println!();
 
     match args.command {
+        Some(Commands::Tui) => {
+            tui_app::run_tui();
+        }
         Some(Commands::Diagnose { target, port }) => {
             run_full_diagnostic(&target, port, args.timeout_ms, args.min, args.max, args.retries);
         }
@@ -291,19 +294,8 @@ fn main() {
             run_kitchen_sink(args.timeout_ms, args.min, max, args.retries, json, output);
         }
         None => {
-            // Default: if --target provided, do quick test; otherwise show help
-            if let Some(target) = args.target {
-                run_quick_icmp(&target, args.timeout_ms, args.min, args.max, args.retries);
-            } else {
-                println!("Usage examples:");
-                println!("  {} --target 8.8.8.8           # Quick ICMP MTU test", "fraggle-packet".green());
-                println!("  {} diagnose github.com        # Full diagnostic", "fraggle-packet".green());
-                println!("  {} multi 8.8.8.8,1.1.1.1      # Compare multiple targets", "fraggle-packet".green());
-                println!("  {} vpn wireguard              # Calculate VPN-safe MTU", "fraggle-packet".green());
-                println!("  {} tcp github.com:443         # TCP-only MTU probe", "fraggle-packet".green());
-                println!();
-                println!("Run with {} for full options", "--help".yellow());
-            }
+            // Default: launch TUI
+            tui_app::run_tui();
         }
     }
 }

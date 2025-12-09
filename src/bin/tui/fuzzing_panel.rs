@@ -7,15 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui_app::{App, FuzzingStatus};
-
-// Color constants from app module
-const TERM_BLACK: Color = Color::Rgb(5, 15, 5);
-const TERM_GREEN: Color = Color::Rgb(0, 255, 65);
-const TERM_GREEN_DIM: Color = Color::Rgb(0, 180, 45);
-const TERM_CYAN: Color = Color::Rgb(0, 255, 200);
-const TERM_AMBER: Color = Color::Rgb(255, 176, 0);
-const TERM_RED: Color = Color::Rgb(255, 50, 50);
+use super::app::{App, FuzzingStatus, TERM_BLACK, TERM_GREEN, TERM_GREEN_DIM, TERM_GREEN_DARK, TERM_AMBER, TERM_RED, TERM_CYAN};
 
 pub fn render_fuzzing_panel(frame: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()

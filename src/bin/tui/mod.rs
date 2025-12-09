@@ -1,23 +1,19 @@
 //! TUI Module - FragglePacket Terminal User Interface
 
-pub mod types;
+pub mod app;
 pub mod colors;
-pub mod events;
 pub mod dashboard;
-pub mod test_panel;
-pub mod test_registration;
 pub mod fuzzing_panel;
 pub mod https_panel;
+pub mod test_panel;
+pub mod test_registration;
 
-// Re-exports
-pub use types::{App, AppState, AppMode, ViewMode, TestStatus, TargetResult, HopInfo, Verdict, FuzzingResult, FuzzingStatus, TestUpdate};
-pub use colors::*;
-pub use events::handle_events;
-pub use dashboard::render_dashboard;
+// Re-exports from app module (which has everything)
+pub use app::{App, AppState, AppMode, render};
 
 use crossterm::{
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen},
     event::{DisableMouseCapture, EnableMouseCapture},
 };
 use ratatui::{
@@ -38,10 +34,10 @@ pub fn run_tui() -> io::Result<()> {
     
     loop {
         terminal.draw(|f| {
-            crate::bin::tui::app::render(f, &mut app);
+            render(f, &mut app);
         })?;
         
-        if handle_events(&mut app)? || app.should_quit {
+        if app::handle_events(&mut app)? || app.should_quit {
             break;
         }
     }
