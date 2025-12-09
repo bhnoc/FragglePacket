@@ -11,10 +11,6 @@ path = "src/lib.rs"
 name = "fraggle-packet"
 path = "main.rs"
 
-[[bin]]
-name = "fraggle-packet-tui"
-path = "tui_main.rs"
-
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 socket2 = "0.5"

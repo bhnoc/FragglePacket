@@ -25,6 +25,9 @@ use fraggle_packet::diagnosis;
 #[path = "src/bin/cli/fuzzing.rs"]
 mod cli_fuzzing;
 
+#[path = "src/bin/cli/test_cmd.rs"]
+mod cli_test_cmd;
+
 #[path = "src/bin/tui/app.rs"]
 mod tui_app;
 
@@ -193,6 +196,21 @@ enum Commands {
         #[arg(short, long, default_value = "segment-size")]
         mode: String,
     },
+    
+    /// Run test framework tests (DNS, HTTPS, TCP, RTT, Loss)
+    Test {
+        /// Target hostname or IP
+        target: String,
+        /// Test categories (dns,https,tcp,rtt,loss,all)
+        #[arg(short, long, default_value = "all")]
+        categories: String,
+        /// Packet count for RTT/loss tests
+        #[arg(short = 'n', long, default_value = "20")]
+        count: usize,
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
 
     /// TCP-based MTU discovery (no ICMP required)
     Tcp {
@@ -256,6 +274,10 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+        }
+        
+        Some(Commands::Test { target, categories, count, verbose }) => {
+            cli_test_cmd::run_tests(cli_test_cmd::TestCommand { target, categories, count, verbose });
         }
         
         Some(Commands::Https { target, timeout, diagnose }) => {

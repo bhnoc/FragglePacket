@@ -4,10 +4,9 @@ set -e
 cd "$(dirname "$0")"
 
 BINARY="./target/release/fraggle-packet"
-TUI_BINARY="./target/release/fraggle-packet-tui"
 
 # Check if built
-if [ ! -f "$BINARY" ] || [ ! -f "$TUI_BINARY" ]; then
+if [ ! -f "$BINARY" ]; then
     echo "FragglePacket not built. Run ./setup.sh first."
     exit 1
 fi
@@ -44,14 +43,33 @@ case "${1:-}" in
         echo "TCP-only test to $TARGET..."
         "$BINARY" tcp "$TARGET"
         ;;
-    -6|--list-vpn)
+    -6|--test)
+        shift
+        CATEGORY="${1:-dns}"
+        TARGET="${2:-github.com}"
+        echo "Running $CATEGORY test on $TARGET..."
+        "$BINARY" test --category "$CATEGORY" "$TARGET"
+        ;;
+    -7|--test-all)
+        shift
+        TARGET="${1:-github.com}"
+        echo "Running ALL tests on $TARGET..."
+        "$BINARY" test --all "$TARGET"
+        ;;
+    -8|--https)
+        shift
+        TARGET="${1:-github.com}"
+        echo "HTTPS stage-by-stage test on $TARGET..."
+        "$BINARY" https "$TARGET"
+        ;;
+    -9|--list-vpn)
         "$BINARY" vpn list
         ;;
-    -7|--kitchen-sink)
+    -10|--kitchen-sink)
         echo "Running comprehensive MTU analysis..."
         sudo "$BINARY" kitchen-sink
         ;;
-    -8|--json)
+    -11|--json)
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         mkdir -p reports
         OUTFILE="reports/mtu-report-${TIMESTAMP}.json"
@@ -60,57 +78,86 @@ case "${1:-}" in
         echo ""
         echo "Report saved to: $OUTFILE"
         ;;
+    -f|--fuzz)
+        shift
+        MODE="${1:-all}"
+        OUTPUT="${2:-reports/fuzz_output.pcap}"
+        echo "Running fuzzing mode: $MODE..."
+        sudo "$BINARY" fuzz --mode "$MODE" --output "$OUTPUT"
+        ;;
     -h|--help)
         cat << 'EOF'
 ============================================
- FragglePacket
+ FragglePacket - Network Diagnostics Suite
 ============================================
 
-Usage: ./start.sh [OPTION] [TARGET]
+Usage: ./start.sh [OPTION] [ARGS]
 
 Default (no args): Launch interactive TUI
 
 CLI Options:
-  -1, --quick [TARGET]        Quick ICMP test (default: 8.8.8.8)
-  -2, --diagnose [TARGET]     Full diagnostic (default: github.com)
-  -3, --multi [TARGETS]       Multi-target comparison (comma-separated)
-  -4, --vpn [TYPE]            VPN/SASE MTU calculator (default: zscaler)
-  -5, --tcp [HOST:PORT]       TCP-only test (default: github.com:443)
-  -6, --list-vpn              List available VPN types
-  -7, --kitchen-sink          Comprehensive MTU analysis
-  -8, --json                  Comprehensive + JSON report
-  -h, --help                  Show this help
+  -1, --quick [TARGET]           Quick ICMP test (default: 8.8.8.8)
+  -2, --diagnose [TARGET]        Full diagnostic (default: github.com)
+  -3, --multi [TARGETS]          Multi-target comparison (comma-separated)
+  -4, --vpn [TYPE]               VPN/SASE MTU calculator (default: zscaler)
+  -5, --tcp [HOST:PORT]          TCP-only test (default: github.com:443)
+  -6, --test [CATEGORY] [TARGET] Run specific test category
+  -7, --test-all [TARGET]        Run ALL 11 test categories
+  -8, --https [TARGET]           HTTPS stage-by-stage analysis
+  -9, --list-vpn                 List available VPN types
+  -10, --kitchen-sink            Comprehensive MTU analysis
+  -11, --json                    Comprehensive + JSON report
+  -f, --fuzz [MODE] [OUTPUT]     Run packet fuzzing
+  -h, --help                     Show this help
+
+Test Categories (for -6):
+  dns, mtu, https, tcp-health, rtt, packet-loss, path-analysis, ipv6, application, fuzzing
+
+TUI Keybindings:
+  [T]     - Open Test Panel (11 test categories)
+  [1-0]   - Select test category (1=DNS, 2=MTU, etc.)
+  [Enter] - Run selected test (smart: single/all targets)
+  [A]     - Run ALL tests on current target
+  [H]     - HTTPS Panel (stage-by-stage testing)
+  [F]     - Fuzzing Panel
+  [c]     - Collapse/expand detail panels
+  [?]     - Help screen
 
 Examples:
-  ./start.sh                       # Launch TUI (default)
-  ./start.sh -1                    # Quick ICMP to 8.8.8.8
-  ./start.sh -1 1.1.1.1            # Quick ICMP to custom target
-  ./start.sh -2 example.com        # Full diagnostic
-  ./start.sh -3 "8.8.8.8,1.1.1.1"  # Compare multiple targets
-  ./start.sh -4 wireguard          # VPN calculator
+  ./start.sh                              # Launch TUI (default)
+  ./start.sh -1                           # Quick ICMP to 8.8.8.8
+  ./start.sh -2 example.com               # Full diagnostic
+  ./start.sh -6 dns github.com            # Run DNS tests only
+  ./start.sh -7 cloudflare.com            # Run ALL 11 tests
+  ./start.sh -8 github.com                # HTTPS stage analysis
+  ./start.sh -f tcp-options reports/tcp.pcap  # Fuzz TCP options
 
-Note: Most tests require sudo for ICMP access.
-      TUI will show a warning if not run as root.
+Note: Most tests require sudo for ICMP/raw socket access.
+      TUI will show warnings if not run as root.
 EOF
         ;;
     "")
         # Default: Launch TUI
         echo ""
         echo "=============================================="
-        echo " FragglePacket"
+        echo " FragglePacket - Network Diagnostics Suite"
         echo "=============================================="
         echo ""
         echo "Launching interactive TUI..."
         echo ""
         if [ "$EUID" -ne 0 ]; then
             echo "⚠️  Not running as root. Some features require sudo:"
-            echo "   • ICMP MTU testing"
+            echo "   • ICMP MTU testing (ping-based)"
+            echo "   • Raw socket tests"
             echo "   • tracepath (press 't' in detail view)"
+            echo "   • Packet fuzzing"
             echo ""
             echo "For full features: sudo ./start.sh"
             echo ""
         fi
-        exec "$TUI_BINARY"
+        echo "TUI Controls: [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
+        echo ""
+        exec "$BINARY" tui
         ;;
     *)
         echo "Unknown option: $1"

@@ -9,9 +9,11 @@
 //! 4. HTTP GET Request
 //! 5. Response & Time to First Byte (TTFB)
 
+use crate::framework::{NetworkTest, TestCategory, TestResult, TestStatus, Diagnosis, DiagnosisSeverity};
 use std::time::{Duration, Instant};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::io::{Write, Read};
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct HttpsTestResult {
@@ -260,6 +262,146 @@ pub fn diagnose_mtu_blackhole(
     false
 }
 
+/// NetworkTest implementation for HTTPS testing
+pub struct HttpsTest {
+    timeout_secs: u64,
+}
+
+impl HttpsTest {
+    pub fn new() -> Self {
+        Self { timeout_secs: 10 }
+    }
+    
+    pub fn with_timeout(timeout_secs: u64) -> Self {
+        Self { timeout_secs }
+    }
+}
+
+impl Default for HttpsTest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NetworkTest for HttpsTest {
+    fn name(&self) -> &str {
+        "HTTPS Stage-by-Stage"
+    }
+    
+    fn category(&self) -> TestCategory {
+        TestCategory::HTTPS
+    }
+    
+    fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
+        let https_result = test_https_stages(target, self.timeout_secs);
+        let mut result = TestResult::new(
+            self.name().to_string(),
+            self.category(),
+            target.to_string(),
+        );
+        
+        // Add metrics
+        if let Some(dns_time) = https_result.dns_time_ms {
+            result.add_metric("dns_time_ms", dns_time as f64);
+        }
+        if let Some(tcp_time) = https_result.tcp_connect_time_ms {
+            result.add_metric("tcp_connect_time_ms", tcp_time as f64);
+        }
+        if let Some(tls_time) = https_result.tls_handshake_time_ms {
+            result.add_metric("tls_handshake_time_ms", tls_time as f64);
+        }
+        if let Some(ttfb) = https_result.ttfb_ms {
+            result.add_metric("ttfb_ms", ttfb as f64);
+        }
+        result.add_metric("total_time_ms", https_result.total_time_ms as f64);
+        
+        // Add metadata
+        result.add_metadata("dns_ips", https_result.dns_ips.join(", "));
+        result.add_metadata("tcp_success", https_result.tcp_success.to_string());
+        result.add_metadata("tls_success", https_result.tls_success.to_string());
+        if let Some(status) = https_result.status_code {
+            result.add_metadata("http_status", status.to_string());
+        }
+        
+        // Set status and diagnoses
+        match https_result.diagnosis {
+            HttpsDiagnosis::Success => {
+                result.set_status(TestStatus::Success);
+            }
+            HttpsDiagnosis::DnsFailure => {
+                result.set_status(TestStatus::Failed);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Error,
+                    "DNS Resolution Failed".to_string(),
+                    format!("Unable to resolve hostname: {}", target),
+                ).with_recommendation("Check DNS configuration")
+                 .with_recommendation("Verify target hostname is correct"));
+            }
+            HttpsDiagnosis::TcpConnectFailed => {
+                result.set_status(TestStatus::Failed);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Error,
+                    "TCP Connection Failed".to_string(),
+                    "Unable to establish TCP connection to port 443".to_string(),
+                ).with_recommendation("Check if target is reachable")
+                 .with_recommendation("Verify firewall rules allow port 443"));
+            }
+            HttpsDiagnosis::TlsTimeout => {
+                result.set_status(TestStatus::Warning);
+                let mut diag = Diagnosis::new(
+                    DiagnosisSeverity::Critical,
+                    "MTU Blackhole Detected".to_string(),
+                    "TCP connection succeeded but TLS handshake timed out. This is a classic MTU blackhole signature.".to_string(),
+                );
+                diag = diag.with_recommendation("Lower interface MTU to 1400: ip link set dev eth0 mtu 1400")
+                    .with_recommendation("Or enable TCP MSS clamping: iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu")
+                    .with_recommendation("Check if ICMP fragmentation needed messages are being blocked")
+                    .with_related_test("MTU Tests");
+                result.add_diagnosis(diag);
+            }
+            HttpsDiagnosis::TlsHandshakeFailed => {
+                result.set_status(TestStatus::Failed);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Error,
+                    "TLS Handshake Failed".to_string(),
+                    "TLS/SSL handshake failed (not a timeout)".to_string(),
+                ).with_recommendation("Check certificate validity")
+                 .with_recommendation("Verify TLS version compatibility"));
+            }
+            HttpsDiagnosis::HttpRequestFailed => {
+                result.set_status(TestStatus::Warning);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "HTTP Request Failed".to_string(),
+                    "TLS succeeded but HTTP request failed".to_string(),
+                ));
+            }
+            HttpsDiagnosis::HttpResponseTimeout => {
+                result.set_status(TestStatus::Warning);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "HTTP Response Timeout".to_string(),
+                    "Request sent but no response received".to_string(),
+                ));
+            }
+            HttpsDiagnosis::MtuBlackhole => {
+                result.set_status(TestStatus::Warning);
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Critical,
+                    "Confirmed MTU Blackhole".to_string(),
+                    "MTU blackhole confirmed through correlation with MTU tests".to_string(),
+                ).with_recommendation("Lower interface MTU immediately"));
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    fn estimated_duration(&self) -> u64 {
+        self.timeout_secs + 5
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +431,13 @@ mod tests {
         
         assert!(diagnose_mtu_blackhole(&result, Some(1500)));
         assert!(!diagnose_mtu_blackhole(&result, Some(1400)));
+    }
+    
+    #[test]
+    fn test_https_network_test_trait() {
+        let test = HttpsTest::new();
+        assert_eq!(test.name(), "HTTPS Stage-by-Stage");
+        assert_eq!(test.category(), TestCategory::HTTPS);
     }
 }
 

@@ -43,6 +43,13 @@ pub struct DiagnosisEvidence {
     pub icmp_mtu: Option<usize>,
     pub tcp_mtu: Option<usize>,
     pub tcp_segment_limit: Option<usize>,
+    // New fields for enhanced rules
+    pub ping_success: Option<bool>,
+    pub tcp_connect_success: Option<bool>,
+    pub dns_resolution_time_ms: Option<f64>,
+    pub dns_success: Option<bool>,
+    pub packet_loss_percent: Option<f64>,
+    pub rtt_ms: Option<f64>,
 }
 
 /// MTU Blackhole Detection Rule
@@ -128,6 +135,222 @@ impl DiagnosisRule for PathMtuMismatchRule {
     }
 }
 
+/// Port Blocking Rule - Ping OK but TCP fails
+pub struct PortBlockingRule;
+
+impl DiagnosisRule for PortBlockingRule {
+    fn name(&self) -> &str {
+        "Port Blocking Detector"
+    }
+    
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        let ping_ok = evidence.ping_success?;
+        let tcp_fail = !evidence.tcp_connect_success.unwrap_or(true);
+        
+        // ICMP works but TCP doesn't = port blocking
+        if ping_ok && tcp_fail {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::PortBlocking,
+                severity: Severity::High,
+                description: "Port blocking detected. ICMP (ping) succeeds but TCP connection fails. \
+                    This indicates a firewall is blocking TCP traffic while allowing ICMP.".to_string(),
+                recommendation: "Check firewall rules:\n\
+                    - Verify target firewall allows TCP on the tested port\n\
+                    - Check intermediate firewalls/routers\n\
+                    - Try different ports (80, 443, 8080)\n\
+                    - Contact network administrator if persistent".to_string(),
+                related_tests: vec![
+                    "Packet Loss Test".to_string(),
+                    "TCP Health Test".to_string(),
+                ],
+            });
+        }
+        
+        None
+    }
+}
+
+/// DNS Issues Rule - Slow or failed resolution
+pub struct DnsIssuesRule;
+
+impl DiagnosisRule for DnsIssuesRule {
+    fn name(&self) -> &str {
+        "DNS Issues Detector"
+    }
+    
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        // Check for DNS failure
+        if let Some(false) = evidence.dns_success {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::DnsFailure,
+                severity: Severity::Critical,
+                description: "DNS resolution failed. Unable to resolve hostname to IP address.".to_string(),
+                recommendation: "DNS troubleshooting steps:\n\
+                    - Check /etc/resolv.conf (Linux/macOS) or DNS settings (Windows)\n\
+                    - Try alternative DNS servers: 1.1.1.1 (Cloudflare), 8.8.8.8 (Google)\n\
+                    - Verify network connectivity\n\
+                    - Check if hostname is correct\n\
+                    - Test with: dig <hostname> or nslookup <hostname>".to_string(),
+                related_tests: vec!["DNS Test".to_string()],
+            });
+        }
+        
+        // Check for slow DNS
+        if let Some(time_ms) = evidence.dns_resolution_time_ms {
+            if time_ms > 1000.0 {
+                return Some(Diagnosis {
+                    issue: DiagnosisIssue::DnsFailure,
+                    severity: Severity::Medium,
+                    description: format!(
+                        "Slow DNS resolution detected ({:.0}ms). This can significantly impact application performance.",
+                        time_ms
+                    ),
+                    recommendation: format!(
+                        "Improve DNS performance:\n\
+                        - Switch to faster DNS servers (current: {:.0}ms)\n\
+                        - Try 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google)\n\
+                        - Check local DNS cache\n\
+                        - Verify DNS server is not overloaded",
+                        time_ms
+                    ),
+                    related_tests: vec!["DNS Test".to_string()],
+                });
+            }
+        }
+        
+        None
+    }
+}
+
+/// TCP Segmentation Limit Rule
+pub struct TcpSegmentationLimitRule;
+
+impl DiagnosisRule for TcpSegmentationLimitRule {
+    fn name(&self) -> &str {
+        "TCP Segmentation Limit Detector"
+    }
+    
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        let segment_limit = evidence.tcp_segment_limit?;
+        
+        // Artificial limit detected (typically 100-500 bytes)
+        if segment_limit < 1000 {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::TcpSegmentationLimit,
+                severity: Severity::High,
+                description: format!(
+                    "Artificial TCP segment size limit detected ({} bytes). \
+                    A firewall or middlebox is limiting TCP segment sizes, which severely impacts performance.",
+                    segment_limit
+                ),
+                recommendation: format!(
+                    "Address TCP segmentation restriction:\n\
+                    - Check firewall rules for TCP segment size limits\n\
+                    - Review DPI (Deep Packet Inspection) settings\n\
+                    - Contact ISP if using VPN or proxy\n\
+                    - Current limit: {} bytes (normal: ~1460 bytes)",
+                    segment_limit
+                ),
+                related_tests: vec![
+                    "TCP Segmentation Test".to_string(),
+                    "TCP Health Test".to_string(),
+                ],
+            });
+        }
+        
+        None
+    }
+}
+
+/// High Packet Loss Rule
+pub struct HighPacketLossRule;
+
+impl DiagnosisRule for HighPacketLossRule {
+    fn name(&self) -> &str {
+        "High Packet Loss Detector"
+    }
+    
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        let loss_percent = evidence.packet_loss_percent?;
+        
+        if loss_percent >= 10.0 {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::PacketLoss,
+                severity: Severity::High,
+                description: format!(
+                    "High packet loss detected ({:.1}%). This will significantly impact application performance.",
+                    loss_percent
+                ),
+                recommendation: "Investigate packet loss:\n\
+                    - Check physical cable connections\n\
+                    - Test with different network interfaces\n\
+                    - Check for network congestion\n\
+                    - Run path analysis to identify problematic hop\n\
+                    - Contact ISP if issue persists".to_string(),
+                related_tests: vec![
+                    "Packet Loss Test".to_string(),
+                    "Path Analysis Test".to_string(),
+                ],
+            });
+        } else if loss_percent >= 1.0 {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::PacketLoss,
+                severity: Severity::Medium,
+                description: format!(
+                    "Moderate packet loss detected ({:.1}%). May affect real-time applications.",
+                    loss_percent
+                ),
+                recommendation: "Monitor packet loss:\n\
+                    - Continue monitoring\n\
+                    - May affect VoIP, video conferencing\n\
+                    - Consider running path analysis".to_string(),
+                related_tests: vec!["Packet Loss Test".to_string()],
+            });
+        }
+        
+        None
+    }
+}
+
+/// High Latency Rule
+pub struct HighLatencyRule;
+
+impl DiagnosisRule for HighLatencyRule {
+    fn name(&self) -> &str {
+        "High Latency Detector"
+    }
+    
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        let rtt_ms = evidence.rtt_ms?;
+        
+        if rtt_ms > 200.0 {
+            return Some(Diagnosis {
+                issue: DiagnosisIssue::HighLatency,
+                severity: Severity::Medium,
+                description: format!(
+                    "High latency detected ({:.1}ms). This may impact interactive applications.",
+                    rtt_ms
+                ),
+                recommendation: format!(
+                    "Reduce latency:\n\
+                    - Check for network congestion\n\
+                    - Use closer/faster DNS servers\n\
+                    - Consider CDN for content delivery\n\
+                    - Run path analysis to find slow hops\n\
+                    - Current RTT: {:.1}ms (good: <50ms, acceptable: <150ms)",
+                    rtt_ms
+                ),
+                related_tests: vec![
+                    "RTT Test".to_string(),
+                    "Path Analysis Test".to_string(),
+                ],
+            });
+        }
+        
+        None
+    }
+}
+
 /// Diagnosis Engine - runs all rules
 pub struct DiagnosisEngine {
     rules: Vec<Box<dyn DiagnosisRule>>,
@@ -138,6 +361,11 @@ impl DiagnosisEngine {
         let rules: Vec<Box<dyn DiagnosisRule>> = vec![
             Box::new(MtuBlackholeRule),
             Box::new(PathMtuMismatchRule),
+            Box::new(PortBlockingRule),
+            Box::new(DnsIssuesRule),
+            Box::new(TcpSegmentationLimitRule),
+            Box::new(HighPacketLossRule),
+            Box::new(HighLatencyRule),
         ];
         
         Self { rules }

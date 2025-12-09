@@ -10,6 +10,14 @@ use fuzzing_panel::render_fuzzing_panel;
 pub mod https_panel;
 use https_panel::render_https_panel;
 
+#[path = "test_registration.rs"]
+mod test_registration;
+use test_registration::register_all_tests;
+
+#[path = "test_panel.rs"]
+pub mod test_panel;
+use test_panel::render_test_panel;
+
 #[path = "../../../tests/test_runner.rs"]
 mod test_runner_mod;
 use test_runner_mod::{load_targets, test_single_target, TestResult as TestRunnerResult};
@@ -132,20 +140,32 @@ pub struct Verdict {
     pub percent_ok: f64,
 }
 
+use fraggle_packet::framework::test_trait::{NetworkTest, TestCategory};
+use fraggle_packet::framework::result::{TestResult as FrameworkTestResult, TestStatus as FrameworkTestStatus};
+use fraggle_packet::framework::orchestrator::TestOrchestrator;
+
+pub enum ViewMode {
+    Dashboard,      // Single target, all test details
+    AllTargets,     // Multiple targets overview
+}
+
 pub enum AppMode {
     Dashboard,
     TargetDetail,
     Simulator,
     FuzzingPanel,
-    HttpsPanel,  // NEW
+    HttpsPanel,
+    TestPanel,      // NEW - test framework panel
     Help,
 }
 
 pub struct App {
     pub state: Arc<Mutex<AppState>>,
     pub mode: AppMode,
+    pub view_mode: ViewMode,
     pub selected_target: usize,
     pub selected_hop: usize,
+    pub selected_category: Option<usize>,  // 0-9 for test categories
     pub table_state: TableState,
     pub hop_list_state: ListState,
     pub scroll_offset: usize,
@@ -156,12 +176,14 @@ pub struct App {
     pub test_rx: Option<mpsc::Receiver<TestUpdate>>,
     pub log_messages: Vec<String>,
     pub tracepath_running: bool,
-    pub tracepath_output: Vec<String>,  // Live tracepath output
-    pub popup_scroll: usize,  // Scroll position for popup
-    pub selected_fuzz_mode: usize,  // NEW: 0-4 for fuzzing modes
-    pub fuzzing_active: bool,       // NEW: is fuzzing running
-    pub selected_https_target: usize,  // NEW - selected target for HTTPS test
-    pub https_testing: bool,  // NEW - is HTTPS test running
+    pub tracepath_output: Vec<String>,
+    pub popup_scroll: usize,
+    pub selected_fuzz_mode: usize,
+    pub fuzzing_active: bool,
+    pub selected_https_target: usize,
+    pub https_testing: bool,
+    pub orchestrator: TestOrchestrator,  // NEW - test framework orchestrator
+    pub framework_results: std::collections::HashMap<String, Vec<FrameworkTestResult>>,  // NEW
 }
 
 #[derive(Debug, Clone)]
@@ -187,7 +209,9 @@ impl Default for AppState {
             verdict: None,
             mtu_history: vec![1500; 20],
             simulated_mtu: 1500,
-            fuzzing_results: std::collections::HashMap::new(),  // NEW
+            fuzzing_results: std::collections::HashMap::new(),
+            https_results: std::collections::HashMap::new(),
+            diagnoses: Vec::new(),
         }
     }
 }
@@ -199,11 +223,17 @@ impl App {
         
         let (tx, rx) = mpsc::channel();
         
+        // Create orchestrator with all tests registered
+        let mut orchestrator = TestOrchestrator::new();
+        register_all_tests(&mut orchestrator);
+        
         Self {
             state,
             mode: AppMode::Dashboard,
+            view_mode: ViewMode::Dashboard,
             selected_target: 0,
             selected_hop: 0,
+            selected_category: None,
             table_state,
             hop_list_state: ListState::default(),
             scroll_offset: 0,
@@ -216,8 +246,12 @@ impl App {
             tracepath_running: false,
             tracepath_output: Vec::new(),
             popup_scroll: 0,
-            selected_fuzz_mode: 0,  // NEW
-            fuzzing_active: false,  // NEW
+            selected_fuzz_mode: 0,
+            fuzzing_active: false,
+            selected_https_target: 0,
+            https_testing: false,
+            orchestrator,
+            framework_results: std::collections::HashMap::new(),
         }
     }
     
@@ -465,6 +499,114 @@ impl App {
             let _ = tx_shared.send(TestUpdate::AllComplete);
         });
     }
+    
+    // HTTPS testing methods
+    pub fn run_https_test(&mut self, target: &str) {
+        self.https_testing = true;
+        let target = target.to_string();
+        
+        thread::spawn(move || {
+            let result = test_https_stages(&target, 5000);
+            eprintln!("[HTTPS] Test complete for {}: success={}", target, result.tcp_success && result.tls_success);
+        });
+    }
+    
+    pub fn prev_https_target(&mut self) {
+        if self.selected_https_target > 0 {
+            self.selected_https_target -= 1;
+        }
+    }
+    
+    pub fn next_https_target(&mut self) {
+        let state = self.state.lock().unwrap();
+        if self.selected_https_target < state.results.len().saturating_sub(1) {
+            self.selected_https_target += 1;
+        }
+    }
+    
+    pub fn run_all_https_tests(&mut self) {
+        let targets: Vec<String> = {
+            let state = self.state.lock().unwrap();
+            state.results.iter().map(|r| r.target.clone()).collect()
+        };
+        
+        for target in targets {
+            self.run_https_test(&target);
+        }
+    }
+    
+    // Test framework methods
+    pub fn run_category(&mut self, category: TestCategory) {
+        let target = {
+            let state = self.state.lock().unwrap();
+            state.results.get(self.selected_target)
+                .map(|r| r.target.clone())
+                .unwrap_or_else(|| "example.com".to_string())
+        };
+        
+        let category_clone = category.clone();
+        let target_clone = target.clone();
+        
+        // Run the test asynchronously
+        thread::spawn(move || {
+            eprintln!("[TEST] Running {:?} for {}", category_clone, target_clone);
+        });
+    }
+    
+    pub fn run_all_tests_on_current_target(&mut self) {
+        let target = {
+            let state = self.state.lock().unwrap();
+            state.results.get(self.selected_target)
+                .map(|r| r.target.clone())
+                .unwrap_or_else(|| "example.com".to_string())
+        };
+        
+        eprintln!("[TEST] Running ALL tests for {}", target);
+        
+        // Run all 10 test categories
+        let categories = vec![
+            TestCategory::DNS,
+            TestCategory::MTU,
+            TestCategory::HTTPS,
+            TestCategory::TCPHealth,
+            TestCategory::RTT,
+            TestCategory::PacketLoss,
+            TestCategory::PathAnalysis,
+            TestCategory::IPv6,
+            TestCategory::Application,
+            TestCategory::Fuzzing,
+        ];
+        
+        for category in categories {
+            self.run_category(category);
+        }
+        
+        self.popup_message = format!("Running all tests on {}", target);
+        self.show_popup = true;
+    }
+    
+    pub fn run_category_on_all_targets(&mut self, category: TestCategory) {
+        let targets: Vec<String> = {
+            let state = self.state.lock().unwrap();
+            state.results.iter().map(|r| r.target.clone()).collect()
+        };
+        
+        eprintln!("[TEST] Running {:?} on {} targets", category, targets.len());
+        
+        for target in targets {
+            let category_clone = category.clone();
+            let target_clone = target.clone();
+            
+            thread::spawn(move || {
+                eprintln!("[TEST] Running {:?} for {}", category_clone, target_clone);
+            });
+        }
+        
+        self.popup_message = format!("Running {:?} on all targets", category);
+        self.show_popup = true;
+    }
+
+
     
     pub fn retest_target(&mut self, index: usize, min_mtu: usize, max_mtu: usize, timeout_ms: u64, retries: usize) {
         self.log_messages.push(format!("[RETEST] Starting retest for index {}", index));
@@ -805,7 +947,8 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
         AppMode::TargetDetail => render_target_detail(frame, chunks[1], app),
         AppMode::Simulator => render_simulator(frame, chunks[1], app),
         AppMode::FuzzingPanel => render_fuzzing_panel(frame, chunks[1], app),
-        AppMode::HttpsPanel => render_https_panel(frame, chunks[1], app),  // NEW
+        AppMode::HttpsPanel => render_https_panel(frame, chunks[1], app),
+        AppMode::TestPanel => render_test_panel(frame, app, chunks[1]),
         AppMode::Help => render_help(frame, chunks[1]),
     }
     
@@ -1492,6 +1635,36 @@ fn render_help(frame: &mut Frame, area: Rect) {
             Span::styled("  ?/h    ", Style::default().fg(TERM_CYAN)),
             Span::styled("This help", Style::default().fg(TERM_GREEN)),
         ]),
+        Line::from(vec![
+            Span::styled("  F      ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Fuzzing Panel", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
+            Span::styled("  H      ", Style::default().fg(TERM_CYAN)),
+            Span::styled("HTTPS Testing", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
+            Span::styled("  T      ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Test Framework (10 test categories)", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("TEST FRAMEWORK (in Test Panel [T])", Style::default().fg(TERM_AMBER))),
+        Line::from(vec![
+            Span::styled("  1-0    ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Select test: 1=DNS 2=MTU 3=HTTPS 4=TCP 5=RTT", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
+            Span::styled("         ", Style::default().fg(TERM_CYAN)),
+            Span::styled("6=Loss 7=Path 8=IPv6 9=App 0=Fuzz", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Enter  ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Run selected test (smart: single/all targets)", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
+            Span::styled("  A      ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Run ALL 10 tests on current target", Style::default().fg(TERM_GREEN)),
+        ]),
         Line::from(""),
         Line::from(Span::styled("ACTIONS", Style::default().fg(TERM_AMBER))),
         Line::from(vec![
@@ -1543,11 +1716,12 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         AppMode::TargetDetail => "DETAIL",
         AppMode::Simulator => "SIMULATOR",
         AppMode::FuzzingPanel => "FUZZING",
-        AppMode::HttpsPanel => "HTTPS",  // NEW
+        AppMode::HttpsPanel => "HTTPS",
+        AppMode::TestPanel => "TESTS",
         AppMode::Help => "HELP",
     };
     
-    let help_hint = " [?]Help [1]Dash [F]Fuzz [H]HTTPS [3]Sim [t]Tracepath [r]Retest [R]RetestAll [s]Save [q]Quit ";
+    let help_hint = " [?]Help [1]Dash [F]Fuzz [H]HTTPS [T]Tests [A]RunAll [3]Sim [t]Tracepath [r]Retest [R]RetestAll [s]Save [q]Quit ";
     
     let footer = Paragraph::new(Line::from(vec![
         Span::styled(" MODE: ", Style::default().fg(TERM_GREEN_DIM)),
@@ -1634,10 +1808,65 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
             match key.code {
                 KeyCode::Char('q') => app.should_quit = true,
                 KeyCode::Char('?') | KeyCode::Char('h') => app.mode = AppMode::Help,
-                KeyCode::Char('1') => app.mode = AppMode::Dashboard,
+                KeyCode::Char('1') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(0);  // DNS
+                    } else {
+                        app.mode = AppMode::Dashboard;
+                    }
+                }
+                KeyCode::Char('2') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(1);  // MTU
+                    } else {
+                        // Could add another mode
+                    }
+                }
+                KeyCode::Char('3') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(2);  // HTTPS
+                    } else {
+                        app.mode = AppMode::Simulator;
+                    }
+                }
+                KeyCode::Char('4') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(3);  // TCP Health
+                    }
+                }
+                KeyCode::Char('5') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(4);  // RTT
+                    }
+                }
+                KeyCode::Char('6') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(5);  // PacketLoss
+                    }
+                }
+                KeyCode::Char('7') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(6);  // PathAnalysis
+                    }
+                }
+                KeyCode::Char('8') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(7);  // IPv6
+                    }
+                }
+                KeyCode::Char('9') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(8);  // Application
+                    }
+                }
+                KeyCode::Char('0') => {
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.selected_category = Some(9);  // Fuzzing
+                    }
+                }
                 KeyCode::Char('f') | KeyCode::Char('F') => app.mode = AppMode::FuzzingPanel,
-                KeyCode::Char('H') => app.mode = AppMode::HttpsPanel,  // NEW - uppercase H for HTTPS
-                KeyCode::Char('3') => app.mode = AppMode::Simulator,
+                KeyCode::Char('T') => app.mode = AppMode::TestPanel,  // Uppercase T for Test Panel
+                KeyCode::Char('H') => app.mode = AppMode::HttpsPanel,
                 KeyCode::Esc => {
                     // Handle escape based on current mode
                     match app.mode {
@@ -1651,7 +1880,51 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.run_selected_fuzzer();
                     } else if matches!(app.mode, AppMode::HttpsPanel) {
-                        app.run_https_test();  // NEW
+                        let target = {
+                            let state = app.state.lock().unwrap();
+                            state.results.get(app.selected_https_target)
+                                .map(|r| r.target.clone())
+                                .unwrap_or_else(|| "example.com".to_string())
+                        };
+                        app.run_https_test(&target);
+                    } else if matches!(app.mode, AppMode::TestPanel) {
+                        // Run selected test category
+                        if let Some(category_idx) = app.selected_category {
+                            let category = match category_idx {
+                                0 => TestCategory::DNS,
+                                1 => TestCategory::MTU,
+                                2 => TestCategory::HTTPS,
+                                3 => TestCategory::TCPHealth,
+                                4 => TestCategory::RTT,
+                                5 => TestCategory::PacketLoss,
+                                6 => TestCategory::PathAnalysis,
+                                7 => TestCategory::IPv6,
+                                8 => TestCategory::Application,
+                                9 => TestCategory::Fuzzing,
+                                _ => TestCategory::DNS,
+                            };
+                            
+                            // Smart execution: if in Dashboard, run on single target
+                            // if in AllTargets view, run on all targets
+                            if matches!(app.view_mode, ViewMode::Dashboard) {
+                                app.run_category(category);
+                            } else {
+                                app.run_category_on_all_targets(category);
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char('a') | KeyCode::Char('A') => {
+                    // Smart "run ALL" - context aware
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        if matches!(app.view_mode, ViewMode::Dashboard) {
+                            // Dashboard: run ALL tests on current target
+                            app.run_all_tests_on_current_target();
+                        } else {
+                            // AllTargets: show confirmation for running ALL on ALL
+                            app.popup_message = "Press Shift+A again to run ALL tests on ALL targets (this will take a while!)".to_string();
+                            app.show_popup = true;
+                        }
                     }
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
@@ -1907,7 +2180,9 @@ pub fn create_demo_state() -> AppState {
         mtu_history: vec![1500, 1500, 1500, 1480, 1500, 1500, 1420, 1500, 1500, 1500,
                          1500, 1460, 1500, 1500, 1500, 1400, 1500, 1500, 1500, 1500],
         simulated_mtu: 1500,
-        fuzzing_results: std::collections::HashMap::new(),  // Add missing field
+        fuzzing_results: std::collections::HashMap::new(),
+        https_results: std::collections::HashMap::new(),
+        diagnoses: Vec::new(),
     }
 }
 
