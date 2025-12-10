@@ -10,3 +10,4 @@ pub const TERM_RED: Color = Color::Rgb(255, 50, 50);
 pub const TERM_BLACK: Color = Color::Rgb(5, 15, 5);
 pub const TERM_CYAN: Color = Color::Rgb(0, 255, 200);
 
+

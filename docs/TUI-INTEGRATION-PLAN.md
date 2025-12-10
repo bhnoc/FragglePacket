@@ -124,3 +124,4 @@ Binary currently has compilation issues due to AppState field changes. Fixing re
 
 This is deferred to avoid scope creep. Test framework is complete and usable via library.
 
+

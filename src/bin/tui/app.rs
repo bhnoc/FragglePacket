@@ -1795,11 +1795,23 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
         AppMode::Simulator => "SIMULATOR",
         AppMode::FuzzingPanel => "FUZZING",
         AppMode::HttpsPanel => "HTTPS",
-        AppMode::TestPanel => "TESTS",
+        AppMode::TestPanel => {
+            if matches!(app.view_mode, ViewMode::Dashboard) {
+                "TESTS (Single)"
+            } else {
+                "TESTS (All)"
+            }
+        }
         AppMode::Help => "HELP",
     };
     
-    let help_hint = " [?]Help [1]Dash [F]Fuzz [H]HTTPS [T]Tests [A]RunAll [3]Sim [t]Tracepath [r]Retest [R]RetestAll [s]Save [q]Quit ";
+    // Context-aware help hints
+    let help_hint = match app.mode {
+        AppMode::TestPanel => " [1-0]Select [Enter]Run [A]All [Tab]Toggle [ESC]Back [?]Help ",
+        AppMode::FuzzingPanel => " [↑/↓]Select [Enter]Run [A]All [ESC]Back [?]Help ",
+        AppMode::HttpsPanel => " [↑/↓]Select [Enter]Test [A]All [ESC]Back [?]Help ",
+        _ => " [?]Help [1]Dash [F]Fuzz [H]HTTPS [T]Tests [3]Sim [t]Trace [r]Retest [s]Save [q]Quit ",
+    };
     
     let footer = Paragraph::new(Line::from(vec![
         Span::styled(" MODE: ", Style::default().fg(TERM_GREEN_DIM)),
@@ -1886,6 +1898,7 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
             match key.code {
                 KeyCode::Char('q') => app.should_quit = true,
                 KeyCode::Char('?') | KeyCode::Char('h') => app.mode = AppMode::Help,
+                // Number keys: context-aware (Test Panel takes priority)
                 KeyCode::Char('1') => {
                     if matches!(app.mode, AppMode::TestPanel) {
                         app.selected_category = Some(0);  // DNS
@@ -1896,9 +1909,8 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('2') => {
                     if matches!(app.mode, AppMode::TestPanel) {
                         app.selected_category = Some(1);  // MTU
-                    } else {
-                        // Could add another mode
                     }
+                    // No global action for '2'
                 }
                 KeyCode::Char('3') => {
                     if matches!(app.mode, AppMode::TestPanel) {
@@ -1945,6 +1957,15 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('f') | KeyCode::Char('F') => app.mode = AppMode::FuzzingPanel,
                 KeyCode::Char('T') => app.mode = AppMode::TestPanel,  // Uppercase T for Test Panel
                 KeyCode::Char('H') => app.mode = AppMode::HttpsPanel,
+                KeyCode::Tab => {
+                    // Toggle view mode in Test Panel
+                    if matches!(app.mode, AppMode::TestPanel) {
+                        app.view_mode = match app.view_mode {
+                            ViewMode::Dashboard => ViewMode::AllTargets,
+                            ViewMode::AllTargets => ViewMode::Dashboard,
+                        };
+                    }
+                }
                 KeyCode::Esc => {
                     // Handle escape based on current mode
                     match app.mode {
@@ -1992,16 +2013,27 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                         }
                     }
                 }
+                // 'A' key: Smart "run ALL" - context aware
                 KeyCode::Char('a') | KeyCode::Char('A') => {
-                    // Smart "run ALL" - context aware
-                    if matches!(app.mode, AppMode::TestPanel) {
-                        if matches!(app.view_mode, ViewMode::Dashboard) {
-                            // Dashboard: run ALL tests on current target
-                            app.run_all_tests_on_current_target();
-                        } else {
-                            // AllTargets: show confirmation for running ALL on ALL
-                            app.popup_message = "Press Shift+A again to run ALL tests on ALL targets (this will take a while!)".to_string();
-                            app.show_popup = true;
+                    match app.mode {
+                        AppMode::TestPanel => {
+                            if matches!(app.view_mode, ViewMode::Dashboard) {
+                                // Dashboard: run ALL tests on current target
+                                app.run_all_tests_on_current_target();
+                            } else {
+                                // AllTargets: show confirmation for running ALL on ALL
+                                app.popup_message = "Press Shift+A again to run ALL tests on ALL targets (this will take a while!)".to_string();
+                                app.show_popup = true;
+                            }
+                        }
+                        AppMode::FuzzingPanel => {
+                            app.run_all_fuzzers();
+                        }
+                        AppMode::HttpsPanel => {
+                            app.run_all_https_tests();
+                        }
+                        _ => {
+                            // No action for other modes
                         }
                     }
                 }
@@ -2011,7 +2043,7 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.prev_fuzz_mode();
                     } else if matches!(app.mode, AppMode::HttpsPanel) {
-                        app.prev_https_target();  // NEW
+                        app.prev_https_target();
                     } else {
                         app.prev_target();
                     }
@@ -2022,16 +2054,9 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.next_fuzz_mode();
                     } else if matches!(app.mode, AppMode::HttpsPanel) {
-                        app.next_https_target();  // NEW
+                        app.next_https_target();
                     } else {
                         app.next_target();
-                    }
-                }
-                KeyCode::Char('a') | KeyCode::Char('A') => {
-                    if matches!(app.mode, AppMode::FuzzingPanel) {
-                        app.run_all_fuzzers();
-                    } else if matches!(app.mode, AppMode::HttpsPanel) {
-                        app.run_all_https_tests();  // NEW
                     }
                 }
                 KeyCode::PageUp => {

@@ -1,9 +1,10 @@
 # todo
-- now that we have added in all of our features and fuctions for our mvp and have tests for them that are passing. lets improve the tui or overhaul it to work well with all of the feures and functions vs how we added them in 
-- make a readme
+- testing
+- possible to keep in tui? or need api and app?
 
 ## randodamn ideas
 - Continuous monitoring mode
+- auto scan network attempting to discover mtu paths
 - Historical trend tracking
 - Prometheus metrics export
 - Alert system
