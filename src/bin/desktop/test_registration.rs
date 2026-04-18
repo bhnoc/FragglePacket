@@ -1,4 +1,7 @@
-// Helper function to register all tests with orchestrator
+//! Test registration for FragglePacket Desktop
+//!
+//! Registers all available network tests with the TestOrchestrator.
+
 use fraggle_packet::framework::TestOrchestrator;
 use fraggle_packet::network_tests::{
     dns::DnsTest,
@@ -15,19 +18,39 @@ use fraggle_packet::network_tests::{
     fuzzing::{FuzzingTest, FuzzMode},
 };
 
+/// Register all tests with the orchestrator
 pub fn register_all_tests(orchestrator: &mut TestOrchestrator) {
+    // DNS tests
     orchestrator.register(Box::new(DnsTest::new()));
+
+    // MTU discovery tests
     orchestrator.register(Box::new(IcmpMtuTest::new()));
     orchestrator.register(Box::new(TcpMtuTest::new()));
     orchestrator.register(Box::new(TunnelMssClampingTest::new()));
+
+    // HTTPS stage-by-stage
     orchestrator.register(Box::new(HttpsTest::new()));
+
+    // TCP tests
     orchestrator.register(Box::new(TcpSegmentationTest::new()));
     orchestrator.register(Box::new(TcpHealthTest::new()));
-    orchestrator.register(Box::new(RttTest::new().with_count(20)));
-    orchestrator.register(Box::new(PacketLossTest::new().with_count(20)));
-    orchestrator.register(Box::new(PathAnalysisTest::new()));
-    orchestrator.register(Box::new(Ipv6Test::new()));
-    orchestrator.register(Box::new(ApplicationTest::new()));
-    orchestrator.register(Box::new(FuzzingTest::new(FuzzMode::All).with_output("reports/tui_fuzz.pcap".to_string())));
-}
 
+    // Latency and loss tests
+    orchestrator.register(Box::new(RttTest::new().with_count(10)));
+    orchestrator.register(Box::new(PacketLossTest::new().with_count(10)));
+
+    // Path analysis
+    orchestrator.register(Box::new(PathAnalysisTest::new()));
+
+    // IPv6 comparison
+    orchestrator.register(Box::new(Ipv6Test::new()));
+
+    // Application protocol tests
+    orchestrator.register(Box::new(ApplicationTest::new()));
+
+    // Fuzzing (default to All mode)
+    orchestrator.register(Box::new(
+        FuzzingTest::new(FuzzMode::All)
+            .with_output("reports/desktop_fuzz.pcap".to_string())
+    ));
+}

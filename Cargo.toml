@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "fraggle-packet"
 path = "main.rs"
 
+[[bin]]
+name = "fraggle-desktop"
+path = "src/bin/desktop/main.rs"
+
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 socket2 = "0.5"
@@ -39,3 +43,18 @@ thiserror = "1.0"           # Error handling
 
 # HTTPS testing
 native-tls = "0.2"          # TLS support for HTTPS testing
+
+# Dioxus Desktop GUI
+dioxus = { version = "0.6", features = ["desktop"] }
+
+# File dialogs (cross-platform native)
+rfd = "0.15"
+
+# Directories for config paths
+dirs = "5.0"
+
+# Async utilities
+futures-util = "0.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+users = "0.11"

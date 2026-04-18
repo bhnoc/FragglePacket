@@ -4,6 +4,7 @@ set -e
 cd "$(dirname "$0")"
 
 BINARY="./target/release/fraggle-packet"
+DESKTOP_BINARY="./target/release/fraggle-desktop"
 
 # Check if built
 if [ ! -f "$BINARY" ]; then
@@ -13,6 +14,29 @@ fi
 
 # Parse arguments
 case "${1:-}" in
+    -d|--desktop)
+        # Launch Desktop GUI
+        if [ ! -f "$DESKTOP_BINARY" ]; then
+            echo "Desktop GUI not built. Run ./setup.sh first."
+            echo ""
+            echo "Desktop GUI requires additional dependencies:"
+            echo "  Ubuntu: libgtk-3-dev libwebkit2gtk-4.1-dev"
+            echo "  macOS:  (included with system)"
+            exit 1
+        fi
+        echo ""
+        echo "=============================================="
+        echo " FragglePacket - Desktop GUI"
+        echo "=============================================="
+        echo ""
+        echo "Launching Desktop GUI..."
+        if [ "$EUID" -ne 0 ]; then
+            echo "⚠️  Not running as root. Some tests require sudo."
+            echo "   For full features: sudo ./start.sh --desktop"
+            echo ""
+        fi
+        exec "$DESKTOP_BINARY"
+        ;;
     -1|--quick)
         shift
         TARGET="${1:-8.8.8.8}"
@@ -95,6 +119,10 @@ Usage: ./start.sh [OPTION] [ARGS]
 
 Default (no args): Launch interactive TUI
 
+Interface Options:
+  (no args)                      Launch terminal UI (TUI)
+  -d, --desktop                  Launch Desktop GUI (Dioxus)
+
 CLI Options:
   -1, --quick [TARGET]           Quick ICMP test (default: 8.8.8.8)
   -2, --diagnose [TARGET]        Full diagnostic (default: github.com)
@@ -125,12 +153,14 @@ TUI Keybindings:
 
 Examples:
   ./start.sh                              # Launch TUI (default)
+  ./start.sh --desktop                    # Launch Desktop GUI
   ./start.sh -1                           # Quick ICMP to 8.8.8.8
   ./start.sh -2 example.com               # Full diagnostic
   ./start.sh -6 dns github.com            # Run DNS tests only
   ./start.sh -7 cloudflare.com            # Run ALL 11 tests
   ./start.sh -8 github.com                # HTTPS stage analysis
   ./start.sh -f tcp-options reports/tcp.pcap  # Fuzz TCP options
+  sudo ./start.sh --desktop               # Desktop GUI with root (full features)
 
 Note: Most tests require sudo for ICMP/raw socket access.
       TUI will show warnings if not run as root.

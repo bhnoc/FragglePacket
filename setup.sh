@@ -37,7 +37,11 @@ install_deps() {
                 tcpdump \
                 dnsutils \
                 net-tools \
-                iproute2
+                iproute2 \
+                libgtk-3-dev \
+                libwebkit2gtk-4.1-dev \
+                libayatana-appindicator3-dev \
+                librsvg2-dev
             ;;
         fedora|rhel|centos|rocky|alma)
             sudo dnf install -y \
@@ -102,15 +106,26 @@ install_rust() {
 # Build the tool
 build_tool() {
     echo "[3/5] Building..."
-    
-    cargo build --release 2>&1 | grep -E "(Compiling fraggle|Finished|error)" || true
-    
+
+    echo "  Building CLI/TUI..."
+    cargo build --release --bin fraggle-packet 2>&1 | grep -E "(Compiling fraggle|Finished|error)" || true
+
     if [ -f "./target/release/fraggle-packet" ]; then
-        echo "  Build successful."
+        echo "  CLI/TUI build successful."
     else
-        echo "  Build FAILED!"
-        cargo build --release
+        echo "  CLI/TUI build FAILED!"
+        cargo build --release --bin fraggle-packet
         exit 1
+    fi
+
+    echo "  Building Desktop GUI..."
+    cargo build --release --bin fraggle-desktop 2>&1 | grep -E "(Compiling fraggle|Finished|error)" || true
+
+    if [ -f "./target/release/fraggle-desktop" ]; then
+        echo "  Desktop GUI build successful."
+    else
+        echo "  Desktop GUI build FAILED!"
+        echo "  (This may be expected if GUI dependencies are missing)"
     fi
 }
 
@@ -127,12 +142,19 @@ verify_setup() {
     
     BINARY="./target/release/fraggle-packet"
     
-    # Check binary exists
+    # Check CLI binary exists
     if [ ! -f "$BINARY" ]; then
         echo "  ERROR: CLI binary not found"
         exit 1
     fi
-    echo "  ✓ CLI Binary: OK"
+    echo "  ✓ CLI/TUI Binary: OK"
+
+    # Check Desktop binary
+    if [ -f "./target/release/fraggle-desktop" ]; then
+        echo "  ✓ Desktop GUI Binary: OK"
+    else
+        echo "  ⚠ Desktop GUI Binary: NOT FOUND (run with --desktop unavailable)"
+    fi
     
     # Check tracepath
     if command -v tracepath &> /dev/null; then

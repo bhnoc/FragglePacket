@@ -9,6 +9,7 @@ pub mod rtt;
 pub mod dns;
 pub mod packet_loss;
 pub mod mtu;
+pub mod tunnel_mss;
 pub mod path_analysis;
 pub mod ipv6;
 pub mod application;
