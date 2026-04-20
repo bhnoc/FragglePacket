@@ -45,7 +45,11 @@ impl NetworkTest for PacketLossTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("ping -c {} -i 0.2 {}", self.count, target));
+        result.add_metadata("cli_note", "Fast interval (0.2s) to detect burst loss patterns");
+
         // Use ping to measure packet loss
         let output = Command::new("ping")
             .arg("-c")

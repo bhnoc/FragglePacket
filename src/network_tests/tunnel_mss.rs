@@ -73,6 +73,11 @@ impl NetworkTest for TunnelMssClampingTest {
             target.to_string(),
         );
 
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("ss -ti dst {} | grep -i mss", target));
+        result.add_metadata("cli_tcpdump", format!("tcpdump -i any -c 5 'tcp[13] == 18' and host {} 2>/dev/null | grep -oE 'mss [0-9]+'", target));
+        result.add_metadata("cli_note", "Reads TCP_MAXSEG socket option from established connection");
+
         let addr_str = if target.contains(':') {
             target.to_string()
         } else {
@@ -112,20 +117,23 @@ impl NetworkTest for TunnelMssClampingTest {
         }
 
         // Determine if clamping is needed
-        if effective_mtu >= 1500 {
+        // Use 1480 threshold to avoid false positives from minor MSS variations
+        if effective_mtu >= 1480 {
             result.set_status(TestStatus::Success);
             result.add_metadata("clamping_needed", "false");
             result.add_metadata("verdict", "Standard MTU, no clamping required");
+            result.add_metadata("effective_mtu_status", "normal");
         } else if effective_mtu >= 1400 {
+            // Noticeable but not critical reduction (1400-1479)
             result.set_status(TestStatus::Success);
-            result.add_metadata("clamping_needed", "recommended");
+            result.add_metadata("clamping_needed", "optional");
+            result.add_metadata("effective_mtu_status", "slightly_reduced");
 
             let diag = Diagnosis::new(
                 DiagnosisSeverity::Info,
                 "Minor MTU Reduction Detected".to_string(),
-                format!("Effective MTU {} (overhead: {} bytes). Likely single tunnel.", effective_mtu, overhead),
-            ).with_recommendation(format!("Consider MSS clamping to {} bytes", actual_mss))
-             .with_recommendation("Current setup should work for most traffic");
+                format!("Effective MTU {} (overhead: {} bytes). Likely single tunnel or minor encapsulation.", effective_mtu, overhead),
+            ).with_recommendation("Current setup should work for most traffic - clamping optional");
             result.add_diagnosis(diag);
         } else if effective_mtu >= 1280 {
             result.set_status(TestStatus::Warning);

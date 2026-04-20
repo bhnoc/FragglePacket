@@ -38,7 +38,12 @@ impl NetworkTest for Ipv6Test {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("dig {} AAAA +short", target));
+        result.add_metadata("cli_ping6", format!("ping6 -c 3 {}", target));
+        result.add_metadata("cli_curl", format!("curl -6 -so /dev/null -w '%{{http_code}}' https://{}", target));
+
         // Test DNS resolution for both IPv4 and IPv6
         let (ipv4_addrs, ipv6_addrs) = resolve_both(&format!("{}:80", target))?;
         

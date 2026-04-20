@@ -1,15 +1,18 @@
 //! Dashboard panel - Overview of test results
 
 use dioxus::prelude::*;
-use crate::state::AppState;
+use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
 use crate::components::results_display::ResultsDisplay;
+use crate::components::target_input::TargetInput;
+use crate::window_manager::DetachButton;
 
 /// Dashboard component showing test results overview
 #[component]
 pub fn Dashboard(
     state: Signal<AppState>,
     update_tx: Coroutine<TestUpdate>,
+    panel: PanelId,
 ) -> Element {
     let targets = state.read().targets.read().clone();
     let results = state.read().results.read().clone();
@@ -32,6 +35,7 @@ pub fn Dashboard(
             div { class: "panel",
                 div { class: "panel-header",
                     span { class: "panel-title", "Overview" }
+                    DetachButton { panel: panel }
                 }
                 div { class: "stats-grid",
                     style: "display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;",
@@ -59,17 +63,8 @@ pub fn Dashboard(
                 div { class: "panel-header",
                     span { class: "panel-title", "Quick Test" }
                 }
-                div { class: "target-input", style: "display: flex; gap: 8px; align-items: center;",
-                    input {
-                        r#type: "text",
-                        placeholder: "Enter target (e.g., github.com)",
-                        value: "{current_target}",
-                        style: "flex: 1;",
-                        disabled: testing,
-                        oninput: move |evt| {
-                            state.write().current_target.set(evt.value().clone());
-                        }
-                    }
+                div { style: "display: flex; gap: 8px; align-items: flex-start;",
+                    TargetInput { state: state, disabled: testing }
                     button {
                         class: "btn primary",
                         disabled: testing,
@@ -115,76 +110,6 @@ pub fn Dashboard(
                         }
                     }
                     {ResultsDisplay::render(&current_results)}
-                }
-            }
-
-            // Targets table
-            div { class: "panel",
-                div { class: "panel-header",
-                    span { class: "panel-title", "Configured Targets" }
-                }
-                table { class: "table",
-                    thead {
-                        tr {
-                            th { "Target" }
-                            th { "Description" }
-                            th { "Port" }
-                            th { "Status" }
-                            th { "Actions" }
-                        }
-                    }
-                    tbody {
-                        for target in targets {
-                            {
-                                let host = target.host.clone();
-                                let port_display = if target.port == 0 { "ICMP".to_string() } else { target.port.to_string() };
-                                let is_tested = results.contains_key(&target.host);
-                                let status_class = if is_tested { "status-success" } else { "status-pending" };
-                                let status_text = if is_tested { "Tested" } else { "Pending" };
-                                let host_for_select = host.clone();
-                                let host_for_test = host.clone();
-
-                                rsx! {
-                                    tr {
-                                        td { "{host}" }
-                                        td { "{target.description}" }
-                                        td { "{port_display}" }
-                                        td { class: "{status_class}", "{status_text}" }
-                                        td {
-                                            button {
-                                                class: "btn",
-                                                style: "padding: 4px 8px; font-size: 12px;",
-                                                disabled: testing,
-                                                onclick: move |_| {
-                                                    state.write().current_target.set(host_for_select.clone());
-                                                },
-                                                "Select"
-                                            }
-                                            button {
-                                                class: "btn primary",
-                                                style: "padding: 4px 8px; font-size: 12px; margin-left: 4px;",
-                                                disabled: testing,
-                                                onclick: move |_| {
-                                                    let target = host_for_test.clone();
-                                                    let runner = state.read().test_runner.clone();
-                                                    let (tx, mut rx) = crate::state::test_runner::TestRunner::create_channel();
-
-                                                    runner.run_all(target.clone(), tx);
-
-                                                    spawn(async move {
-                                                        while let Some(update) = rx.recv().await {
-                                                            update_tx.send(update);
-                                                        }
-                                                    });
-                                                },
-                                                "Test"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }

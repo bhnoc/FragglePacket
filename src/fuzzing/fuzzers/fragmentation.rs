@@ -5,9 +5,19 @@
 
 use crate::fuzzing::{FuzzError, PacketContext, PcapWriter};
 
-/// Run IP fragmentation fuzzing campaign
+/// Run IP fragmentation fuzzing campaign to a provided writer
+pub fn fuzz_to_writer(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
+    fuzz_to_writer_impl(ctx, writer)
+}
+
+/// Run IP fragmentation fuzzing campaign to a file path
 pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
     let mut writer = PcapWriter::new(output_path)?;
+    fuzz_to_writer_impl(ctx, &mut writer)
+}
+
+/// Internal implementation for fragmentation fuzzing
+fn fuzz_to_writer_impl(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
     let mut count = 0;
 
     // Scenario 1: Normal fragmented packet (baseline)

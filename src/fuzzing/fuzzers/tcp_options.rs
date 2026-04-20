@@ -4,39 +4,38 @@
 
 use crate::fuzzing::{FuzzError, PacketContext, PcapWriter};
 
-/// Run TCP options fuzzing campaign
-pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
-    let mut writer = PcapWriter::new(output_path)?;
+/// Run TCP options fuzzing campaign to a provided writer
+pub fn fuzz_to_writer(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
     let mut count = 0;
 
     // Scenario 1: Normal MSS (baseline)
     {
-        let (eth_bytes, ipv4_bytes, mut tcp_bytes, payload) = ctx
+        let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         // Add MSS option manually after base TCP header
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // TCP options: MSS = 1460 (kind=2, len=4, value=1460)
         packet.push(2); // Kind: MSS
         packet.push(4); // Length: 4 bytes
         packet.push((1460 >> 8) as u8);
         packet.push((1460 & 0xFF) as u8);
-        
+
         // End of options
         packet.push(0); // Kind: End
-        
+
         // Padding to 4-byte boundary
         while packet.len() % 4 != 0 {
             packet.push(0);
         }
-        
+
         packet.extend_from_slice(&payload);
-        
+
         writer.write_packet(&packet)?;
         count += 1;
     }
@@ -46,19 +45,19 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // MSS = 0
         packet.push(2);
         packet.push(4);
         packet.push(0);
         packet.push(0);
         packet.push(0); // End
-        
+
         packet.extend_from_slice(&payload);
         writer.write_packet(&packet)?;
         count += 1;
@@ -69,19 +68,19 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // MSS = 65535
         packet.push(2);
         packet.push(4);
         packet.push(0xFF);
         packet.push(0xFF);
         packet.push(0); // End
-        
+
         packet.extend_from_slice(&payload);
         writer.write_packet(&packet)?;
         count += 1;
@@ -92,17 +91,17 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // MSS with wrong length (kind=2, len=2 instead of 4)
         packet.push(2);
         packet.push(2); // WRONG: should be 4
         packet.push(0); // End
-        
+
         packet.extend_from_slice(&payload);
         writer.write_packet(&packet)?;
         count += 1;
@@ -113,22 +112,22 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // Window Scale with wrong length
         packet.push(3); // Kind: Window Scale
         packet.push(1); // WRONG: should be 3
-        
+
         // SACK Permitted with wrong length
         packet.push(4); // Kind: SACK Permitted
         packet.push(5); // WRONG: should be 2
-        
+
         packet.push(0); // End
-        
+
         packet.extend_from_slice(&payload);
         writer.write_packet(&packet)?;
         count += 1;
@@ -139,25 +138,31 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let (eth_bytes, ipv4_bytes, tcp_bytes, payload) = ctx
             .build_base_layers(0)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth_bytes);
         packet.extend_from_slice(&ipv4_bytes);
         packet.extend_from_slice(&tcp_bytes);
-        
+
         // Invalid kind
         packet.push(kind);
         packet.push(4);
         packet.push(0);
         packet.push(0);
         packet.push(0); // End
-        
+
         packet.extend_from_slice(&payload);
         writer.write_packet(&packet)?;
         count += 1;
     }
 
     Ok(count)
+}
+
+/// Run TCP options fuzzing campaign to a file path
+pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
+    let mut writer = PcapWriter::new(output_path)?;
+    fuzz_to_writer(ctx, &mut writer)
 }
 
 #[cfg(test)]

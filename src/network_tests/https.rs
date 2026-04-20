@@ -299,7 +299,12 @@ impl NetworkTest for HttpsTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("curl -w 'DNS: %{{time_namelookup}}s\\nTCP: %{{time_connect}}s\\nTLS: %{{time_appconnect}}s\\nTTFB: %{{time_starttransfer}}s\\nTotal: %{{time_total}}s\\n' -so /dev/null https://{}", target));
+        result.add_metadata("cli_simple", format!("curl -Iv https://{}", target));
+        result.add_metadata("cli_openssl", format!("openssl s_client -connect {}:443 -servername {}", target, target));
+
         // Add metrics
         if let Some(dns_time) = https_result.dns_time_ms {
             result.add_metric("dns_time_ms", dns_time as f64);

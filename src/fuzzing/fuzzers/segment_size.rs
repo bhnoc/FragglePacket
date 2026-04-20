@@ -13,16 +13,15 @@
 
 use crate::fuzzing::{FuzzError, PacketContext, PcapWriter};
 
-/// Run segment size fuzzing campaign
-pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
-    let mut writer = PcapWriter::new(output_path)?;
+/// Run segment size fuzzing campaign to a provided writer
+pub fn fuzz_to_writer(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
     let mut count = 0;
 
     // Test sizes (much smaller to avoid snaplen issues)
     let sizes = vec![
         // Tiny segments (0-9 bytes)
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        // Edge cases  
+        // Edge cases
         536,   // Minimum MSS
         1460,  // Standard MSS
         1500,  // MTU boundary
@@ -33,12 +32,18 @@ pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> 
         let packet = ctx
             .build_packet(size)
             .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-        
+
         writer.write_packet(&packet)?;
         count += 1;
     }
 
     Ok(count)
+}
+
+/// Run segment size fuzzing campaign to a file path
+pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
+    let mut writer = PcapWriter::new(output_path)?;
+    fuzz_to_writer(ctx, &mut writer)
 }
 
 #[cfg(test)]

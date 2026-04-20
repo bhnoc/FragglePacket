@@ -121,7 +121,12 @@ impl NetworkTest for DnsTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("dig {} +short", target));
+        result.add_metadata("cli_alt", format!("host {}", target));
+        result.add_metadata("cli_multi_dns", format!("dig @1.1.1.1 {} +short; dig @8.8.8.8 {} +short", target, target));
+
         // Test IPv4 resolution
         let start = Instant::now();
         let addr_str = if target.contains(':') {

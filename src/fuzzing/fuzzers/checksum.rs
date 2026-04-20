@@ -4,9 +4,19 @@
 
 use crate::fuzzing::{FuzzError, PacketContext, PcapWriter};
 
-/// Run checksum fuzzing campaign
+/// Run checksum fuzzing campaign to a provided writer
+pub fn fuzz_to_writer(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
+    fuzz_to_writer_impl(ctx, writer)
+}
+
+/// Run checksum fuzzing campaign to a file path
 pub fn fuzz(ctx: &PacketContext, output_path: &str) -> Result<usize, FuzzError> {
     let mut writer = PcapWriter::new(output_path)?;
+    fuzz_to_writer_impl(ctx, &mut writer)
+}
+
+/// Internal implementation for checksum fuzzing
+fn fuzz_to_writer_impl(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError> {
     let mut count = 0;
 
     // Scenario 1: Valid checksum (baseline)

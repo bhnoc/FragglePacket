@@ -47,7 +47,12 @@ impl NetworkTest for ApplicationTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("curl -I --http2 https://{}", target));
+        result.add_metadata("cli_http3", format!("curl --http3 -I https://{}", target));
+        result.add_metadata("cli_alpn", format!("openssl s_client -connect {}:443 -alpn h2,http/1.1 2>/dev/null | grep ALPN", target));
+
         // Test HTTP/1.1
         let http11 = test_http11(target, self.timeout_secs);
         result.add_metadata("http11_supported", http11.to_string());

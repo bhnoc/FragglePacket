@@ -48,7 +48,11 @@ impl NetworkTest for RttTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("ping -c {} {}", self.count, target));
+        result.add_metadata("cli_note", "Parses min/avg/max/stddev from ping statistics");
+
         // Use ping command
         let output = Command::new("ping")
             .arg("-c")

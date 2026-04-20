@@ -124,7 +124,12 @@ impl NetworkTest for PathAnalysisTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("traceroute -m {} {}", self.max_hops, target));
+        result.add_metadata("cli_mtr", format!("mtr -r -c 10 {}", target));
+        result.add_metadata("cli_note", "Per-hop latency measured with multiple probes like mtr");
+
         // Run traceroute
         let output = Command::new("traceroute")
             .arg("-m")

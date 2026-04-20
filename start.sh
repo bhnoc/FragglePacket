@@ -30,36 +30,37 @@ case "${1:-}" in
         echo "=============================================="
         echo ""
         echo "Launching Desktop GUI..."
-        if [ "$EUID" -ne 0 ]; then
-            echo "⚠️  Not running as root. Some tests require sudo."
-            echo "   For full features: sudo ./start.sh --desktop"
-            echo ""
-        fi
+        echo ""
+        echo "All tests work without root (TCP-based or use setuid binaries)."
+        echo ""
+        echo "Note: ICMP MTU Discovery uses Linux-specific ping flags."
+        echo "      On macOS, use TCP-based MTU tests instead."
+        echo ""
         exec "$DESKTOP_BINARY"
         ;;
     -1|--quick)
         shift
         TARGET="${1:-8.8.8.8}"
         echo "Quick ICMP test to $TARGET..."
-        sudo "$BINARY" quick "$TARGET"
+        "$BINARY" quick "$TARGET"
         ;;
     -2|--diagnose)
         shift
         TARGET="${1:-github.com}"
         echo "Full diagnostic for $TARGET..."
-        sudo "$BINARY" diagnose "$TARGET"
+        "$BINARY" diagnose "$TARGET"
         ;;
     -3|--multi)
         shift
         TARGETS="${1:-8.8.8.8,1.1.1.1,github.com}"
         echo "Multi-target comparison: $TARGETS..."
-        sudo "$BINARY" multi "$TARGETS"
+        "$BINARY" multi "$TARGETS"
         ;;
     -4|--vpn)
         shift
         VPNTYPE="${1:-zscaler}"
         echo "VPN MTU calculator for $VPNTYPE..."
-        sudo "$BINARY" vpn "$VPNTYPE"
+        "$BINARY" vpn "$VPNTYPE"
         ;;
     -5|--tcp)
         shift
@@ -91,14 +92,14 @@ case "${1:-}" in
         ;;
     -10|--kitchen-sink)
         echo "Running comprehensive MTU analysis..."
-        sudo "$BINARY" kitchen-sink
+        "$BINARY" kitchen-sink
         ;;
     -11|--json)
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         mkdir -p reports
         OUTFILE="reports/mtu-report-${TIMESTAMP}.json"
         echo "Running comprehensive analysis with JSON output..."
-        sudo "$BINARY" kitchen-sink --json --output "$OUTFILE"
+        "$BINARY" kitchen-sink --json --output "$OUTFILE"
         echo ""
         echo "Report saved to: $OUTFILE"
         ;;
@@ -107,7 +108,7 @@ case "${1:-}" in
         MODE="${1:-all}"
         OUTPUT="${2:-reports/fuzz_output.pcap}"
         echo "Running fuzzing mode: $MODE..."
-        sudo "$BINARY" fuzz --mode "$MODE" --output "$OUTPUT"
+        "$BINARY" fuzz --mode "$MODE" --output "$OUTPUT"
         ;;
     -h|--help)
         cat << 'EOF'
@@ -160,10 +161,9 @@ Examples:
   ./start.sh -7 cloudflare.com            # Run ALL 11 tests
   ./start.sh -8 github.com                # HTTPS stage analysis
   ./start.sh -f tcp-options reports/tcp.pcap  # Fuzz TCP options
-  sudo ./start.sh --desktop               # Desktop GUI with root (full features)
+  ./start.sh --desktop                     # Desktop GUI
 
-Note: Most tests require sudo for ICMP/raw socket access.
-      TUI will show warnings if not run as root.
+Note: All tests work without root. ICMP MTU uses Linux-specific ping flags.
 EOF
         ;;
     "")
@@ -175,16 +175,9 @@ EOF
         echo ""
         echo "Launching interactive TUI..."
         echo ""
-        if [ "$EUID" -ne 0 ]; then
-            echo "⚠️  Not running as root. Some features require sudo:"
-            echo "   • ICMP MTU testing (ping-based)"
-            echo "   • Raw socket tests"
-            echo "   • tracepath (press 't' in detail view)"
-            echo "   • Packet fuzzing"
-            echo ""
-            echo "For full features: sudo ./start.sh"
-            echo ""
-        fi
+        echo "All tests work without root."
+        echo "Note: ICMP MTU uses Linux-specific flags (use TCP MTU on macOS)."
+        echo ""
         echo "TUI Controls: [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
         echo ""
         exec "$BINARY" tui

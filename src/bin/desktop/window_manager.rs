@@ -1,91 +1,88 @@
 //! Multi-window manager for detachable panels
 //!
-//! Implements true multi-window support using Dioxus Desktop's native window API.
-//! Detached panels open in separate OS-level windows and share state via GlobalSignal.
+//! Uses VirtualDom::new_with_props to pass panel ID directly,
+//! avoiding race conditions. Uses tao/wry event handlers to detect window close.
 
 use std::collections::HashSet;
 use dioxus::prelude::*;
-use dioxus::desktop::{use_window, Config, WindowBuilder, LogicalSize};
+use dioxus::desktop::{use_window, Config, WindowBuilder, LogicalSize, tao};
+use tao::event::{Event, WindowEvent};
 use crate::state::PanelId;
 
 // ============================================================================
-// Global State - Shared across all windows
+// Global State
 // ============================================================================
 
-/// Global signal tracking which panels are currently detached
+/// Tracks which panels are currently in detached windows
 pub static DETACHED_PANELS: GlobalSignal<HashSet<PanelId>> = Signal::global(|| HashSet::new());
 
-/// Check if a panel is detached
-pub fn is_panel_detached(panel: PanelId) -> bool {
-    DETACHED_PANELS.read().contains(&panel)
+/// Context for child components to know they're in a detached window
+#[derive(Clone, Copy, PartialEq)]
+pub struct DetachedWindowContext {
+    pub panel: PanelId,
 }
 
-/// Mark a panel as detached
-pub fn detach_panel(panel: PanelId) {
-    DETACHED_PANELS.write().insert(panel);
-}
+// ============================================================================
+// Public API
+// ============================================================================
 
-/// Mark a panel as reattached (remove from detached set)
+/// Mark a panel as reattached
 pub fn reattach_panel(panel: PanelId) {
     DETACHED_PANELS.write().remove(&panel);
-}
-
-/// Get list of currently attached panels (for main window tab bar)
-pub fn get_attached_panels() -> Vec<PanelId> {
-    let detached = DETACHED_PANELS.read();
-    PanelId::all()
-        .into_iter()
-        .filter(|p| !detached.contains(p))
-        .collect()
-}
-
-/// Get count of detached panels
-pub fn detached_count() -> usize {
-    DETACHED_PANELS.read().len()
 }
 
 // ============================================================================
 // Detach Button Component
 // ============================================================================
 
-/// Button to detach a panel into its own window
 #[component]
 pub fn DetachButton(panel: PanelId) -> Element {
     let window = use_window();
-    let is_detached = is_panel_detached(panel);
 
-    if is_detached {
-        // This button appears in the detached window - clicking closes the window
-        rsx! {
-            button {
-                class: "detach-btn reattach",
-                title: "Close and reattach to main window",
-                onclick: move |_| {
-                    // Reattach the panel
-                    reattach_panel(panel);
-                    // Close this window
-                    window.close();
-                },
-                "× Close & Reattach"
+    // Check if we're inside a detached window
+    let in_detached = try_use_context::<DetachedWindowContext>();
+
+    // Read detached state for reactivity
+    let detached = DETACHED_PANELS.read();
+    let is_this_detached = detached.contains(&panel);
+
+    match in_detached {
+        Some(ctx) if ctx.panel == panel => {
+            // Header of this detached window - show Reattach
+            rsx! {
+                button {
+                    class: "detach-btn reattach",
+                    onclick: move |_| {
+                        // Update state - panel reappears in main window
+                        reattach_panel(panel);
+                        // User closes window with X, or leaves it open (harmless)
+                    },
+                    "Reattach"
+                }
             }
         }
-    } else {
-        // This button appears in the main window - clicking opens new window
-        rsx! {
-            button {
-                class: "detach-btn",
-                title: "Open in separate window",
-                onclick: move |_| {
-                    // Mark panel as detached
-                    detach_panel(panel);
+        Some(_) => {
+            // Sub-component in detached window - no button
+            rsx! {}
+        }
+        None if is_this_detached => {
+            // Panel is detached, we're in main window - no button
+            rsx! {}
+        }
+        None => {
+            // Normal case - show Detach button
+            rsx! {
+                button {
+                    class: "detach-btn",
+                    onclick: move |_| {
+                        // Mark as detached in global state
+                        DETACHED_PANELS.write().insert(panel);
 
-                    // Spawn new window asynchronously
-                    let window_clone = window.clone();
-                    spawn(async move {
-                        spawn_panel_window(window_clone, panel).await;
-                    });
-                },
-                "⬚ Detach"
+                        // Create new window with this panel
+                        spawn_detached_window(window.clone(), panel);
+                    },
+                    "Detach"
+                }
             }
         }
     }
@@ -95,18 +92,16 @@ pub fn DetachButton(panel: PanelId) -> Element {
 // Window Spawning
 // ============================================================================
 
-/// Spawn a new window for a detached panel
-async fn spawn_panel_window(window: dioxus::desktop::DesktopContext, panel: PanelId) {
+fn spawn_detached_window(window: dioxus::desktop::DesktopContext, panel: PanelId) {
     use crate::theme;
 
-    // Create the VirtualDom for the new window
-    // We use a wrapper component that knows which panel to render
+    // Create VirtualDom with props - the panel ID is passed directly, no race conditions
+    // #[component] macro generates DetachedWindowComponentProps automatically
     let dom = VirtualDom::new_with_props(
-        DetachedPanelWindow,
-        DetachedPanelWindowProps { panel },
+        DetachedWindowComponent,
+        DetachedWindowComponentProps { panel },
     );
 
-    // Configure the new window
     let config = Config::default()
         .with_window(
             WindowBuilder::new()
@@ -116,58 +111,53 @@ async fn spawn_panel_window(window: dioxus::desktop::DesktopContext, panel: Pane
         )
         .with_custom_head(format!(r#"<style>{}</style>"#, theme::get_css()));
 
-    // Create the new window
-    // In Dioxus 0.6, new_window is synchronous and returns immediately
-    let _ = window.new_window(dom, config);
+    window.new_window(dom, config);
 }
 
-// ============================================================================
-// Detached Panel Window Component
-// ============================================================================
-
-#[derive(Props, Clone, PartialEq)]
-pub struct DetachedPanelWindowProps {
-    panel: PanelId,
-}
-
-/// Component that renders inside a detached panel window
+/// Root component for detached windows - receives panel via props
 #[component]
-pub fn DetachedPanelWindow(props: DetachedPanelWindowProps) -> Element {
-    let panel = props.panel;
+fn DetachedWindowComponent(panel: PanelId) -> Element {
+    let window = use_window();
 
-    // When this window unmounts (closes), reattach the panel
-    use_drop(move || {
-        reattach_panel(panel);
+    // Provide context for children
+    use_context_provider(|| DetachedWindowContext { panel });
+
+    // Register event handler to detect when THIS window is being closed (X button)
+    use_hook(|| {
+        let window_id = window.id();
+        window.create_wry_event_handler(move |event, _target| {
+            if let Event::WindowEvent { window_id: evt_window_id, event: WindowEvent::CloseRequested, .. } = event {
+                if *evt_window_id == window_id {
+                    // Window is closing - reattach the panel
+                    reattach_panel(panel);
+                }
+            }
+        });
     });
 
     rsx! {
         div { class: "app-container detached-window",
-            // Header with panel name and close button
             header { class: "header",
                 h1 { "{panel.label()}" }
-                DetachButton { panel: panel }
+                DetachButton { panel }
             }
-
-            // Panel content
             div { class: "content",
-                DetachedPanelContent { panel: panel }
+                PanelContent { panel }
             }
         }
     }
 }
 
-/// Renders the actual panel content in a detached window
+/// Renders panel content
 #[component]
-fn DetachedPanelContent(panel: PanelId) -> Element {
-    use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator};
+fn PanelContent(panel: PanelId) -> Element {
+    use crate::components::{Dashboard, TestPanel, FuzzingPanel, Simulator, LogsPanel, HistoryPanel};
     use crate::state::AppState;
     use crate::state::test_runner::TestUpdate;
     use futures_util::StreamExt;
 
-    // Get the shared app state
-    let mut state = use_signal(AppState::new);
+    let state = use_signal(AppState::new);
 
-    // Set up test update processing for this window
     let update_tx = use_coroutine({
         let mut state = state;
         move |mut rx: UnboundedReceiver<TestUpdate>| async move {
@@ -178,7 +168,7 @@ fn DetachedPanelContent(panel: PanelId) -> Element {
                         state.write().progress.set(0.0);
                         let msg = match category {
                             Some(cat) => format!("Running {} on {}...", cat.as_str(), target),
-                            None => format!("Running all tests on {}...", target),
+                            None => format!("Running tests on {}...", target),
                         };
                         state.write().status_message.set(msg);
                     }
@@ -191,7 +181,6 @@ fn DetachedPanelContent(panel: PanelId) -> Element {
                     }
                     TestUpdate::Completed { target } => {
                         state.write().testing.set(false);
-                        state.write().progress.set(1.0);
                         state.write().status_message.set(format!("Completed: {}", target));
                     }
                     TestUpdate::Failed { error, .. } => {
@@ -204,13 +193,12 @@ fn DetachedPanelContent(panel: PanelId) -> Element {
     });
 
     match panel {
-        PanelId::Dashboard => rsx! { Dashboard { state: state, update_tx: update_tx } },
-        PanelId::Tests => rsx! { TestPanel { state: state, update_tx: update_tx } },
-        PanelId::Https => rsx! { HttpsPanel { state: state, update_tx: update_tx } },
-        PanelId::Fuzzing => rsx! { FuzzingPanel { state: state, update_tx: update_tx } },
-        PanelId::Path => rsx! { PathPanel { state: state, update_tx: update_tx } },
-        PanelId::Simulator => rsx! { Simulator { state: state } },
-        PanelId::VpnCalculator => rsx! { Simulator { state: state } },
-        PanelId::Targets => rsx! { Dashboard { state: state, update_tx: update_tx } },
+        PanelId::Dashboard => rsx! { Dashboard { state, update_tx, panel } },
+        PanelId::Tests => rsx! { TestPanel { state, update_tx, panel } },
+        PanelId::Fuzzing => rsx! { FuzzingPanel { state, update_tx, panel } },
+        PanelId::Simulator => rsx! { Simulator { state, panel } },
+        PanelId::Logs => rsx! { LogsPanel { state, panel } },
+        PanelId::History => rsx! { HistoryPanel { state, panel } },
+        _ => rsx! { Dashboard { state, update_tx, panel: PanelId::Dashboard } },
     }
 }

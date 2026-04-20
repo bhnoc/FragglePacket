@@ -48,23 +48,46 @@ impl NetworkTest for IcmpMtuTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent command for transparency
+        result.add_metadata("cli_command", format!("ping -c 3 -M do -s 1472 {}", target));
+        result.add_metadata("cli_note", "Binary search from 576-1500 bytes with DF bit set");
+
+        // Check if we're on macOS - ICMP MTU discovery requires Linux-specific ping flags
+        #[cfg(target_os = "macos")]
+        {
+            result.set_status(TestStatus::Skipped);
+            result.add_metadata("reason", "ICMP MTU discovery uses Linux-specific ping flags (-M do)");
+            result.add_metadata("alternative", "Use TCP MSS Discovery instead");
+            result.add_metadata("macos_alt", "Use: ping -D -s 1472 (but no DF flag on macOS)");
+            result.add_diagnosis(crate::framework::Diagnosis::new(
+                crate::framework::DiagnosisSeverity::Info,
+                "Not Supported on macOS".to_string(),
+                "ICMP MTU discovery requires Linux ping with -M (Don't Fragment) flag. Use TCP-based MTU tests instead.".to_string(),
+            ).with_recommendation("TCP MSS Discovery provides equivalent MTU information")
+             .with_related_test("TCP MSS Discovery"));
+            return Ok(result);
+        }
+
+        // Linux path - use ping with DF bit
+        #[cfg(not(target_os = "macos"))]
+        {
         // Binary search for MTU
         let mut low = self.min_mtu;
         let mut high = self.max_mtu;
         let mut discovered_mtu = None;
-        
+
         while low <= high {
             let mid = (low + high) / 2;
-            
+
             // Ping with specific packet size (DF bit set)
             let packet_size = mid - 28; // Subtract IP + ICMP headers
-            
+
             let output = Command::new("ping")
                 .arg("-c")
                 .arg("3")
                 .arg("-M")
-                .arg("do") // Don't fragment
+                .arg("do") // Don't fragment (Linux-specific)
                 .arg("-s")
                 .arg(packet_size.to_string())
                 .arg("-W")
@@ -108,8 +131,9 @@ impl NetworkTest for IcmpMtuTest {
             result.set_status(TestStatus::Failed);
             result.add_metadata("error", "Could not discover MTU");
         }
-        
+
         Ok(result)
+        } // end #[cfg(not(target_os = "macos"))]
     }
     
     fn requires_root(&self) -> bool {
@@ -159,15 +183,20 @@ impl NetworkTest for TcpMtuTest {
             self.category(),
             target.to_string(),
         );
-        
+
         use std::net::{TcpStream, ToSocketAddrs};
         use std::time::Duration;
-        
+
         let addr_str = if target.contains(':') {
             target.to_string()
         } else {
             format!("{}:{}", target, self.port)
         };
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("curl -so /dev/null -w 'TCP connected' https://{}", target));
+        result.add_metadata("cli_tcpdump", format!("tcpdump -i any -c 5 'tcp[13] == 2' and host {} | grep mss", target));
+        result.add_metadata("cli_ss", "ss -ti | grep -i mss");
         
         let mut addrs = addr_str.to_socket_addrs()?;
         let addr = addrs.next().ok_or("No address resolved")?;

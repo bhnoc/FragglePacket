@@ -1,8 +1,9 @@
 //! HTTPS Panel - Stage-by-stage HTTPS testing with waterfall visualization
 
 use dioxus::prelude::*;
-use crate::state::AppState;
+use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
+use crate::window_manager::DetachButton;
 use fraggle_packet::framework::TestCategory;
 
 /// HTTPS testing panel with waterfall chart
@@ -10,6 +11,7 @@ use fraggle_packet::framework::TestCategory;
 pub fn HttpsPanel(
     state: Signal<AppState>,
     update_tx: Coroutine<TestUpdate>,
+    panel: PanelId,
 ) -> Element {
     let current_target = state.read().current_target.read().clone();
     let testing = *state.read().testing.read();
@@ -54,6 +56,7 @@ pub fn HttpsPanel(
             div { class: "panel",
                 div { class: "panel-header",
                     span { class: "panel-title", "HTTPS Stage-by-Stage Test" }
+                    DetachButton { panel: panel }
                 }
                 div { class: "target-input", style: "display: flex; gap: 8px;",
                     input {

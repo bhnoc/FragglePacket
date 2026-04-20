@@ -54,7 +54,12 @@ impl NetworkTest for TcpSegmentationTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("curl -so /dev/null --write-out '%{{size_download}}' https://{}", target));
+        result.add_metadata("cli_tcpdump", format!("tcpdump -i any -c 20 'tcp and host {}' -v | grep -E 'length|mss'", target));
+        result.add_metadata("cli_note", "Tests TCP with segment sizes: 100, 536, 1024, 1460 bytes");
+
         // Try to connect to common ports (443 first, then 80)
         let ports = vec![443, 80];
         let mut connected_port = None;

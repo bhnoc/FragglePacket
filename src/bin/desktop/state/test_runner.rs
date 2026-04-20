@@ -2,6 +2,7 @@
 //!
 //! Wraps the blocking TestOrchestrator calls in async tasks to prevent UI freezing.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use fraggle_packet::framework::{TestOrchestrator, TestCategory, TestResult};
@@ -77,6 +78,62 @@ impl TestRunner {
             match result {
                 Ok(results) => {
                     let total = results.len();
+                    for (i, result) in results.into_iter().enumerate() {
+                        let _ = tx.send(TestUpdate::Result {
+                            target: target.clone(),
+                            result,
+                        }).await;
+
+                        // Send progress
+                        let _ = tx.send(TestUpdate::Progress {
+                            target: target.clone(),
+                            progress: (i + 1) as f64 / total as f64,
+                        }).await;
+                    }
+                    let _ = tx.send(TestUpdate::Completed {
+                        target,
+                    }).await;
+                }
+                Err(e) => {
+                    let _ = tx.send(TestUpdate::Failed {
+                        target,
+                        error: e.to_string(),
+                    }).await;
+                }
+            }
+        });
+    }
+
+    /// Run multiple test categories asynchronously
+    pub fn run_categories(
+        &self,
+        target: String,
+        categories: HashSet<TestCategory>,
+        tx: mpsc::Sender<TestUpdate>,
+    ) {
+        let orchestrator = self.orchestrator.clone();
+
+        tokio::spawn(async move {
+            // Notify start
+            let _ = tx.send(TestUpdate::Started {
+                target: target.clone(),
+                category: None, // Multiple categories
+            }).await;
+
+            let target_clone = target.clone();
+            let categories_clone = categories.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                let mut all_results = Vec::new();
+                for category in categories_clone {
+                    let cat_results = orchestrator.run_category(&target_clone, category);
+                    all_results.extend(cat_results);
+                }
+                all_results
+            }).await;
+
+            match result {
+                Ok(results) => {
+                    let total = results.len().max(1);
                     for (i, result) in results.into_iter().enumerate() {
                         let _ = tx.send(TestUpdate::Result {
                             target: target.clone(),

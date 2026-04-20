@@ -1,8 +1,10 @@
 //! Fuzzing Panel - Packet fuzzing controls
 
 use dioxus::prelude::*;
-use crate::state::AppState;
+use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
+use crate::state::LogLevel;
+use crate::window_manager::DetachButton;
 use fraggle_packet::framework::TestCategory;
 
 /// Fuzzing panel with mode selection and PCAP output
@@ -10,6 +12,7 @@ use fraggle_packet::framework::TestCategory;
 pub fn FuzzingPanel(
     state: Signal<AppState>,
     update_tx: Coroutine<TestUpdate>,
+    panel: PanelId,
 ) -> Element {
     let current_target = state.read().current_target.read().clone();
     let mut selected_mode = use_signal(|| "all".to_string());
@@ -17,9 +20,22 @@ pub fn FuzzingPanel(
     let testing = *state.read().testing.read();
     let progress = *state.read().progress.read();
 
+    // Track if we're actively generating fuzz packets (local to this panel)
+    let mut is_generating = use_signal(|| false);
+
     // Get fuzzing results
     let fuzz_results = state.read().get_category_results(&current_target, TestCategory::Fuzzing);
     let latest_result = fuzz_results.last();
+
+    // Extract packets count and output file from latest result for status display
+    let packets_from_result = latest_result
+        .and_then(|r| r.metrics.get("packets_generated"))
+        .map(|v| *v as u64)
+        .unwrap_or(0);
+    let output_from_result = latest_result
+        .and_then(|r| r.metadata.get("output_file"))
+        .cloned()
+        .unwrap_or_default();
 
     let modes = vec![
         ("segment-size", "Segment Size", "Test TCP segment size handling"),
@@ -36,6 +52,7 @@ pub fn FuzzingPanel(
             div { class: "panel",
                 div { class: "panel-header",
                     span { class: "panel-title", "Packet Fuzzing" }
+                    DetachButton { panel: panel }
                 }
                 div { class: "target-input", style: "display: flex; gap: 8px;",
                     input {
@@ -115,31 +132,114 @@ pub fn FuzzingPanel(
             }
 
             // Run button and progress
-            div { class: "panel", style: "display: flex; gap: 8px; align-items: center;",
-                button {
-                    class: "btn primary",
-                    disabled: testing,
-                    onclick: move |_| {
-                        let target = state.read().current_target.read().clone();
-                        let runner = state.read().test_runner.clone();
-                        let (tx, mut rx) = crate::state::test_runner::TestRunner::create_channel();
+            div { class: "panel",
+                div { class: "fuzz-controls", style: "display: flex; gap: 8px; align-items: center; margin-bottom: 12px;",
+                    button {
+                        class: "btn primary",
+                        disabled: *is_generating.read(),
+                        onclick: move |_| {
+                            let target = state.read().current_target.read().clone();
+                            let runner = state.read().test_runner.clone();
+                            let (tx, mut rx) = crate::state::test_runner::TestRunner::create_channel();
 
-                        // Run fuzzing test
-                        runner.run_category(target.clone(), TestCategory::Fuzzing, tx);
+                            // Reset state and start generating
+                            is_generating.set(true);
+                            state.write().reset_cancel();
 
-                        spawn(async move {
-                            while let Some(update) = rx.recv().await {
-                                update_tx.send(update);
+                            // Run fuzzing test
+                            runner.run_category(target.clone(), TestCategory::Fuzzing, tx);
+
+                            spawn(async move {
+                                while let Some(update) = rx.recv().await {
+                                    // Check for cancellation
+                                    if state.read().is_cancelled() {
+                                        is_generating.set(false);
+                                        break;
+                                    }
+                                    update_tx.send(update);
+                                }
+                                is_generating.set(false);
+                            });
+                        },
+                        if *is_generating.read() { "Generating..." } else { "Generate" }
+                    }
+                    if *is_generating.read() {
+                        button {
+                            class: "btn danger",
+                            onclick: move |_| {
+                                state.read().cancel_tests();
+                                state.write().log(LogLevel::Warning, "Fuzzing cancelled by user");
+                                is_generating.set(false);
+                            },
+                            "Stop"
+                        }
+                    }
+                    if !output_from_result.is_empty() && !*is_generating.read() {
+                        {
+                            let output_path_for_open = output_from_result.clone();
+                            rsx! {
+                                button {
+                                    class: "btn",
+                                    onclick: move |_| {
+                                        let path = output_path_for_open.clone();
+                                        // Get the parent directory of the output file
+                                        if let Some(parent) = std::path::Path::new(&path).parent() {
+                                            let parent_str = parent.to_string_lossy().to_string();
+                                            #[cfg(target_os = "macos")]
+                                            {
+                                                let _ = std::process::Command::new("open")
+                                                    .arg(&parent_str)
+                                                    .spawn();
+                                            }
+                                            #[cfg(target_os = "linux")]
+                                            {
+                                                let _ = std::process::Command::new("xdg-open")
+                                                    .arg(&parent_str)
+                                                    .spawn();
+                                            }
+                                            #[cfg(target_os = "windows")]
+                                            {
+                                                let _ = std::process::Command::new("explorer")
+                                                    .arg(&parent_str)
+                                                    .spawn();
+                                            }
+                                        }
+                                    },
+                                    "Open Folder"
+                                }
                             }
-                        });
-                    },
-                    if testing { "Generating..." } else { "Generate Fuzz Packets" }
+                        }
+                    }
+                    if *is_generating.read() {
+                        div { class: "progress-bar", style: "flex: 1;",
+                            div {
+                                class: "fill",
+                                style: "width: {(progress * 100.0) as u32}%;"
+                            }
+                        }
+                    }
                 }
-                if testing {
-                    div { class: "progress-bar", style: "flex: 1;",
-                        div {
-                            class: "fill",
-                            style: "width: {(progress * 100.0) as u32}%;"
+
+                // Status display
+                if *is_generating.read() || packets_from_result > 0 || !output_from_result.is_empty() {
+                    div { class: "fuzz-status",
+                        if *is_generating.read() {
+                            div { class: "status-row",
+                                span { class: "status-label", "Status:" }
+                                span { class: "status-value status-warning", "Generating packets..." }
+                            }
+                        }
+                        if packets_from_result > 0 {
+                            div { class: "status-row",
+                                span { class: "status-label", "Packets:" }
+                                span { class: "status-value status-success", "{packets_from_result}" }
+                            }
+                        }
+                        if !output_from_result.is_empty() {
+                            div { class: "status-row",
+                                span { class: "status-label", "Output:" }
+                                span { class: "status-value", "{output_from_result}" }
+                            }
                         }
                     }
                 }

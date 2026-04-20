@@ -47,7 +47,12 @@ impl NetworkTest for TcpHealthTest {
             self.category(),
             target.to_string(),
         );
-        
+
+        // Add CLI equivalent commands for transparency
+        result.add_metadata("cli_command", format!("curl -so /dev/null -w 'TCP connect: %{{time_connect}}s' https://{}", target));
+        result.add_metadata("cli_ss", format!("ss -ti dst {}", target));
+        result.add_metadata("cli_note", "Tests TCP handshake timing and connection health");
+
         // Test TCP handshake timing on port 80/443
         let handshake_result = test_tcp_handshake_timing(target, 443, self.timeout_ms);
         

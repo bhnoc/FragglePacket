@@ -2,10 +2,10 @@
 
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use crate::state::{AppState, PanelId, ToastType};
+use crate::state::{AppState, PanelId, ToastType, LogLevel};
 use crate::state::test_runner::TestUpdate;
-use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator};
-use crate::window_manager::{DetachButton, get_attached_panels, is_panel_detached, detached_count, reattach_panel};
+use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel};
+use crate::window_manager::reattach_panel;
 
 /// Main App component
 #[component]
@@ -20,23 +20,81 @@ pub fn App() -> Element {
                 TestUpdate::Started { target, category } => {
                     state.write().testing.set(true);
                     state.write().progress.set(0.0);
+                    state.write().reset_cancel();
+                    state.write().test_start_time.set(Some(std::time::Instant::now()));
                     let msg = match category {
                         Some(cat) => format!("Running {} test on {}...", cat.as_str(), target),
                         None => format!("Running all tests on {}...", target),
                     };
-                    state.write().status_message.set(msg);
+                    state.write().status_message.set(msg.clone());
+                    state.write().log(LogLevel::Info, format!("=== {} ===", msg));
+                    state.write().current_test_name.set(String::new());
                 }
                 TestUpdate::Result { result, .. } => {
                     let target = result.target.clone();
+                    let test_name = result.name.clone();
+                    let status = result.status;
+
+                    // Log the result with details
+                    let level = match status {
+                        fraggle_packet::framework::TestStatus::Success => LogLevel::Success,
+                        fraggle_packet::framework::TestStatus::Warning => LogLevel::Warning,
+                        fraggle_packet::framework::TestStatus::Failed => LogLevel::Error,
+                        fraggle_packet::framework::TestStatus::Skipped => LogLevel::Info,
+                        fraggle_packet::framework::TestStatus::Pending => LogLevel::Info,
+                        fraggle_packet::framework::TestStatus::Running => LogLevel::Running,
+                    };
+
+                    // Extract CLI command from metadata
+                    let cli_command = result.metadata.get("cli_command").cloned();
+
+                    // Build metrics list
+                    let metrics: Vec<(String, String)> = result.metrics.iter()
+                        .map(|(k, v)| (k.clone(), format!("{:.2}", v)))
+                        .collect();
+
+                    // Build details from metadata (excluding cli_command)
+                    let details: Option<String> = {
+                        let other_meta: Vec<String> = result.metadata.iter()
+                            .filter(|(k, _)| !k.starts_with("cli_"))
+                            .map(|(k, v)| format!("{}: {}", k, v))
+                            .collect();
+                        if other_meta.is_empty() {
+                            None
+                        } else {
+                            Some(other_meta.join("\n"))
+                        }
+                    };
+
+                    // Create detailed log entry
+                    let mut entry = crate::state::LogEntry::new(level, format!("{}: {:?}", test_name, status));
+                    if let Some(cmd) = cli_command {
+                        entry = entry.with_cli_command(cmd);
+                    }
+                    if !metrics.is_empty() {
+                        entry = entry.with_metrics(metrics);
+                    }
+                    if let Some(det) = details {
+                        entry = entry.with_details(det);
+                    }
+
+                    state.write().log_detailed(entry);
+                    state.write().current_test_name.set(test_name);
                     state.write().store_result(&target, result);
                 }
                 TestUpdate::Progress { progress, .. } => {
                     state.write().progress.set(progress);
                 }
                 TestUpdate::Completed { target } => {
+                    // Save to history before clearing testing state
+                    let categories = state.read().selected_categories.read().clone();
+                    state.write().save_to_history(&target, categories);
+
                     state.write().testing.set(false);
                     state.write().progress.set(1.0);
+                    state.write().current_test_name.set(String::new());
                     state.write().status_message.set(format!("Tests completed for {}", target));
+                    state.write().log(LogLevel::Success, format!("=== Completed: {} ===", target));
                     state.write().add_toast(
                         format!("Tests completed for {}", target),
                         ToastType::Success
@@ -44,7 +102,9 @@ pub fn App() -> Element {
                 }
                 TestUpdate::Failed { target, error } => {
                     state.write().testing.set(false);
+                    state.write().current_test_name.set(String::new());
                     state.write().status_message.set(format!("Test failed: {}", error));
+                    state.write().log(LogLevel::Error, format!("FAILED: {} - {}", target, error));
                     state.write().add_toast(
                         format!("Test failed for {}: {}", target, error),
                         ToastType::Error
@@ -80,8 +140,13 @@ fn render_active_panel(
 ) -> Element {
     let active = *state.read().active_panel.read();
 
+    // Read the global signal DIRECTLY to create reactive dependency
+    // This ensures the content area re-renders when panels are detached/reattached
+    let detached = crate::window_manager::DETACHED_PANELS.read();
+    let is_active_detached = detached.contains(&active);
+
     // If this panel is detached, show a placeholder
-    if is_panel_detached(active) {
+    if is_active_detached {
         return rsx! {
             div { class: "panel-detached-message",
                 p { "This panel is open in a separate window." }
@@ -98,21 +163,18 @@ fn render_active_panel(
 
     rsx! {
         div { class: "panel-container",
-            // Detach button in corner
-            div { class: "panel-detach-corner",
-                DetachButton { panel: active }
-            }
-
-            // Panel content
+            // Panel content - each panel includes its own detach button in header
             match active {
-                PanelId::Dashboard => rsx! { Dashboard { state: state, update_tx: update_tx } },
-                PanelId::Tests => rsx! { TestPanel { state: state, update_tx: update_tx } },
-                PanelId::Https => rsx! { HttpsPanel { state: state, update_tx: update_tx } },
-                PanelId::Fuzzing => rsx! { FuzzingPanel { state: state, update_tx: update_tx } },
-                PanelId::Path => rsx! { PathPanel { state: state, update_tx: update_tx } },
-                PanelId::Simulator => rsx! { Simulator { state: state } },
-                PanelId::VpnCalculator => rsx! { Simulator { state: state } },
-                PanelId::Targets => rsx! { Dashboard { state: state, update_tx: update_tx } },
+                PanelId::Dashboard => rsx! { Dashboard { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Tests => rsx! { TestPanel { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Https => rsx! { HttpsPanel { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Fuzzing => rsx! { FuzzingPanel { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Path => rsx! { PathPanel { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Simulator => rsx! { Simulator { state: state, panel: active } },
+                PanelId::VpnCalculator => rsx! { Simulator { state: state, panel: active } },
+                PanelId::Targets => rsx! { Dashboard { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Logs => rsx! { LogsPanel { state: state, panel: active } },
+                PanelId::History => rsx! { HistoryPanel { state: state, panel: active } },
             }
         }
     }
@@ -154,8 +216,15 @@ fn Header(state: Signal<AppState>) -> Element {
 #[component]
 fn TabBar(state: Signal<AppState>) -> Element {
     let active = *state.read().active_panel.read();
-    let attached = get_attached_panels();
-    let num_detached = detached_count();
+
+    // Read the global signal DIRECTLY in the component to create reactive dependency
+    // This ensures the component re-renders when panels are detached/reattached
+    let detached = crate::window_manager::DETACHED_PANELS.read();
+    let attached: Vec<PanelId> = PanelId::all()
+        .into_iter()
+        .filter(|p| !detached.contains(p))
+        .collect();
+    let num_detached = detached.len();
 
     rsx! {
         nav { class: "tabs",
@@ -165,10 +234,7 @@ fn TabBar(state: Signal<AppState>) -> Element {
                     onclick: move |_| {
                         state.write().active_panel.set(panel);
                     },
-                    "{panel.label()}"
-                    if let Some(shortcut) = panel.shortcut() {
-                        span { class: "shortcut", "[{shortcut}]" }
-                    }
+                    {panel.label()}
                 }
             }
             // Show indicator for detached panels
