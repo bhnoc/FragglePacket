@@ -6,6 +6,10 @@ use fraggle_packet::network_tests::tcp_segmentation::TcpSegmentationTest;
 use fraggle_packet::network_tests::rtt::RttTest;
 use fraggle_packet::network_tests::dns::DnsTest;
 use fraggle_packet::network_tests::packet_loss::PacketLossTest;
+use fraggle_packet::network_tests::{
+    DnsSecureCompareTest, QuicPmtudTest, Raw9100BulkTest, SshDataPathTest, TcpOptionsEchoTest,
+    UploadSizeSweepTest,
+};
 use colored::*;
 
 pub struct TestCommand {
@@ -43,6 +47,24 @@ pub fn run_tests(cmd: TestCommand) {
     }
     if run_all || categories.contains(&"loss") {
         orchestrator.register(Box::new(PacketLossTest::new().with_count(cmd.count)));
+    }
+    if run_all || categories.contains(&"upload") {
+        orchestrator.register(Box::new(UploadSizeSweepTest::new()));
+    }
+    if run_all || categories.contains(&"ssh") {
+        orchestrator.register(Box::new(SshDataPathTest::new()));
+    }
+    if run_all || categories.contains(&"printer") {
+        orchestrator.register(Box::new(Raw9100BulkTest::new()));
+    }
+    if run_all || categories.contains(&"tcp_opts") {
+        orchestrator.register(Box::new(TcpOptionsEchoTest::new()));
+    }
+    if run_all || categories.contains(&"quic") {
+        orchestrator.register(Box::new(QuicPmtudTest::new()));
+    }
+    if run_all || categories.contains(&"dns_secure") {
+        orchestrator.register(Box::new(DnsSecureCompareTest::new()));
     }
     
     let test_count = orchestrator.available_categories().len();

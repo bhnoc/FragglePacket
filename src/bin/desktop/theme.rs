@@ -636,6 +636,83 @@ select:focus {
     gap: var(--spacing-md);
 }
 
+/* Privilege indicator */
+.priv-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 2px var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--term-green-dark);
+}
+
+.priv-indicator.root {
+    color: var(--term-green);
+    border-color: var(--term-green);
+    background-color: rgba(0, 255, 65, 0.08);
+}
+
+.priv-indicator.user {
+    color: var(--term-amber);
+    border-color: var(--term-amber);
+    background-color: rgba(255, 176, 0, 0.08);
+}
+
+/* Privilege banner shown below tab bar when not privileged */
+.priv-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: rgba(255, 176, 0, 0.08);
+    border-bottom: 1px solid var(--term-amber);
+    color: var(--term-amber);
+    font-size: var(--font-size-sm);
+}
+
+.priv-banner-text {
+    flex: 1;
+}
+
+.priv-banner-text strong {
+    color: var(--term-amber);
+    font-weight: 600;
+}
+
+.priv-banner-features {
+    color: var(--term-amber);
+    opacity: 0.85;
+}
+
+.priv-banner-hint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--term-green-dim);
+    padding: 2px 6px;
+    border: 1px solid var(--term-green-dark);
+    border-radius: var(--radius-sm);
+    background-color: rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+.priv-banner-close {
+    background: transparent;
+    border: 1px solid var(--term-amber);
+    color: var(--term-amber);
+    padding: 2px var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.priv-banner-close:hover {
+    background-color: rgba(255, 176, 0, 0.15);
+}
+
 .progress-container {
     width: 200px;
 }

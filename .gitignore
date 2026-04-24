@@ -17,3 +17,6 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
+# Scratch / temp
+/temp/
+

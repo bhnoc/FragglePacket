@@ -1,4 +1,5 @@
 # todo
+- each test ability to see the commands and edit them and even save the edit for future use before running them 
 - testing
 - possible to keep in tui? or need api and app?
 

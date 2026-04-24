@@ -13,24 +13,40 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! use fuzzing::{PacketContext, FuzzMode, run_campaign};
+//! ```ignore
+//! use fraggle_packet::fuzzing::{PacketContext, FuzzMode, run_campaign};
 //!
-//! let ctx = PacketContext::new("192.168.1.1", "8.8.8.8");
-//! run_campaign(&ctx, FuzzMode::SegmentSize, "output.pcap")?;
+//! let ctx = PacketContext::new("192.168.1.1", "8.8.8.8").unwrap();
+//! run_campaign(&ctx, FuzzMode::SegmentSize, "output.pcap").unwrap();
 //! ```
 
 use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod builder;
+pub mod capture;
 pub mod cli;
 pub mod context;
+pub mod dsl;
 pub mod fuzzers;
+pub mod probe;
+pub mod replay;
 pub mod writer;
 
 pub use context::PacketContext;
 pub use writer::PcapWriter;
+
+/// Utility: detect whether the process is running as root/admin.
+pub fn is_root() -> bool {
+    #[cfg(unix)]
+    unsafe {
+        libc::geteuid() == 0
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
 
 /// Fuzzing modes available
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

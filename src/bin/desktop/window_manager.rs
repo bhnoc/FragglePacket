@@ -1,9 +1,11 @@
 //! Multi-window manager for detachable panels
 //!
-//! Uses VirtualDom::new_with_props to pass panel ID directly,
-//! avoiding race conditions. Uses tao/wry event handlers to detect window close.
+//! Uses VirtualDom::new_with_props to pass panel ID directly.
+//! Uses a channel to communicate window close events back to Dioxus safely.
 
 use std::collections::HashSet;
+use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::OnceLock;
 use dioxus::prelude::*;
 use dioxus::desktop::{use_window, Config, WindowBuilder, LogicalSize, tao};
 use tao::event::{Event, WindowEvent};
@@ -16,6 +18,23 @@ use crate::state::PanelId;
 /// Tracks which panels are currently in detached windows
 pub static DETACHED_PANELS: GlobalSignal<HashSet<PanelId>> = Signal::global(|| HashSet::new());
 
+/// Channel for window close events - initialized once
+static REATTACH_CHANNEL: OnceLock<(Sender<PanelId>, std::sync::Mutex<Option<Receiver<PanelId>>>)> = OnceLock::new();
+
+fn get_reattach_sender() -> Sender<PanelId> {
+    let (tx, _) = REATTACH_CHANNEL.get_or_init(|| {
+        let (tx, rx) = mpsc::channel();
+        (tx, std::sync::Mutex::new(Some(rx)))
+    });
+    tx.clone()
+}
+
+fn take_reattach_receiver() -> Option<Receiver<PanelId>> {
+    REATTACH_CHANNEL.get().and_then(|(_, rx_mutex)| {
+        rx_mutex.lock().ok().and_then(|mut guard| guard.take())
+    })
+}
+
 /// Context for child components to know they're in a detached window
 #[derive(Clone, Copy, PartialEq)]
 pub struct DetachedWindowContext {
@@ -26,9 +45,41 @@ pub struct DetachedWindowContext {
 // Public API
 // ============================================================================
 
-/// Mark a panel as reattached
+/// Mark a panel as reattached (safe to call from Dioxus context)
 pub fn reattach_panel(panel: PanelId) {
     DETACHED_PANELS.write().remove(&panel);
+}
+
+/// Initialize the reattach listener - call once from main App component
+pub fn use_reattach_listener() {
+    // use_hook runs once on mount - perfect for one-time initialization
+    use_hook(|| {
+        // Take the receiver and spawn the listener
+        if let Some(rx) = take_reattach_receiver() {
+            spawn(async move {
+                // Poll the receiver in a loop
+                loop {
+                    // Check for messages without blocking
+                    match rx.try_recv() {
+                        Ok(panel) => {
+                            // Safe to update GlobalSignal here - we're in Dioxus context
+                            DETACHED_PANELS.write().remove(&panel);
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {
+                            // No message, sleep briefly and check again
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            // Channel closed, stop listening
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+        // Return unit to satisfy Clone requirement
+        ()
+    });
 }
 
 // ============================================================================
@@ -96,7 +147,6 @@ fn spawn_detached_window(window: dioxus::desktop::DesktopContext, panel: PanelId
     use crate::theme;
 
     // Create VirtualDom with props - the panel ID is passed directly, no race conditions
-    // #[component] macro generates DetachedWindowComponentProps automatically
     let dom = VirtualDom::new_with_props(
         DetachedWindowComponent,
         DetachedWindowComponentProps { panel },
@@ -123,13 +173,17 @@ fn DetachedWindowComponent(panel: PanelId) -> Element {
     use_context_provider(|| DetachedWindowContext { panel });
 
     // Register event handler to detect when THIS window is being closed (X button)
+    // IMPORTANT: We send through channel instead of directly updating GlobalSignal
+    // because the event handler runs outside Dioxus's reactive runtime
     use_hook(|| {
         let window_id = window.id();
+        let tx = get_reattach_sender();
+
         window.create_wry_event_handler(move |event, _target| {
             if let Event::WindowEvent { window_id: evt_window_id, event: WindowEvent::CloseRequested, .. } = event {
                 if *evt_window_id == window_id {
-                    // Window is closing - reattach the panel
-                    reattach_panel(panel);
+                    // Send reattach request through channel (safe from any thread)
+                    let _ = tx.send(panel);
                 }
             }
         });
@@ -199,6 +253,8 @@ fn PanelContent(panel: PanelId) -> Element {
         PanelId::Simulator => rsx! { Simulator { state, panel } },
         PanelId::Logs => rsx! { LogsPanel { state, panel } },
         PanelId::History => rsx! { HistoryPanel { state, panel } },
+        PanelId::Probes => rsx! { crate::components::ProbesPanel { state, panel } },
+        PanelId::Report => rsx! { crate::components::ReportPanel { state, panel } },
         _ => rsx! { Dashboard { state, update_tx, panel: PanelId::Dashboard } },
     }
 }

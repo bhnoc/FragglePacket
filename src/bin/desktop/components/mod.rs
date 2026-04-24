@@ -10,6 +10,8 @@ pub mod results_display;
 pub mod logs_panel;
 pub mod history_panel;
 pub mod target_input;
+pub mod probes_panel;
+pub mod report_panel;
 
 pub use dashboard::Dashboard;
 pub use test_panel::TestPanel;
@@ -21,3 +23,5 @@ pub use results_display::ResultsDisplay;
 pub use logs_panel::LogsPanel;
 pub use history_panel::HistoryPanel;
 pub use target_input::TargetInput;
+pub use probes_panel::ProbesPanel;
+pub use report_panel::ReportPanel;

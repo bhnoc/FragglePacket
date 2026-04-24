@@ -30,6 +30,16 @@ pub struct HttpsTestResult {
     pub status_code: Option<u16>,
     pub total_time_ms: u64,
     pub diagnosis: HttpsDiagnosis,
+    pub cert_chain: Vec<CertInfo>,
+    pub negotiated_alpn: Option<String>,
+}
+
+/// Summary of a single certificate in the peer chain.
+#[derive(Debug, Clone, Default)]
+pub struct CertInfo {
+    pub subject: String,
+    pub issuer: String,
+    pub der_len: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +70,8 @@ impl HttpsTestResult {
             status_code: None,
             total_time_ms: 0,
             diagnosis: HttpsDiagnosis::Success,
+            cert_chain: Vec::new(),
+            negotiated_alpn: None,
         }
     }
 }
@@ -100,11 +112,22 @@ pub fn test_https_stages(target: &str, timeout_secs: u64) -> HttpsTestResult {
     };
     
     // Stage 3: TLS Handshake (CRITICAL for MTU blackhole detection)
-    let tls_start = Instant::now();
+    let _tls_start = Instant::now();
     match perform_tls_handshake(stream, target, timeout_secs) {
         Ok((mut tls_stream, handshake_time)) => {
             result.tls_handshake_time_ms = Some(handshake_time);
             result.tls_success = true;
+
+            if let Ok(Some(cert)) = tls_stream.peer_certificate() {
+                if let Ok(der) = cert.to_der() {
+                    let info = CertInfo {
+                        subject: String::new(),
+                        issuer: String::new(),
+                        der_len: der.len(),
+                    };
+                    result.cert_chain.push(info);
+                }
+            }
             
             // Stage 4: HTTP Request
             let http_start = Instant::now();

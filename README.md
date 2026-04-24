@@ -1,313 +1,224 @@
-# FragglePacket 🔍
+# FragglePacket
 
-** Network Diagnostic Tool for MTU Path Discovery, Protocol Testing, and Packet Fuzzing**
+FragglePacket is a Rust network diagnostics suite that combines active path probing, packet fuzzing, PCAP replay, staged HTTPS analysis, and a rule-based diagnosis engine behind a CLI, a terminal UI, and a Dioxus desktop GUI.
 
----
+## Features
 
-## 🚀 Features
+### Network tests
 
-### 🎯 Core Capabilities
+Ten test categories drive the framework. Each category holds one or more `NetworkTest` implementations.
 
-- **MTU Path Discovery** - ICMP, TCP, UDP, and QUIC-based MTU detection with binary search
-- **HTTPS Stage Testing** - Diagnose MTU blackholes with stage-by-stage TLS analysis
-- **Packet Fuzzing** - RustPacketFuzz integration for security testing with 5 fuzzing modes
-- **TCP Health Metrics** - Handshake timing, window analysis, retransmission detection
-- **Path Analysis** - Traceroute with per-hop MTU discovery
-- **Protocol Tests** - DNS, IPv6, RTT, packet loss, application-layer protocols
-- **VPN/SASE Calculator** - Optimal MTU for 12+ tunnel types (WireGuard, Zscaler, GlobalProtect, etc.)
+| Category | What it covers |
+| --- | --- |
+| MTU | ICMP and TCP MSS discovery, QUIC PMTU, tunnel MSS clamping analysis |
+| RTT | Round-trip latency sampling via ping with min/avg/max/stddev parsing |
+| PacketLoss | Loss percentage from fast-interval pings, burst detection |
+| PathAnalysis | Traceroute style per-hop latency and MTU inspection |
+| TCPHealth | Handshake timing, TCP options echo, segmentation detection |
+| DNS | Plain resolution, DoH and DoT comparison against UDP |
+| HTTPS | Staged DNS, TCP, TLS, HTTP request, TTFB probe with blackhole detection |
+| IPv6 | AAAA lookup and IPv6 reachability comparison |
+| Application | ALPN detection, HTTP/2 vs HTTP/3, raw JetDirect bulk sweep, SSH data-path |
+| Fuzzing | PCAP campaigns driven by the RustPacketFuzz engine |
 
-### 🖥️ Dual Interface
+Full catalog in [docs/TESTS.md](docs/TESTS.md).
 
-**Interactive TUI** (Terminal User Interface)
-- Retro green-on-black aesthetic
-- Real-time test execution with progress tracking
-- Multi-panel design: Dashboard, Test Panel, Fuzzing, HTTPS, Simulator, Help
-- Live tracepath output streaming
-- Context-aware key bindings
+### Packet fuzzing modes
 
-**CLI**
-- Batch testing of 159 default targets
-- JSON report generation
-- Pipe-friendly output
-- Quick ICMP-only mode for fast checks
+Five modes emit PCAP files for offline replay, IDS testing, or wire replay.
 
----
+| Mode | Focus |
+| --- | --- |
+| SegmentSize | TCP segment sizes across the 0 to 65535 range |
+| LengthMismatch | Heartbleed-style header length lies |
+| TcpOptions | Malformed MSS, SACK, and window-scale options |
+| Fragmentation | Edge-case IPv4 fragment offsets, overlaps, DF combos |
+| Checksum | Valid and corrupt IP, TCP, UDP checksums |
 
-## 🚀 Quick Setup & Start
+### Active probes, PCAP replay, capture
 
-**Automatic setup and launch:**
+Native engine built on `etherparse` and `pcap-file`. No `tcpreplay`, `hping3`, or `nping` required.
 
-```bash
-git clone https://github.com/yourusername/FragglePacket.git
-cd FragglePacket
-./setup.sh   # Installs deps, builds, verifies
-./start.sh   # Launches TUI
-```
+* Packet DSL composes layers with `/` in scapy style
+* PCAP replay sends on the wire using AF_PACKET on Linux, IP_HDRINCL raw sockets on macOS and FreeBSD
+* Passive capture reads from AF_PACKET with userspace filter callbacks
+* Active PMTU probe binary-searches DF pings and watches for ICMP fragmentation-needed
 
-**What `setup.sh` does:**
-- Installs system deps (traceroute, tcpdump, dnsutils)
-- Installs Rust if needed
-- Builds release binary
-- Verifies capabilities
+Details in [docs/FUZZING.md](docs/FUZZING.md).
 
-**What `start.sh` does:**
-- Default: launches TUI
-- Options: `-1` quick, `-2` diagnose, `-6` test, `-h` help
-- Handles sudo prompts
+### Scenario runner
 
-**Requirements:** Rust 1.70+, Linux with raw sockets, sudo for ICMP
+Declarative key-value step format. Each step names a `kind` (https, upload_sweep, ssh, printer, quic, dns_secure, tcp_options) and a target. Runs sequentially through the same `NetworkTest` trait. See [docs/SCENARIOS.md](docs/SCENARIOS.md).
 
----
+### Prometheus metrics exporter
 
-## 🎮 Usage
+Hand-rolled HTTP/1.1 server exposes a `/metrics` endpoint using the 0.0.4 text format. Default bind is `127.0.0.1:9464`. The `serve` subcommand can seed the registry from a single upload-sweep run. See [docs/METRICS.md](docs/METRICS.md).
 
-### Interactive TUI (Recommended)
+### Diagnosis engine
 
-```bash
-./start.sh  # Default mode
-```
+Eight rules correlate evidence and produce severity-ranked `Diagnosis` records.
 
-**Navigation:**
-- `[T]` - Test Panel (10 test categories)
-- `[F]` - Fuzzing Panel (packet crafting)
-- `[H]` - HTTPS Testing (MTU blackhole detection)
-- `[3]` - MTU Simulator (what-if analysis)
-- `[?]` - Help screen
-- `[q]` - Quit
+| Rule | Signal |
+| --- | --- |
+| MtuBlackholeRule | TCP ok, TLS timeout, interface MTU 1500 |
+| PathMtuMismatchRule | ICMP path MTU lower than interface by more than 50 |
+| PortBlockingRule | Ping ok, TCP connect fails |
+| DnsIssuesRule | DNS failure or resolution over 1000 ms |
+| TcpSegmentationLimitRule | Negotiated segment under 1000 bytes |
+| HighPacketLossRule | Loss at or above 1 percent |
+| HighLatencyRule | RTT over 200 ms |
+| BlackholeScoreRule | Aggregated heuristic score across probes |
 
-### CLI Examples (via start.sh)
+Engine and evidence schema live in `src/diagnosis/mod.rs`.
 
-**Quick ICMP MTU test:**
-```bash
-./start.sh -1 github.com
-```
+### Terminal UI
 
-**Full diagnostic (DNS → TCP → TLS → HTTP):**
-```bash
-./start.sh -2 github.com
-```
+Ratatui-based retro phosphor-green dashboard. Panels cover Dashboard, Tests, HTTPS stage view, Fuzzing, and Help. Keybindings in [docs/TUI.md](docs/TUI.md).
 
-**Test multiple targets:**
-```bash
-./start.sh -3 8.8.8.8,1.1.1.1,github.com
-```
+### Desktop GUI
 
-**HTTPS stage-by-stage with diagnosis:**
-```bash
-./start.sh -8 example.com
-```
+Dioxus 0.6 desktop app with detachable panels. Dashboard, Tests, Probes, Report, Fuzzing, Simulator, Logs, History tabs. The app detects missing root at launch and banners any disabled raw-socket features. Layout and behavior in [docs/DESKTOP.md](docs/DESKTOP.md).
 
-**Run specific test category:**
-```bash
-./start.sh -6 dns github.com
-./start.sh -7 github.com  # All categories
-```
+## Supported platforms
 
-**VPN MTU calculator:**
-```bash
-./start.sh -4 zscaler
-./start.sh -9  # List all VPN types
-```
+| Platform | Status |
+| --- | --- |
+| Ubuntu 22.04 or newer | Supported |
+| Debian 12 or newer | Supported |
+| macOS (recent) | Supported |
+| Older Ubuntu or Debian | Not supported |
+| Windows | Best effort, raw socket features unavailable |
 
-**Packet fuzzing:**
-```bash
-./start.sh -f tcp-options reports/evil.pcap
-```
+The `setup.sh` dependency list targets the newer `libwebkit2gtk-4.1-dev` and `libayatana-appindicator3-dev` packages. Older LTS releases ship the 4.0 webkit and appindicator3 packages which will not satisfy the build.
 
-**Comprehensive test suite:**
-```bash
-./start.sh -10       # Kitchen sink mode
-./start.sh -11       # Kitchen sink + JSON report
-```
+See [docs/PLATFORMS.md](docs/PLATFORMS.md) for per-OS feature matrix.
 
-### Direct Binary Usage
-
-If you prefer direct access:
-
-### Direct Binary Usage
-
-If you prefer direct access:
+## Quickstart
 
 ```bash
-sudo ./target/release/fraggle-packet tui
-sudo ./target/release/fraggle-packet quick github.com
-sudo ./target/release/fraggle-packet diagnose github.com --port 443
+./setup.sh       # install deps, build release binaries
+./start.sh       # launches the desktop GUI by default
+./start.sh --tui # launches the terminal UI
 ```
 
-sudo ./target/release/fraggle-packet diagnose github.com --port 443
-# Install globally for convenience
-sudo cp target/release/fraggle-packet /usr/local/bin/
-sudo fraggle-packet tui
-```
+`start.sh` falls back to the TUI if the desktop binary is missing.
 
----
+## start.sh flags
 
-## 🎯 Use Cases
+| Flag | Action |
+| --- | --- |
+| (no args) | Launch desktop GUI (falls back to TUI if missing) |
+| `-d`, `--desktop` | Launch desktop GUI |
+| `-t`, `--tui` | Launch terminal UI |
+| `-1`, `--quick [TARGET]` | Quick ICMP test, default 8.8.8.8 |
+| `-2`, `--diagnose [TARGET]` | Full diagnostic, default github.com |
+| `-3`, `--multi [TARGETS]` | Multi-target comparison, comma separated |
+| `-4`, `--vpn [TYPE]` | VPN/SASE MTU calculator, default zscaler |
+| `-5`, `--tcp [HOST:PORT]` | TCP-only MTU discovery |
+| `-6`, `--test [CATEGORY] [TARGET]` | Run a single test category |
+| `-7`, `--test-all [TARGET]` | Run all registered tests |
+| `-8`, `--https [TARGET]` | HTTPS stage-by-stage analysis |
+| `-9`, `--list-vpn` | List supported VPN types |
+| `-10`, `--kitchen-sink` | Run the comprehensive MTU sweep |
+| `-11`, `--json` | Kitchen-sink with timestamped JSON in reports/ |
+| `-f`, `--fuzz [MODE] [OUTPUT]` | Run a fuzzing campaign |
+| `-h`, `--help` | Show help |
 
-### 1️⃣ **Enterprise Network Troubleshooting**
-- Diagnose M365/Teams connectivity issues
-- Identify MTU blackholes causing TLS failures
-- Test Zscaler/SASE tunnel configurations
+## fraggle-packet CLI subcommands
 
-### 2️⃣ **DevOps & Cloud**
-- Verify AWS/Azure/GCP connectivity paths
-- Test Docker registry/NPM/PyPI access
-- Validate CI/CD pipeline network requirements
+| Subcommand | Purpose |
+| --- | --- |
+| `tui` | Launch the terminal UI (also default when no subcommand given) |
+| `diagnose <target> [-p PORT]` | Six-step DNS, ICMP, TCP, MTU, HTTPS diagnostic |
+| `https <target> [-T SECS] [-d]` | Staged HTTPS probe, optional diagnosis engine output |
+| `multi <targets>` | Comma-separated MTU comparison |
+| `vpn <type> [-b MTU]` | Tunnel MTU calculator; `vpn list` prints the catalog |
+| `quick <target>` | ICMP-only MTU with stability check |
+| `fuzz <target> [-o OUTPUT] [-m MODE]` | Write a fuzzing PCAP |
+| `test <target> [-c CATEGORIES] [-n COUNT] [-v]` | Run framework tests |
+| `tcp <host:port>` | TCP-based MTU discovery |
+| `kitchen-sink [--max N] [--json] [--output FILE]` | Comprehensive sweep across targets.txt |
+| `upload-sweep <target> [-p PORT]` | HTTP(S) upload size sweep |
+| `ssh-path <target> [-p PORT] [-u USER]` | SSH banner plus optional exec data-path |
+| `printer-raw <target> [-p PORT]` | JetDirect PJL and bulk sweep on port 9100 |
+| `tcp-options <target> [-p PORT]` | Negotiated MSS and middlebox rewrite detection |
+| `quic <target> [-p PORT]` | QUIC PMTU probe |
+| `dns-secure <target>` | UDP vs DoH vs DoT comparison |
+| `report <target>` | README_FIRST style unified report |
+| `replay <pcap> [--iface I] [--pps N] [--loop-count N] [--rewrite-dst-ip IP] [--rewrite-src-ip IP]` | PCAP wire replay |
+| `probe <target> --iface I [--min N] [--max N]` | Active DSL-driven PMTU probe |
+| `scenario <file>` | Run a scenario file or stdin with `-` |
+| `serve [-b ADDR] [-t TARGET]` | Prometheus scrape endpoint |
+| `dsl-demo [-d IP] [-p PORT] [--size N]` | Hexdump a DSL-built packet |
 
-### 3️⃣ **Security Research**
-- Fuzz network appliances with malformed packets
-- Test IDS/IPS bypass techniques
-- Validate firewall MTU handling
+Shared top-level flags apply to the legacy MTU commands: `--target`, `--min`, `--max`, `--timeout-ms`, `--retries`. Full flag table in [docs/CLI.md](docs/CLI.md).
 
-### 4️⃣ **VPN Configuration**
-- Calculate optimal MTU for WireGuard/OpenVPN
-- Avoid fragmentation in Zero Trust tunnels
-- Test GlobalProtect/AnyConnect settings
+## Privileges
 
----
+Most tests run unprivileged. A small set of features require raw sockets and therefore root or an equivalent capability on Linux.
 
-## 📊 Test Framework
+| Feature | Root needed | Why |
+| --- | --- | --- |
+| Framework tests (DNS, HTTPS, RTT, Loss, TCP health, MSS, App, IPv6) | No | Use standard sockets or shell out to ping |
+| `ping`-based ICMP paths | No | `iputils-ping` is typically setuid |
+| `tracepath` in TUI | Yes (spawns sudo) | TUI shells out to `sudo tracepath` |
+| PCAP replay (`replay`) | Yes | AF_PACKET on Linux, IP_HDRINCL on BSD/macOS |
+| Active PMTU probe (`probe`) | Yes | Raw capture plus raw send |
+| Passive capture (probe engine) | Yes | AF_PACKET socket open |
 
-FragglePacket includes 10 comprehensive test categories:
-
-| # | Category | Tests | Description |
-|---|----------|-------|-------------|
-| 1 | **DNS** | Resolution, EDNS0 | Verify DNS connectivity |
-| 2 | **MTU** | ICMP, TCP, UDP, QUIC | Multi-protocol MTU discovery |
-| 3 | **HTTPS** | TLS stages | MTU blackhole detection |
-| 4 | **TCP Health** | Handshake, window, retrans | TCP stack analysis |
-| 5 | **RTT** | Latency, jitter | Round-trip time measurements |
-| 6 | **Packet Loss** | Loss rate, patterns | Packet drop detection |
-| 7 | **Path Analysis** | Traceroute, per-hop MTU | Network path mapping |
-| 8 | **IPv6** | Connectivity, comparison | IPv6 vs IPv4 testing |
-| 9 | **Application** | HTTP/2, HTTP/3, WebSocket | Protocol support |
-| 10 | **Fuzzing** | 5 modes | Packet crafting for security |
-
----
-
-## 🔧 Configuration
-
-### Custom Targets
-
-Create a `targets.txt` file in the project directory:
-
-```
-# Format: target,description,port
-github.com,GitHub,443
-1.1.1.1,Cloudflare DNS,0
-internal.corp.local,Internal App,8080
-```
-
-Port 0 = ICMP-only (no TCP test)
-
-### Default Targets
-
-FragglePacket includes 159 pre-configured targets across 10 tiers:
-- Tier 1: Critical Infrastructure (DNS, M365, Google Workspace)
-- Tier 2: Cloud Providers (AWS, Azure, GCP)
-- Tier 3: Developer Tools (GitHub, npm, Docker Hub)
-- Tier 4-10: Collaboration, Security, CDN, Consumer, Regional, Specialized
-
-See `targets.txt` for the complete list.
-
----
-
-## 📖 Documentation
-
-Comprehensive documentation available in the `docs/` directory:
-
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System design and components
-- **[TEST-FRAMEWORK.md](docs/TEST-FRAMEWORK.md)** - Test implementation guide
-- **[TUI-INTEGRATION-PLAN.md](docs/TUI-INTEGRATION-PLAN.md)** - TUI architecture
-- **[QUICKSTART-RUSTPACKETFUZZ.md](docs/QUICKSTART-RUSTPACKETFUZZ.md)** - Fuzzing guide
-- **[MTU-TESTING-METHODS.md](docs/MTU-TESTING-METHODS.md)** - MTU discovery techniques
-- **[TUNNEL-OVERHEADS.md](docs/TUNNEL-OVERHEADS.md)** - VPN overhead calculations
-- **[RFC-REFERENCE.md](docs/RFC-REFERENCE.md)** - Related RFCs
-
----
-
-## 🐛 Known Issues & Troubleshooting
-
-### "Permission denied" errors
-FragglePacket requires root/sudo for raw socket access (ICMP).
+The desktop app detects elevation at startup by checking `geteuid` and displays a banner listing disabled features. On Linux you can grant capabilities once instead of running as root:
 
 ```bash
-sudo fraggle-packet tui
+sudo setcap cap_net_raw,cap_net_admin+eip ./target/release/fraggle-desktop
 ```
 
-### ICMP blocked by firewall
-Use TCP-based discovery:
+The same approach works for the CLI binary.
 
-```bash
-sudo fraggle-packet tcp github.com:443
+## Project layout
+
+```
+.
+├── Cargo.toml
+├── main.rs                     # fraggle-packet CLI + TUI entry
+├── setup.sh                    # Install deps and build
+├── start.sh                    # Launcher (desktop default, --tui for TUI)
+├── targets.txt                 # Default targets for kitchen-sink
+├── src/
+│   ├── lib.rs
+│   ├── framework/              # NetworkTest trait, orchestrator, result, metrics
+│   ├── network_tests/          # All NetworkTest impls
+│   ├── fuzzing/                # Fuzzers, DSL, replay, capture, probe, writer
+│   ├── diagnosis/              # Rules and report rendering
+│   └── bin/
+│       ├── cli/                # CLI subcommand helpers
+│       ├── tui/                # Ratatui terminal UI
+│       └── desktop/            # Dioxus desktop GUI
+├── tests/                      # Integration tests
+└── docs/                       # Documentation, see below
 ```
 
-### TLS timeout on large downloads
-This is the MTU blackhole! The tool will detect it:
+## Build, test, run
 
 ```bash
-sudo fraggle-packet https example.com --diagnose
-```
-
-### High CPU during bulk tests
-Rate limiting will be added in v1.0. For now, reduce target count or use `kitchen-sink` with smaller batches.
-
----
-
-## 🧪 Testing
-
-```bash
-# Run unit tests
-cargo test --lib
-
-# Run integration tests
-cargo test --test test_runner
-
-# Run with verbose output
-cargo test -- --nocapture
-```
-
----
-
-## 🛠️ Manual Installation
-
-### From Source (Detailed)
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/FragglePacket.git
-cd FragglePacket
-
-# Build release binary
-cargo build --release
-
-# Copy to system path (optional)
-sudo cp target/release/fraggle-packet /usr/local/bin/
-
-# Verify installation
-fraggle-packet --version
-```
-
-### System Requirements
-
-- **Rust:** 1.70 or later
-- **OS:** Linux with raw socket support
-- **Permissions:** sudo required for ICMP tests
-- **Optional:** `tracepath` or `traceroute` for path analysis
-
-### Development Setup
-
-```bash
-git clone https://github.com/yourusername/FragglePacket.git
-cd FragglePacket
-cargo build
+cargo build --release --bin fraggle-packet
+cargo build --release --bin fraggle-desktop
 cargo test
-cargo run -- tui
+./target/release/fraggle-packet test github.com
+./target/release/fraggle-desktop
 ```
 
-### Code Style
+## Documentation
 
-- Follow Rust 2021 idioms
-- Run `cargo fmt` before committing
-- Run `cargo clippy` and address warnings
-- Add tests for new features
+| Page | Covers |
+| --- | --- |
+| [docs/INDEX.md](docs/INDEX.md) | Table of contents |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modules, data flow, framework traits |
+| [docs/TESTS.md](docs/TESTS.md) | Every NetworkTest impl, category, root needs |
+| [docs/FUZZING.md](docs/FUZZING.md) | FuzzMode, DSL, PCAP writer, replay, capture, probe |
+| [docs/CLI.md](docs/CLI.md) | Full CLI reference |
+| [docs/DESKTOP.md](docs/DESKTOP.md) | Desktop panel map and behavior |
+| [docs/TUI.md](docs/TUI.md) | TUI keybindings and panels |
+| [docs/SETUP.md](docs/SETUP.md) | setup.sh per distro, verification, setcap |
+| [docs/PLATFORMS.md](docs/PLATFORMS.md) | OS feature matrix |
+| [docs/SCENARIOS.md](docs/SCENARIOS.md) | Scenario DSL syntax |
+| [docs/METRICS.md](docs/METRICS.md) | Prometheus exporter |

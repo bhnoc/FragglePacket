@@ -14,14 +14,28 @@ fi
 
 # Parse arguments
 case "${1:-}" in
+    -t|--tui)
+        echo ""
+        echo "=============================================="
+        echo " FragglePacket - Terminal UI"
+        echo "=============================================="
+        echo ""
+        echo "Launching interactive TUI..."
+        echo ""
+        echo "All tests work without root."
+        echo "Note: ICMP MTU uses Linux-specific flags (use TCP MTU on macOS)."
+        echo ""
+        echo "TUI Controls: [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
+        echo ""
+        exec "$BINARY" tui
+        ;;
     -d|--desktop)
-        # Launch Desktop GUI
         if [ ! -f "$DESKTOP_BINARY" ]; then
             echo "Desktop GUI not built. Run ./setup.sh first."
             echo ""
             echo "Desktop GUI requires additional dependencies:"
-            echo "  Ubuntu: libgtk-3-dev libwebkit2gtk-4.1-dev"
-            echo "  macOS:  (included with system)"
+            echo "  Ubuntu/Debian: libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev"
+            echo "  macOS:         included with system"
             exit 1
         fi
         echo ""
@@ -31,10 +45,12 @@ case "${1:-}" in
         echo ""
         echo "Launching Desktop GUI..."
         echo ""
-        echo "All tests work without root (TCP-based or use setuid binaries)."
+        echo "Most tests work without root. The app detects missing privileges"
+        echo "and shows disabled features in a banner at the top."
         echo ""
-        echo "Note: ICMP MTU Discovery uses Linux-specific ping flags."
-        echo "      On macOS, use TCP-based MTU tests instead."
+        echo "For raw-socket features (PCAP replay, active PMTU probe, capture)"
+        echo "relaunch with sudo, or grant caps one time:"
+        echo "  sudo setcap cap_net_raw,cap_net_admin+eip $DESKTOP_BINARY"
         echo ""
         exec "$DESKTOP_BINARY"
         ;;
@@ -118,11 +134,12 @@ case "${1:-}" in
 
 Usage: ./start.sh [OPTION] [ARGS]
 
-Default (no args): Launch interactive TUI
+Default (no args): Launch Desktop GUI
 
 Interface Options:
-  (no args)                      Launch terminal UI (TUI)
+  (no args)                      Launch Desktop GUI (Dioxus)
   -d, --desktop                  Launch Desktop GUI (Dioxus)
+  -t, --tui                      Launch terminal UI (TUI)
 
 CLI Options:
   -1, --quick [TARGET]           Quick ICMP test (default: 8.8.8.8)
@@ -153,34 +170,39 @@ TUI Keybindings:
   [?]     - Help screen
 
 Examples:
-  ./start.sh                              # Launch TUI (default)
-  ./start.sh --desktop                    # Launch Desktop GUI
+  ./start.sh                              # Launch Desktop GUI (default)
+  ./start.sh --tui                        # Launch TUI
   ./start.sh -1                           # Quick ICMP to 8.8.8.8
   ./start.sh -2 example.com               # Full diagnostic
   ./start.sh -6 dns github.com            # Run DNS tests only
   ./start.sh -7 cloudflare.com            # Run ALL 11 tests
   ./start.sh -8 github.com                # HTTPS stage analysis
   ./start.sh -f tcp-options reports/tcp.pcap  # Fuzz TCP options
-  ./start.sh --desktop                     # Desktop GUI
 
-Note: All tests work without root. ICMP MTU uses Linux-specific ping flags.
+Note: Most tests work without root. ICMP MTU uses Linux-specific ping flags.
+      Raw-socket features (replay, active probe, capture) need sudo or setcap.
 EOF
         ;;
     "")
-        # Default: Launch TUI
+        if [ ! -f "$DESKTOP_BINARY" ]; then
+            echo "Desktop GUI not built. Falling back to TUI."
+            echo "Run ./setup.sh to build the Desktop GUI."
+            echo ""
+            exec "$BINARY" tui
+        fi
         echo ""
         echo "=============================================="
-        echo " FragglePacket - Network Diagnostics Suite"
+        echo " FragglePacket - Desktop GUI"
         echo "=============================================="
         echo ""
-        echo "Launching interactive TUI..."
+        echo "Launching Desktop GUI..."
         echo ""
-        echo "All tests work without root."
-        echo "Note: ICMP MTU uses Linux-specific flags (use TCP MTU on macOS)."
+        echo "The app detects missing privileges and shows disabled"
+        echo "features in a banner at the top. For raw-socket features"
+        echo "relaunch with sudo or grant caps one time:"
+        echo "  sudo setcap cap_net_raw,cap_net_admin+eip $DESKTOP_BINARY"
         echo ""
-        echo "TUI Controls: [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
-        echo ""
-        exec "$BINARY" tui
+        exec "$DESKTOP_BINARY"
         ;;
     *)
         echo "Unknown option: $1"

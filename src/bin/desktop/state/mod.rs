@@ -26,6 +26,8 @@ pub enum PanelId {
     Targets,
     Logs,
     History,
+    Probes,
+    Report,
 }
 
 impl PanelId {
@@ -41,6 +43,8 @@ impl PanelId {
             PanelId::Targets => "Targets",
             PanelId::Logs => "Logs",
             PanelId::History => "History",
+            PanelId::Probes => "Probes",
+            PanelId::Report => "Report",
         }
     }
 
@@ -50,6 +54,8 @@ impl PanelId {
         vec![
             PanelId::Dashboard,
             PanelId::Tests,
+            PanelId::Probes,
+            PanelId::Report,
             PanelId::Fuzzing,
             PanelId::Simulator,
             PanelId::Logs,
@@ -385,6 +391,89 @@ pub struct AppState {
 
     /// Test start time for duration tracking
     pub test_start_time: Signal<Option<std::time::Instant>>,
+
+    /// Cached README_FIRST-style report text
+    pub last_report: Signal<String>,
+
+    /// Inputs and outputs for the Probes panel
+    pub probe_tools: Signal<ProbeToolsState>,
+
+    /// Whether the process has root or admin privileges at startup
+    pub is_privileged: bool,
+
+    /// Feature names that are disabled when not privileged
+    pub disabled_features: Vec<&'static str>,
+
+    /// Whether the user has dismissed the privileges banner
+    pub priv_banner_dismissed: Signal<bool>,
+}
+
+/// Features that require root or admin on Unix. Used to build the startup
+/// banner and button pre-checks. Wire-sending tests and capture-dependent
+/// probes live here.
+pub const ROOT_REQUIRED_FEATURES: &[&str] = &[
+    "PCAP Replay",
+    "Active PMTU Probe",
+    "Packet Capture",
+];
+
+/// Detect whether the current process can open raw sockets without failing
+/// on EPERM. On Unix this checks euid. On Windows we assume true because
+/// the app is typically launched elevated when needed.
+pub fn detect_privileged() -> bool {
+    fraggle_packet::fuzzing::is_root()
+}
+
+/// State for the Probes panel (DSL, Replay, Active Probe, Scenario, Metrics).
+#[derive(Clone, Debug)]
+pub struct ProbeToolsState {
+    pub dsl_dst: String,
+    pub dsl_port: u16,
+    pub dsl_size: usize,
+    pub replay_pcap: String,
+    pub replay_iface: String,
+    pub replay_pps: u32,
+    pub replay_loops: u32,
+    pub probe_target: String,
+    pub probe_iface: String,
+    pub probe_min: u16,
+    pub probe_max: u16,
+    pub scenario_text: String,
+    pub metrics_bind: String,
+    pub metrics_serving: bool,
+    pub last_output: String,
+}
+
+impl Default for ProbeToolsState {
+    fn default() -> Self {
+        Self {
+            dsl_dst: "1.1.1.1".to_string(),
+            dsl_port: 443,
+            dsl_size: 32,
+            replay_pcap: "reports/fuzz.pcap".to_string(),
+            replay_iface: default_iface(),
+            replay_pps: 0,
+            replay_loops: 1,
+            probe_target: "1.1.1.1".to_string(),
+            probe_iface: default_iface(),
+            probe_min: 576,
+            probe_max: 1500,
+            scenario_text:
+                "# step: check-http\nkind: https\ntarget: github.com\n\n# step: bulk-upload\nkind: upload_sweep\ntarget: github.com\nport: 443\n"
+                    .to_string(),
+            metrics_bind: "127.0.0.1:9464".to_string(),
+            metrics_serving: false,
+            last_output: String::new(),
+        }
+    }
+}
+
+fn default_iface() -> String {
+    if cfg!(target_os = "linux") {
+        "eth0".to_string()
+    } else {
+        "en0".to_string()
+    }
 }
 
 impl AppState {
@@ -403,6 +492,13 @@ impl AppState {
             Target::new("github.com", "GitHub", 443).with_category(TargetCategory::DevTools),
             Target::new("google.com", "Google", 443).with_category(TargetCategory::Collaboration),
         ];
+
+        let is_privileged = detect_privileged();
+        let disabled_features = if is_privileged {
+            Vec::new()
+        } else {
+            ROOT_REQUIRED_FEATURES.to_vec()
+        };
 
         Self {
             active_panel: Signal::new(PanelId::Dashboard),
@@ -423,6 +519,11 @@ impl AppState {
             current_test_name: Signal::new(String::new()),
             cancel_flag: Arc::new(AtomicBool::new(false)),
             test_start_time: Signal::new(None),
+            last_report: Signal::new(String::new()),
+            probe_tools: Signal::new(ProbeToolsState::default()),
+            is_privileged,
+            disabled_features,
+            priv_banner_dismissed: Signal::new(false),
         }
     }
 

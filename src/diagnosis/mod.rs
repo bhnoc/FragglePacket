@@ -20,6 +20,7 @@ pub enum DiagnosisIssue {
     HighLatency,
     PacketLoss,
     PathMtuMismatch,
+    BlackholeScore,
 }
 
 #[derive(Debug, Clone, PartialEq, Ord, PartialOrd, Eq)]
@@ -50,6 +51,12 @@ pub struct DiagnosisEvidence {
     pub dns_success: Option<bool>,
     pub packet_loss_percent: Option<f64>,
     pub rtt_ms: Option<f64>,
+    // Shell-script-equivalent evidence
+    pub upload_fail_sizes: Vec<usize>,
+    pub ssh_banner_ok: Option<bool>,
+    pub ssh_exec_ok: Option<bool>,
+    pub printer_fail_sizes: Vec<usize>,
+    pub icmp_frag_needed_received: Option<bool>,
 }
 
 /// MTU Blackhole Detection Rule
@@ -351,6 +358,168 @@ impl DiagnosisRule for HighLatencyRule {
     }
 }
 
+/// Aggregated heuristic score rule (mirrors the shell script's scoring).
+pub struct BlackholeScoreRule;
+
+impl BlackholeScoreRule {
+    pub fn score(ev: &DiagnosisEvidence) -> (u32, Vec<String>) {
+        let mut score = 0u32;
+        let mut findings = Vec::new();
+
+        if let Some(mtu) = ev.icmp_mtu.or(ev.tcp_mtu) {
+            if mtu < 1500 {
+                score += 2;
+                findings.push(format!("Observed path MTU appears reduced: ~{}", mtu));
+            }
+            if mtu < 1400 {
+                score += 2;
+                findings.push("Path MTU low enough to strongly suspect tunnel overhead".to_string());
+            }
+        }
+
+        if let Some(https) = &ev.https_result {
+            if https.tcp_success
+                && (https.diagnosis == HttpsDiagnosis::TlsTimeout
+                    || https.diagnosis == HttpsDiagnosis::HttpResponseTimeout
+                    || https.diagnosis == HttpsDiagnosis::MtuBlackhole)
+            {
+                score += 3;
+                findings.push(
+                    "TCP connect succeeded but TLS/HTTP path looked unhealthy".to_string(),
+                );
+            }
+        }
+
+        if !ev.upload_fail_sizes.is_empty() {
+            score += 3;
+            findings.push(format!(
+                "HTTP POST upload showed trouble at sizes: {:?}",
+                ev.upload_fail_sizes
+            ));
+        }
+
+        if ev.ssh_banner_ok == Some(true) && ev.ssh_exec_ok == Some(false) {
+            score += 3;
+            findings.push(
+                "SSH banner reachable but authenticated data-path test did not complete"
+                    .to_string(),
+            );
+        }
+
+        if !ev.printer_fail_sizes.is_empty() {
+            score += 3;
+            findings.push(format!(
+                "Raw printer bulk stream showed failures at sizes: {:?}",
+                ev.printer_fail_sizes
+            ));
+        }
+
+        if ev.icmp_frag_needed_received == Some(true) {
+            score += 2;
+            findings.push("ICMP fragmentation-needed responses observed".to_string());
+        }
+
+        (score, findings)
+    }
+
+    pub fn severity_for_score(score: u32) -> Severity {
+        if score >= 6 {
+            Severity::Critical
+        } else if score >= 3 {
+            Severity::High
+        } else {
+            Severity::Info
+        }
+    }
+}
+
+impl DiagnosisRule for BlackholeScoreRule {
+    fn name(&self) -> &str {
+        "Blackhole Score"
+    }
+
+    fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
+        let (score, findings) = Self::score(evidence);
+        if findings.is_empty() && score == 0 {
+            return None;
+        }
+        let severity = Self::severity_for_score(score);
+        let verdict = match severity {
+            Severity::Critical => "high",
+            Severity::High => "moderate",
+            _ => "low",
+        };
+        let mut description = format!(
+            "Aggregated blackhole score {} ({} likelihood). Findings:\n",
+            score, verdict
+        );
+        for f in &findings {
+            description.push_str("- ");
+            description.push_str(f);
+            description.push('\n');
+        }
+        Some(Diagnosis {
+            issue: DiagnosisIssue::BlackholeScore,
+            severity,
+            description,
+            recommendation: "Compare against MTU tests and upload sweep before changing MTU. For tunnels, clamp MSS conservatively (max(1200, MSS-20)).".to_string(),
+            related_tests: vec![
+                "HTTPS Test".to_string(),
+                "Upload Size Sweep".to_string(),
+                "SSH Data-Path".to_string(),
+                "Raw 9100 Bulk Sweep".to_string(),
+                "ICMP MTU Discovery".to_string(),
+            ],
+        })
+    }
+}
+
+/// Render a README_FIRST-style text report that mirrors the shell script.
+pub fn render_unified_report(
+    diagnoses: &[Diagnosis],
+    evidence: &DiagnosisEvidence,
+) -> String {
+    let (score, findings) = BlackholeScoreRule::score(evidence);
+    let verdict = if score >= 6 {
+        "LIKELY_MTU_OR_MSS_BLACKHOLE=high"
+    } else if score >= 3 {
+        "LIKELY_MTU_OR_MSS_BLACKHOLE=moderate"
+    } else {
+        "LIKELY_MTU_OR_MSS_BLACKHOLE=low"
+    };
+    let mut out = String::new();
+    out.push_str("=== Findings ===\n");
+    if findings.is_empty() {
+        out.push_str("- No strong blackhole indicators found from these probes\n");
+    } else {
+        for f in &findings {
+            out.push_str("- ");
+            out.push_str(f);
+            out.push('\n');
+        }
+    }
+    out.push_str("\n=== Interpretation ===\n");
+    out.push_str(verdict);
+    out.push('\n');
+    if let Some(mtu) = evidence.icmp_mtu.or(evidence.tcp_mtu) {
+        let mss_v4 = mtu.saturating_sub(40);
+        out.push_str(&format!("SUGGESTED_BASE_MSS_IPV4={}\n", mss_v4));
+        let conservative = mss_v4.saturating_sub(20).max(1200);
+        out.push_str(&format!("SUGGESTED_CONSERVATIVE_CLAMP={}\n", conservative));
+    }
+    if !diagnoses.is_empty() {
+        out.push_str("\n=== Ranked Diagnoses ===\n");
+        for d in diagnoses {
+            out.push_str(&format!("- [{:?}] {:?}: {}\n", d.severity, d.issue, d.description.lines().next().unwrap_or("")));
+        }
+    }
+    out.push_str("\n=== Notes ===\n");
+    out.push_str("- This score is heuristic, not proof.\n");
+    out.push_str("- Strongest evidence: small/control traffic works but larger transfers stall.\n");
+    out.push_str("- If a VPN is involved, clamp slightly below the theoretical max.\n");
+    out
+}
+
 /// Diagnosis Engine - runs all rules
 pub struct DiagnosisEngine {
     rules: Vec<Box<dyn DiagnosisRule>>,
@@ -366,23 +535,24 @@ impl DiagnosisEngine {
             Box::new(TcpSegmentationLimitRule),
             Box::new(HighPacketLossRule),
             Box::new(HighLatencyRule),
+            Box::new(BlackholeScoreRule),
         ];
-        
+
         Self { rules }
     }
-    
+
     pub fn diagnose(&self, evidence: &DiagnosisEvidence) -> Vec<Diagnosis> {
         let mut diagnoses = Vec::new();
-        
+
         for rule in &self.rules {
             if let Some(diagnosis) = rule.check(evidence) {
                 diagnoses.push(diagnosis);
             }
         }
-        
+
         // Sort by severity
         diagnoses.sort_by(|a, b| b.severity.cmp(&a.severity));
-        
+
         diagnoses
     }
 }

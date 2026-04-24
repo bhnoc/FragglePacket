@@ -4,14 +4,56 @@ use dioxus::prelude::*;
 use futures_util::StreamExt;
 use crate::state::{AppState, PanelId, ToastType, LogLevel};
 use crate::state::test_runner::TestUpdate;
-use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel};
-use crate::window_manager::reattach_panel;
+use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel, ProbesPanel, ReportPanel};
+use crate::window_manager::{reattach_panel, use_reattach_listener};
+
+/// Suggested re-launch hint shown in the privileges banner. Linux uses setcap
+/// or sudo, macOS uses sudo, Windows path is unused because we assume admin.
+fn priv_relaunch_hint() -> &'static str {
+    #[cfg(target_os = "linux")]
+    {
+        "sudo setcap cap_net_raw,cap_net_admin+eip ./target/release/fraggle-desktop"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "sudo ./target/release/fraggle-desktop"
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        "Relaunch the application as administrator"
+    }
+}
 
 /// Main App component
 #[component]
 pub fn App() -> Element {
     // Initialize application state
     let mut state = use_signal(AppState::new);
+
+    // Listen for window close events from detached windows
+    use_reattach_listener();
+
+    // Startup privilege check: if not privileged on Unix, log a warning and
+    // drop a toast listing disabled features. Runs exactly once.
+    use_hook(move || {
+        let snapshot = state.read();
+        let privileged = snapshot.is_privileged;
+        let disabled: Vec<&'static str> = snapshot.disabled_features.clone();
+        drop(snapshot);
+        if !privileged && !disabled.is_empty() {
+            let list = disabled.join(", ");
+            state.write().log(
+                LogLevel::Warning,
+                format!("Running without root. Disabled: {}", list),
+            );
+            state.write().add_toast(
+                format!("Running without root. Disabled features: {}", list),
+                ToastType::Warning,
+            );
+        } else if privileged {
+            state.write().log(LogLevel::Info, "Running with elevated privileges");
+        }
+    });
 
     // Set up test update processing
     let process_updates = use_coroutine(move |mut rx: UnboundedReceiver<TestUpdate>| async move {
@@ -116,18 +158,16 @@ pub fn App() -> Element {
 
     rsx! {
         div { class: "app-container",
-            // Header
             Header { state: state }
 
-            // Tab bar (only shows attached panels)
             TabBar { state: state }
 
-            // Content area - render active panel
+            PrivBanner { state: state }
+
             div { class: "content",
                 {render_active_panel(state, process_updates)}
             }
 
-            // Toast container
             ToastContainer { state: state }
         }
     }
@@ -175,6 +215,8 @@ fn render_active_panel(
                 PanelId::Targets => rsx! { Dashboard { state: state, update_tx: update_tx, panel: active } },
                 PanelId::Logs => rsx! { LogsPanel { state: state, panel: active } },
                 PanelId::History => rsx! { HistoryPanel { state: state, panel: active } },
+                PanelId::Probes => rsx! { ProbesPanel { state: state, panel: active } },
+                PanelId::Report => rsx! { ReportPanel { state: state, panel: active } },
             }
         }
     }
@@ -186,6 +228,7 @@ fn Header(state: Signal<AppState>) -> Element {
     let status = state.read().status_message.read().clone();
     let testing = *state.read().testing.read();
     let progress = *state.read().progress.read();
+    let privileged = state.read().is_privileged;
 
     rsx! {
         header { class: "header",
@@ -201,12 +244,52 @@ fn Header(state: Signal<AppState>) -> Element {
                         }
                     }
                 }
+                span {
+                    class: if privileged { "priv-indicator root" } else { "priv-indicator user" },
+                    title: if privileged { "Raw sockets available" } else { "Raw-socket features disabled" },
+                    if privileged { "ROOT" } else { "USER" }
+                }
                 div { class: "status",
                     if testing {
                         span { class: "status-pending", "Testing... " }
                     }
                     "{status}"
                 }
+            }
+        }
+    }
+}
+
+/// Banner shown below the tab bar when the app lacks raw-socket privileges.
+/// Lists the disabled features and a one-shot hint for granting access.
+#[component]
+fn PrivBanner(state: Signal<AppState>) -> Element {
+    let privileged = state.read().is_privileged;
+    let dismissed = *state.read().priv_banner_dismissed.read();
+    if privileged || dismissed {
+        return rsx! {};
+    }
+    let features: Vec<&'static str> = state.read().disabled_features.clone();
+    if features.is_empty() {
+        return rsx! {};
+    }
+    let features_joined = features.join(", ");
+    let hint = priv_relaunch_hint();
+
+    rsx! {
+        div { class: "priv-banner",
+            div { class: "priv-banner-text",
+                strong { "Limited mode." }
+                " Raw-socket features disabled: "
+                span { class: "priv-banner-features", "{features_joined}" }
+            }
+            code { class: "priv-banner-hint", "{hint}" }
+            button {
+                class: "priv-banner-close",
+                onclick: move |_| {
+                    state.write().priv_banner_dismissed.set(true);
+                },
+                "Dismiss"
             }
         }
     }

@@ -16,6 +16,8 @@ use fraggle_packet::network_tests::{
     ipv6::Ipv6Test,
     application::ApplicationTest,
     fuzzing::{FuzzingTest, FuzzMode},
+    DnsSecureCompareTest, QuicPmtudTest, Raw9100BulkTest, SshDataPathTest, TcpOptionsEchoTest,
+    UploadSizeSweepTest,
 };
 
 /// Register all tests with the orchestrator
@@ -53,4 +55,12 @@ pub fn register_all_tests(orchestrator: &mut TestOrchestrator) {
         FuzzingTest::new(FuzzMode::All)
             .with_output("reports/desktop_fuzz.pcap".to_string())
     ));
+
+    // Shell script parity + comprehensive-tester extras
+    orchestrator.register(Box::new(UploadSizeSweepTest::new()));
+    orchestrator.register(Box::new(SshDataPathTest::new()));
+    orchestrator.register(Box::new(Raw9100BulkTest::new()));
+    orchestrator.register(Box::new(TcpOptionsEchoTest::new()));
+    orchestrator.register(Box::new(QuicPmtudTest::new()));
+    orchestrator.register(Box::new(DnsSecureCompareTest::new()));
 }

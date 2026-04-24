@@ -232,6 +232,131 @@ enum Commands {
         #[arg(long)]
         output: Option<String>,
     },
+
+    /// HTTP(S) upload size sweep (detects data-stall blackholes)
+    UploadSweep {
+        /// Target hostname
+        target: String,
+        /// Target port (default 443)
+        #[arg(short, long, default_value_t = 443)]
+        port: u16,
+    },
+
+    /// SSH banner + optional authenticated echo data-path test
+    SshPath {
+        /// Target hostname or IP
+        target: String,
+        /// SSH port (default 22)
+        #[arg(short, long, default_value_t = 22)]
+        port: u16,
+        /// SSH user for the optional exec stage (also enables it)
+        #[arg(short, long)]
+        user: Option<String>,
+    },
+
+    /// Raw JetDirect port 9100 PJL + bulk size sweep
+    PrinterRaw {
+        /// Target hostname or IP
+        target: String,
+        /// Target port (default 9100)
+        #[arg(short, long, default_value_t = 9100)]
+        port: u16,
+    },
+
+    /// Query actual negotiated TCP MSS and detect middlebox rewriting
+    TcpOptions {
+        /// Target hostname or IP
+        target: String,
+        /// Target port (default 443)
+        #[arg(short, long, default_value_t = 443)]
+        port: u16,
+    },
+
+    /// QUIC/UDP PMTUD probe
+    Quic {
+        /// Target hostname or IP
+        target: String,
+        /// Target port (default 443)
+        #[arg(short, long, default_value_t = 443)]
+        port: u16,
+    },
+
+    /// DoH/DoT vs plain DNS comparison
+    DnsSecure {
+        /// Target hostname to resolve
+        target: String,
+    },
+
+    /// Render a unified README_FIRST-style diagnosis of a target
+    Report {
+        /// Target hostname
+        target: String,
+    },
+
+    /// Replay a PCAP file onto the wire (requires root)
+    Replay {
+        /// PCAP path
+        pcap: String,
+        /// Interface to send on (required on Linux)
+        #[arg(short, long)]
+        iface: Option<String>,
+        /// Packets-per-second rate
+        #[arg(long)]
+        pps: Option<u32>,
+        /// Number of loops
+        #[arg(long, default_value_t = 1)]
+        loop_count: u32,
+        /// Rewrite destination IP before sending
+        #[arg(long)]
+        rewrite_dst_ip: Option<std::net::Ipv4Addr>,
+        /// Rewrite source IP before sending
+        #[arg(long)]
+        rewrite_src_ip: Option<std::net::Ipv4Addr>,
+    },
+
+    /// Active MTU probe using the native DSL + send-and-capture engine
+    Probe {
+        /// Target IPv4 address
+        target: std::net::Ipv4Addr,
+        /// Interface
+        #[arg(short, long)]
+        iface: String,
+        /// Minimum probe size
+        #[arg(long, default_value_t = 576)]
+        min: u16,
+        /// Maximum probe size
+        #[arg(long, default_value_t = 1500)]
+        max: u16,
+    },
+
+    /// Run a declarative scenario from a file or stdin
+    Scenario {
+        /// Path to scenario file ('-' for stdin)
+        file: String,
+    },
+
+    /// Expose a Prometheus metrics scrape endpoint
+    Serve {
+        /// Bind address
+        #[arg(short = 'b', long, default_value = "127.0.0.1:9464")]
+        bind: String,
+        /// Optional target to seed metrics from a single run
+        #[arg(short, long)]
+        target: Option<String>,
+    },
+
+    /// Print a hexdump of a packet described by our DSL (demo helper)
+    DslDemo {
+        /// Destination IPv4
+        #[arg(short, long, default_value = "1.1.1.1")]
+        dst: std::net::Ipv4Addr,
+        /// Destination port
+        #[arg(short, long, default_value_t = 443)]
+        port: u16,
+        /// Payload size in bytes
+        #[arg(long, default_value_t = 32)]
+        size: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -293,6 +418,30 @@ fn main() {
         Some(Commands::KitchenSink { max, json, output }) => {
             run_kitchen_sink(args.timeout_ms, args.min, max, args.retries, json, output);
         }
+        Some(Commands::UploadSweep { target, port }) => run_upload_sweep(&target, port),
+        Some(Commands::SshPath { target, port, user }) => run_ssh_path(&target, port, user),
+        Some(Commands::PrinterRaw { target, port }) => run_printer_raw(&target, port),
+        Some(Commands::TcpOptions { target, port }) => run_tcp_options(&target, port),
+        Some(Commands::Quic { target, port }) => run_quic_pmtud(&target, port),
+        Some(Commands::DnsSecure { target }) => run_dns_secure(&target),
+        Some(Commands::Report { target }) => run_unified_report(&target),
+        Some(Commands::Replay {
+            pcap,
+            iface,
+            pps,
+            loop_count,
+            rewrite_dst_ip,
+            rewrite_src_ip,
+        }) => run_replay(pcap, iface, pps, loop_count, rewrite_dst_ip, rewrite_src_ip),
+        Some(Commands::Probe {
+            target,
+            iface,
+            min,
+            max,
+        }) => run_probe(target, &iface, min, max),
+        Some(Commands::Scenario { file }) => run_scenario(&file),
+        Some(Commands::Serve { bind, target }) => run_serve(&bind, target),
+        Some(Commands::DslDemo { dst, port, size }) => run_dsl_demo(dst, port, size),
         None => {
             // Default: launch TUI
             tui_app::run_tui();
@@ -2121,3 +2270,282 @@ fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
     }
 }
 
+
+// =============================================================================
+// NEW CLI SUBCOMMAND HANDLERS
+// =============================================================================
+
+fn run_upload_sweep(target: &str, port: u16) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::UploadSizeSweepTest;
+    let t = UploadSizeSweepTest::new().with_port(port);
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} upload-sweep error: {}", "✗".red(), e),
+    }
+}
+
+fn run_ssh_path(target: &str, port: u16, user: Option<String>) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::SshDataPathTest;
+    let mut t = SshDataPathTest::new().with_port(port);
+    if let Some(u) = user {
+        t = t.with_user(u);
+    }
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} ssh-path error: {}", "✗".red(), e),
+    }
+}
+
+fn run_printer_raw(target: &str, port: u16) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::Raw9100BulkTest;
+    let t = Raw9100BulkTest::new().with_port(port);
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} printer-raw error: {}", "✗".red(), e),
+    }
+}
+
+fn run_tcp_options(target: &str, port: u16) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::TcpOptionsEchoTest;
+    let t = TcpOptionsEchoTest::new().with_port(port);
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} tcp-options error: {}", "✗".red(), e),
+    }
+}
+
+fn run_quic_pmtud(target: &str, port: u16) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::QuicPmtudTest;
+    let t = QuicPmtudTest::new().with_port(port);
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} quic error: {}", "✗".red(), e),
+    }
+}
+
+fn run_dns_secure(target: &str) {
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::DnsSecureCompareTest;
+    let t = DnsSecureCompareTest::new();
+    match t.run(target) {
+        Ok(res) => print_test_result(&res),
+        Err(e) => eprintln!("{} dns-secure error: {}", "✗".red(), e),
+    }
+}
+
+fn run_unified_report(target: &str) {
+    use fraggle_packet::diagnosis::{render_unified_report, DiagnosisEngine, DiagnosisEvidence};
+    use fraggle_packet::framework::NetworkTest;
+    use fraggle_packet::network_tests::{
+        https::HttpsTest, Raw9100BulkTest, SshDataPathTest, UploadSizeSweepTest,
+    };
+    let mut ev = DiagnosisEvidence::default();
+    println!("{}", format!("Running unified probe suite against {}", target).cyan().bold());
+
+    if let Ok(r) = HttpsTest::new().run(target) {
+        if let Some(connect) = r.metrics.get("tls_success") {
+            ev.tcp_connect_success = Some(*connect > 0.5);
+        }
+        print_test_result(&r);
+    }
+    if let Ok(r) = UploadSizeSweepTest::new().run(target) {
+        let fails = r.metadata.get("upload_fail_sizes").cloned().unwrap_or_default();
+        ev.upload_fail_sizes = fails
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        print_test_result(&r);
+    }
+    if let Ok(r) = SshDataPathTest::new().run(target) {
+        ev.ssh_banner_ok = r
+            .metadata
+            .get("ssh_banner_ok")
+            .and_then(|v| v.parse().ok());
+        ev.ssh_exec_ok = r
+            .metadata
+            .get("ssh_exec_ok")
+            .and_then(|v| v.parse().ok());
+        print_test_result(&r);
+    }
+    if let Ok(r) = Raw9100BulkTest::new().run(target) {
+        let fails = r
+            .metadata
+            .get("printer_fail_sizes")
+            .cloned()
+            .unwrap_or_default();
+        ev.printer_fail_sizes = fails
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        print_test_result(&r);
+    }
+
+    let engine = DiagnosisEngine::new();
+    let diagnoses = engine.diagnose(&ev);
+    println!("\n{}", "╔════════════════════════════════════════════════╗".cyan());
+    println!("{}", "║   FragglePacket Unified Report (README_FIRST)  ║".cyan().bold());
+    println!("{}", "╚════════════════════════════════════════════════╝".cyan());
+    println!();
+    println!("{}", render_unified_report(&diagnoses, &ev));
+}
+
+fn run_replay(
+    pcap: String,
+    iface: Option<String>,
+    pps: Option<u32>,
+    loop_count: u32,
+    rewrite_dst_ip: Option<std::net::Ipv4Addr>,
+    rewrite_src_ip: Option<std::net::Ipv4Addr>,
+) {
+    use fraggle_packet::fuzzing::replay::{replay_pcap, ReplayOptions};
+    let mut opts = ReplayOptions::new().loop_count(loop_count);
+    if let Some(i) = iface {
+        opts = opts.iface(i);
+    }
+    if let Some(r) = pps {
+        opts = opts.pps(r);
+    }
+    if let Some(ip) = rewrite_dst_ip {
+        opts = opts.rewrite_dst_ip(ip);
+    }
+    if let Some(ip) = rewrite_src_ip {
+        opts = opts.rewrite_src_ip(ip);
+    }
+    println!("{}", format!("Replaying {} ...", pcap).cyan().bold());
+    match replay_pcap(&pcap, &opts) {
+        Ok(report) => {
+            println!("{}", "Replay complete".green().bold());
+            println!("  Packets sent:    {}", report.packets_sent);
+            println!("  Packets dropped: {}", report.packets_dropped);
+            println!("  Bytes sent:      {}", report.bytes_sent);
+            println!("  Duration:        {} ms", report.duration_ms);
+        }
+        Err(e) => eprintln!("{} replay error: {}", "✗".red(), e),
+    }
+}
+
+fn run_probe(target: std::net::Ipv4Addr, iface: &str, min: u16, max: u16) {
+    use fraggle_packet::fuzzing::probe::active_pmtu_probe;
+    use std::time::Duration;
+    println!(
+        "{}",
+        format!("Active PMTU probe {} -> {} on {}", min, max, iface)
+            .cyan()
+            .bold()
+    );
+    match active_pmtu_probe(iface, target, min, max, Duration::from_millis(1500)) {
+        Ok(r) => {
+            println!("Samples tried: {:?}", r.samples_tried);
+            println!("Frag needed seen: {}", r.frag_needed_reported);
+            if let Some(mtu) = r.estimated_mtu {
+                println!("Estimated MTU: {}", mtu);
+            }
+        }
+        Err(e) => eprintln!("{} probe error: {}", "✗".red(), e),
+    }
+}
+
+fn run_scenario(file: &str) {
+    use fraggle_packet::network_tests::scenario::Scenario;
+    let text = if file == "-" {
+        let mut s = String::new();
+        use std::io::Read;
+        let _ = std::io::stdin().read_to_string(&mut s);
+        s
+    } else {
+        match std::fs::read_to_string(file) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{} read scenario: {}", "✗".red(), e);
+                return;
+            }
+        }
+    };
+    let scenario = match Scenario::parse(&text) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{} parse scenario: {}", "✗".red(), e);
+            return;
+        }
+    };
+    let results = scenario.run();
+    for (name, res) in results {
+        println!("{}", format!("-- {} --", name).cyan().bold());
+        match res {
+            Ok(r) => print_test_result(&r),
+            Err(e) => println!("error: {}", e),
+        }
+    }
+}
+
+fn run_serve(bind: &str, target: Option<String>) {
+    use fraggle_packet::framework::{serve_metrics, MetricsRegistry, NetworkTest};
+    let reg = MetricsRegistry::new();
+    reg.set_help("fraggle_build_info", "Build metadata");
+    reg.set_gauge("fraggle_build_info", 1.0);
+    if let Some(t) = target {
+        use fraggle_packet::network_tests::UploadSizeSweepTest;
+        if let Ok(r) = UploadSizeSweepTest::new().run(&t) {
+            for (k, v) in &r.metrics {
+                let metric = format!("fraggle_upload_{}", sanitize_metric(k));
+                reg.set_gauge(&metric, *v);
+            }
+        }
+    }
+    println!("{}", format!("Serving metrics on http://{}/metrics", bind).green().bold());
+    if let Err(e) = serve_metrics(reg, bind) {
+        eprintln!("{} serve error: {}", "✗".red(), e);
+    }
+}
+
+fn sanitize_metric(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect()
+}
+
+fn run_dsl_demo(dst: std::net::Ipv4Addr, port: u16, size: usize) {
+    use fraggle_packet::fuzzing::dsl::*;
+    let pkt = Ether::new()
+        / Ip::new().dst_addr(dst).df()
+        / Tcp::new()
+            .dport(port)
+            .syn()
+            .options(vec![TcpOpt::Mss(1460), TcpOpt::SAckOK, TcpOpt::Nop])
+        / Raw::of_size(size, b'X');
+    println!("{}", pkt.summary().cyan());
+    match pkt.hexdump() {
+        Ok(h) => println!("{}", h),
+        Err(e) => eprintln!("{} hexdump error: {}", "✗".red(), e),
+    }
+}
+
+fn print_test_result(res: &fraggle_packet::framework::TestResult) {
+    use fraggle_packet::framework::TestStatus;
+    let status = match res.status {
+        TestStatus::Success => "PASS".green().bold().to_string(),
+        TestStatus::Warning => "WARN".yellow().bold().to_string(),
+        TestStatus::Failed => "FAIL".red().bold().to_string(),
+        TestStatus::Running => "RUN ".cyan().to_string(),
+        TestStatus::Pending => "PEND".to_string(),
+        TestStatus::Skipped => "SKIP".dimmed().to_string(),
+    };
+    println!("[{}] {} ({}) target={}", status, res.name, res.category.as_str(), res.target);
+    for (k, v) in &res.metrics {
+        println!("  metric {} = {}", k, v);
+    }
+    for (k, v) in &res.metadata {
+        println!("  meta   {} = {}", k, v);
+    }
+    for d in &res.diagnoses {
+        println!("  {:?}: {}", d.severity, d.title);
+        for r in &d.recommendations {
+            println!("    - {}", r);
+        }
+    }
+}

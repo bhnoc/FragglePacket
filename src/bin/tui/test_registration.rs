@@ -13,6 +13,8 @@ use fraggle_packet::network_tests::{
     ipv6::Ipv6Test,
     application::ApplicationTest,
     fuzzing::{FuzzingTest, FuzzMode},
+    DnsSecureCompareTest, QuicPmtudTest, Raw9100BulkTest, SshDataPathTest, TcpOptionsEchoTest,
+    UploadSizeSweepTest,
 };
 
 pub fn register_all_tests(orchestrator: &mut TestOrchestrator) {
@@ -29,5 +31,11 @@ pub fn register_all_tests(orchestrator: &mut TestOrchestrator) {
     orchestrator.register(Box::new(Ipv6Test::new()));
     orchestrator.register(Box::new(ApplicationTest::new()));
     orchestrator.register(Box::new(FuzzingTest::new(FuzzMode::All).with_output("reports/tui_fuzz.pcap".to_string())));
+    orchestrator.register(Box::new(UploadSizeSweepTest::new()));
+    orchestrator.register(Box::new(SshDataPathTest::new()));
+    orchestrator.register(Box::new(Raw9100BulkTest::new()));
+    orchestrator.register(Box::new(TcpOptionsEchoTest::new()));
+    orchestrator.register(Box::new(QuicPmtudTest::new()));
+    orchestrator.register(Box::new(DnsSecureCompareTest::new()));
 }
 

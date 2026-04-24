@@ -110,6 +110,17 @@ impl NetworkTest for TunnelMssClampingTest {
         let overhead = 1500_u16.saturating_sub(effective_mtu);
         result.add_metric("detected_overhead", overhead as f64);
 
+        // Recommended MSS values: standard (MSS - 40), IPv4 (MSS), and a
+        // VPN-conservative value that subtracts an additional 20B safety
+        // margin for double-encapsulation scenarios. Mirrors the shell
+        // script's RECOMMENDED_MSS_VPN_CONSERVATIVE output.
+        let vpn_conservative_mss = (actual_mss.saturating_sub(20)).max(1200);
+        result.add_metric("recommended_mss_vpn_conservative", vpn_conservative_mss as f64);
+        result.add_metadata(
+            "recommended_mss_vpn_conservative",
+            vpn_conservative_mss.to_string(),
+        );
+
         // Match against known tunnel signatures
         let tunnel_type = identify_tunnel_type(effective_mtu);
         if let Some(tunnel) = tunnel_type {
