@@ -12,8 +12,16 @@ use crate::load_guard::counters::InterfaceCounters;
 use crate::load_guard::radio::{classify_rf, RadioSnapshot, RfQuality};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+/// A "completed" phase whose measured wall time overshoots its budgeted
+/// duration by more than this factor cannot be trusted as having run at the
+/// intended rate for the intended time.
+const DURATION_OVERRUN_TOLERANCE: f64 = 1.25;
+/// A "completed" phase that moved less than this fraction of its target byte
+/// volume did not present the configured load, regardless of why.
+const MIN_TARGET_FRACTION: f64 = 0.10;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RadioTimeline {
@@ -63,6 +71,16 @@ pub enum InvalidReason {
     UnstableRf,
     CountersUnusable,
     RadioUnavailable,
+    /// The phase reported normal completion but took materially longer than
+    /// the budgeted `max_duration_secs`. A "completed" run whose own clock
+    /// cannot be trusted must not produce a ratio.
+    PhaseDurationExceeded,
+    /// The phase reported normal completion but moved far less than its
+    /// target byte volume. Whatever the cause (generator stall, real
+    /// collapse, or something else), the guard cannot attest that the
+    /// configured load was actually presented, so no derived ratio may be
+    /// read off it — same failure shape as a roam invalidating a run.
+    PhaseTargetUndershoot,
 }
 
 impl std::fmt::Display for InvalidReason {
@@ -74,6 +92,8 @@ impl std::fmt::Display for InvalidReason {
             InvalidReason::UnstableRf => "unstable RF (low SNR) observed during phase",
             InvalidReason::CountersUnusable => "interface counters unusable (wrap/reset)",
             InvalidReason::RadioUnavailable => "radio state unavailable",
+            InvalidReason::PhaseDurationExceeded => "phase ran materially longer than the requested duration",
+            InvalidReason::PhaseTargetUndershoot => "phase moved far less than its target byte volume",
         };
         f.write_str(s)
     }
@@ -200,13 +220,14 @@ pub fn compute_derived_ratio(validity: &Validity, raw: &RawMetrics) -> Option<De
     }
 }
 
+#[derive(Clone)]
 pub struct RadioSource {
-    inner: Box<dyn Fn() -> Result<RadioSnapshot, String> + Send + Sync>,
+    inner: Arc<dyn Fn() -> Result<RadioSnapshot, String> + Send + Sync>,
 }
 
 impl RadioSource {
     pub fn new(f: impl Fn() -> Result<RadioSnapshot, String> + Send + Sync + 'static) -> Self {
-        Self { inner: Box::new(f) }
+        Self { inner: Arc::new(f) }
     }
     fn sample(&self) -> RadioSnapshot {
         (self.inner)().unwrap_or_else(|_| RadioSnapshot::unavailable())
@@ -272,11 +293,35 @@ impl LoadGuard {
     /// interface counters before/during/after, checking abort thresholds
     /// every tick, and honoring `cancel` (set from a SIGINT handler) as an
     /// operator-cancellation abort that still returns a full report.
+    ///
+    /// Radio sampling runs on its own background thread rather than inline in
+    /// the tick loop: a real `system_profiler` call can take several seconds,
+    /// and calling it synchronously inside the phase loop was stealing wall
+    /// time from the budgeted duration — a 2s-budget request was measured
+    /// taking 17s because each in-loop radio sample blocked the phase. The
+    /// background thread samples on its own cadence and the phase loop only
+    /// ever reads the latest snapshot a `Mutex` away, never blocking on it.
     pub fn run(&self, mut phase: impl LoadPhase, cancel: Arc<AtomicBool>) -> GuardReport {
         let before_radio = self.radio.sample();
         let counters_before = self.counters.sample();
 
-        let mut during_radio = Vec::new();
+        let during_radio: Arc<Mutex<Vec<RadioSnapshot>>> = Arc::new(Mutex::new(Vec::new()));
+        let radio_thread_stop = Arc::new(AtomicBool::new(false));
+        let radio_source = self.radio.clone();
+        let radio_interval = self.radio_sample_interval;
+        let during_radio_writer = during_radio.clone();
+        let radio_thread_stop_reader = radio_thread_stop.clone();
+        let radio_thread = std::thread::spawn(move || {
+            while !radio_thread_stop_reader.load(Ordering::SeqCst) {
+                std::thread::sleep(radio_interval);
+                if radio_thread_stop_reader.load(Ordering::SeqCst) {
+                    break;
+                }
+                let snap = radio_source.sample();
+                during_radio_writer.lock().unwrap().push(snap);
+            }
+        });
+
         let mut bytes_transferred: u64 = 0;
         let mut stop_reason = StopReason::Completed;
         let target_bytes = (self.budget.target_rate_mbps * 1_000_000.0 / 8.0
@@ -286,7 +331,6 @@ impl LoadGuard {
         let step_duration = Duration::from_secs(self.budget.max_duration_secs.max(1))
             / schedule.len().max(1) as u32;
         let start = Instant::now();
-        let mut last_radio_sample = Instant::now() - self.radio_sample_interval;
 
         'ramp: for rate in schedule {
             let step_start = Instant::now();
@@ -298,10 +342,6 @@ impl LoadGuard {
 
                 let tick = phase.tick(rate, start.elapsed());
                 bytes_transferred += tick.bytes_sent_delta;
-                if last_radio_sample.elapsed() >= self.radio_sample_interval {
-                    during_radio.push(self.radio.sample());
-                    last_radio_sample = Instant::now();
-                }
 
                 if let Some(detail) = tick.endpoint_error {
                     stop_reason = StopReason::AbortEndpointError { detail: detail.to_string() };
@@ -326,16 +366,40 @@ impl LoadGuard {
                     }
                 }
 
-                if let Some(latest) = during_radio.last() {
-                    if latest.association_fingerprint() != before_radio.association_fingerprint() {
-                        stop_reason = StopReason::AbortAssociationChange;
-                        break 'ramp;
+                {
+                    let guard = during_radio.lock().unwrap();
+                    if let Some(latest) = guard.last() {
+                        if latest.association_fingerprint() != before_radio.association_fingerprint() {
+                            stop_reason = StopReason::AbortAssociationChange;
+                            break 'ramp;
+                        }
                     }
                 }
 
-                std::thread::sleep(self.sample_interval.min(step_duration));
+                // Sleep only for however much of the step actually remains,
+                // not a flat `sample_interval`. Capping to `step_duration`
+                // alone still let each iteration overshoot the step boundary
+                // by up to a full `sample_interval` when the interval didn't
+                // divide the step evenly — compounded across every ramp step,
+                // a short budget could overrun materially even in a
+                // perfectly healthy run, which is exactly the false-positive
+                // this guard exists to prevent, just self-inflicted.
+                let remaining = step_duration.saturating_sub(step_start.elapsed());
+                if remaining.is_zero() {
+                    break;
+                }
+                std::thread::sleep(self.sample_interval.min(remaining));
             }
         }
+
+        // Captured the instant the phase loop itself ends, before the
+        // (multi-second, on macOS) post-phase radio/counter snapshots run —
+        // those measure the guard's own bookkeeping overhead, not the phase,
+        // and must not count against the requested duration.
+        let elapsed_secs = start.elapsed().as_secs_f64();
+
+        radio_thread_stop.store(true, Ordering::SeqCst);
+        let _ = radio_thread.join();
 
         let after_radio = self.radio.sample();
         let counters_after = self.counters.sample();
@@ -343,9 +407,26 @@ impl LoadGuard {
 
         let timeline = RadioTimeline {
             before: before_radio.clone(),
-            during: during_radio,
+            during: Arc::try_unwrap(during_radio)
+                .map(|m| m.into_inner().unwrap())
+                .unwrap_or_default(),
             after: after_radio,
         };
+
+        let budgeted_secs = self.budget.max_duration_secs as f64;
+        let duration_exceeded =
+            budgeted_secs > 0.0 && elapsed_secs > budgeted_secs * DURATION_OVERRUN_TOLERANCE;
+        // Only judge a phase against its own budget when it actually ran to
+        // completion under that budget. A run that stopped early for an
+        // abort reason (loss, latency, roam, cancellation) already carries
+        // that specific StopReason and is correctly short on bytes/time as a
+        // consequence — it should not be relabeled as a duration/undershoot
+        // defect on top of that.
+        let ran_to_completion = matches!(stop_reason, StopReason::Completed);
+        let target_undershoot = ran_to_completion
+            && target_bytes > 0
+            && (bytes_transferred as f64) < (target_bytes as f64) * MIN_TARGET_FRACTION;
+        let duration_exceeded = ran_to_completion && duration_exceeded;
 
         let validity = if !before_radio.associated || !timeline.after.associated {
             Validity::Invalid(InvalidReason::RadioUnavailable)
@@ -355,6 +436,10 @@ impl LoadGuard {
             Validity::Invalid(InvalidReason::BandChanged)
         } else if !counters_usable {
             Validity::Invalid(InvalidReason::CountersUnusable)
+        } else if duration_exceeded {
+            Validity::Invalid(InvalidReason::PhaseDurationExceeded)
+        } else if target_undershoot {
+            Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
         } else {
             match timeline.weakest_rf() {
                 RfQuality::Weak => Validity::Invalid(InvalidReason::WeakRf),
@@ -365,7 +450,7 @@ impl LoadGuard {
 
         let raw = RawMetrics {
             bytes_transferred,
-            elapsed_secs: start.elapsed().as_secs_f64(),
+            elapsed_secs,
             target_bytes,
         };
         let derived = compute_derived_ratio(&validity, &raw);
@@ -517,5 +602,77 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
         );
         assert!(matches!(report.stop_reason, StopReason::AbortGatewayLatency { .. }));
+    }
+
+    #[test]
+    fn phase_that_undershoots_target_is_invalid_with_no_ratio() {
+        let budget = LoadBudget::maintenance(1000.0, 5, 1);
+        let radio = RadioSource::new(|| Ok(strong_snapshot()));
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5));
+        // Completes normally but only ever sends a trickle relative to the
+        // 1000 Mbps / 5s target — this is the "0.82% of target" shape from
+        // the field report, not an abort.
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1, ..Default::default() },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert_eq!(report.stop_reason, StopReason::Completed);
+        assert_eq!(
+            report.validity,
+            Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
+        );
+        assert!(report.derived.is_none());
+        assert!(report.raw.bytes_transferred > 0, "raw evidence retained even when invalid");
+    }
+
+    #[test]
+    fn phase_that_overruns_duration_is_invalid_with_no_ratio() {
+        let budget = LoadBudget::maintenance(1.0, 1, 1);
+        let radio = RadioSource::new(|| Ok(strong_snapshot()));
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5));
+        // The injected phase itself blocks well past the 1s budget on every
+        // tick. Unlike the guard's own bookkeeping sleep (which is capped to
+        // the remaining step duration), time spent inside the caller's phase
+        // callback is not something the guard can throttle — this is the
+        // realistic shape of "a blocking send made the phase run long."
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| {
+                std::thread::sleep(Duration::from_millis(1500));
+                PhaseTick { bytes_sent_delta: 1_000_000, ..Default::default() }
+            },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert_eq!(report.stop_reason, StopReason::Completed);
+        assert_eq!(
+            report.validity,
+            Validity::Invalid(InvalidReason::PhaseDurationExceeded)
+        );
+        assert!(report.derived.is_none());
+    }
+
+    #[test]
+    fn aborted_run_is_not_relabeled_as_undershoot() {
+        // An abort (endpoint error here) legitimately produces few bytes and
+        // short elapsed time; that must surface as the abort's own StopReason
+        // / validity path, not get double-labeled as a duration/undershoot
+        // defect on top of it.
+        let budget = LoadBudget::maintenance(1000.0, 5, 1);
+        let radio = RadioSource::new(|| Ok(strong_snapshot()));
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5));
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| PhaseTick { endpoint_error: Some("reset"), ..Default::default() },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert!(matches!(report.stop_reason, StopReason::AbortEndpointError { .. }));
+        assert_ne!(
+            report.validity,
+            Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
+        );
     }
 }

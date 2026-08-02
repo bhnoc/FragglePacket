@@ -22,3 +22,5 @@ pub mod dsl_demo;
 pub mod load_guard;
 pub mod preflight;
 pub mod pcap_report;
+pub mod probe_rate;
+pub mod firsthop;

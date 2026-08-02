@@ -69,56 +69,82 @@ impl NetworkTest for RttTest {
         }
         
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
-        // Parse ping output
-        let stats = parse_ping_stats(&stdout)?;
-        
-        result.add_metric("min_ms", stats.min);
-        result.add_metric("max_ms", stats.max);
-        result.add_metric("avg_ms", stats.avg);
-        result.add_metric("stddev_ms", stats.stddev);
-        result.add_metric("loss_percent", stats.loss_percent);
-        result.add_metric("jitter_ms", stats.jitter);
-        
-        // Bufferbloat detection (RTT variance under load)
-        if stats.stddev > stats.avg * 0.5 {
+
+        // Parse ping output. Fields are Option<f64>: a missing/unrecognized
+        // summary line must never be reported as a latency of 0.0 (GAP-009).
+        let stats = parse_ping_stats(&stdout);
+
+        let mut latency_available = false;
+        if let Some(v) = stats.min { result.add_metric("min_ms", v); latency_available = true; }
+        if let Some(v) = stats.avg { result.add_metric("avg_ms", v); latency_available = true; }
+        if let Some(v) = stats.max { result.add_metric("max_ms", v); latency_available = true; }
+        if let Some(v) = stats.stddev { result.add_metric("stddev_ms", v); latency_available = true; }
+        if let Some(v) = stats.jitter { result.add_metric("jitter_ms", v); }
+        if let Some(v) = stats.loss_percent { result.add_metric("loss_percent", v); }
+
+        if !latency_available {
+            result.add_metadata(
+                "latency_unavailable",
+                "no round-trip/rtt summary line was found or recognized in ping output; \
+                 min/avg/max/stddev/jitter are unavailable, not zero",
+            );
             result.add_diagnosis(Diagnosis::new(
                 DiagnosisSeverity::Warning,
-                "Possible Bufferbloat".to_string(),
-                format!("High RTT variance (stddev {:.1}ms vs avg {:.1}ms) may indicate bufferbloat", stats.stddev, stats.avg),
-            ).with_recommendation("Test under load: ping during large download")
-             .with_recommendation("Check router queue management (consider fq_codel)")
-             .with_recommendation("May affect real-time applications"));
+                "Latency Unavailable".to_string(),
+                "Ping produced no parseable round-trip summary (total loss or unrecognized \
+                 platform format). Latency is unknown, not zero.".to_string(),
+            ).with_recommendation("Check packet loss below; total loss commonly means no summary line exists")
+             .with_recommendation("If loss is low, this may be an unrecognized ping output format"));
         }
-        
+
+        // Bufferbloat detection (RTT variance under load) -- only meaningful
+        // when both values were actually parsed.
+        if let (Some(stddev), Some(avg)) = (stats.stddev, stats.avg) {
+            if stddev > avg * 0.5 {
+                result.add_diagnosis(Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "Possible Bufferbloat".to_string(),
+                    format!("High RTT variance (stddev {:.1}ms vs avg {:.1}ms) may indicate bufferbloat", stddev, avg),
+                ).with_recommendation("Test under load: ping during large download")
+                 .with_recommendation("Check router queue management (consider fq_codel)")
+                 .with_recommendation("May affect real-time applications"));
+            }
+        }
+
         // Analyze results
-        if stats.loss_percent > 10.0 {
+        let loss = stats.loss_percent;
+        if loss.map(|l| l > 10.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
             result.add_diagnosis(Diagnosis::new(
                 DiagnosisSeverity::Warning,
                 "High Packet Loss".to_string(),
-                format!("Packet loss: {:.1}%", stats.loss_percent),
+                format!("Packet loss: {:.1}%", loss.unwrap()),
             ).with_recommendation("Investigate network congestion")
              .with_recommendation("Check for routing issues"));
-        } else if stats.jitter > 50.0 {
+        } else if stats.jitter.map(|j| j > 50.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
             result.add_diagnosis(Diagnosis::new(
                 DiagnosisSeverity::Warning,
                 "High Jitter Detected".to_string(),
-                format!("Jitter: {:.1}ms (stddev/avg ratio)", stats.jitter),
+                format!("Jitter: {:.1}ms (stddev/avg ratio)", stats.jitter.unwrap()),
             ).with_recommendation("May affect real-time applications (VoIP, gaming)"));
-        } else if stats.avg > 200.0 {
+        } else if stats.avg.map(|a| a > 200.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
             result.add_diagnosis(Diagnosis::new(
                 DiagnosisSeverity::Info,
                 "High Latency".to_string(),
-                format!("Average RTT: {:.1}ms", stats.avg),
+                format!("Average RTT: {:.1}ms", stats.avg.unwrap()),
             ).with_recommendation("Check routing path")
              .with_related_test("Path Analysis"));
+        } else if !latency_available {
+            // No round-trip summary and loss wasn't reported as high either
+            // (e.g. loss line itself missing/unrecognized): can't call this
+            // a success, but it's also not a command failure.
+            result.set_status(TestStatus::Warning);
         } else {
             result.set_status(TestStatus::Success);
         }
-        
+
         Ok(result)
     }
     
@@ -128,26 +154,31 @@ impl NetworkTest for RttTest {
     }
 }
 
-#[derive(Debug)]
-struct PingStats {
-    min: f64,
-    max: f64,
-    avg: f64,
-    stddev: f64,
-    loss_percent: f64,
-    jitter: f64,
+/// Parsed ping statistics. Every field is `Option<f64>` on purpose: a
+/// missing or unrecognized summary line must be structurally distinguishable
+/// from a real measurement of 0.0 (GAP-009). `None` means "unavailable",
+/// never "zero".
+#[derive(Debug, Default, PartialEq)]
+pub struct PingStats {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub avg: Option<f64>,
+    pub stddev: Option<f64>,
+    pub loss_percent: Option<f64>,
+    pub jitter: Option<f64>,
 }
 
-fn parse_ping_stats(output: &str) -> Result<PingStats, Box<dyn Error>> {
-    let mut min = 0.0;
-    let mut max = 0.0;
-    let mut avg = 0.0;
-    let mut stddev = 0.0;
-    let mut loss_percent = 0.0;
-    
-    // Parse rtt line: "rtt min/avg/max/mdev = 14.123/20.456/45.789/8.234 ms"
+/// Parses both Linux (`rtt min/avg/max/mdev = ...`) and Darwin
+/// (`round-trip min/avg/max/stddev = ...`) ping summary lines from the same
+/// code path -- not `#[cfg]`-gated, since a colleague's pasted output from
+/// either OS must parse on any host. If no summary line is found or it
+/// doesn't parse into 4 numbers, the latency fields stay `None`.
+pub fn parse_ping_stats(output: &str) -> PingStats {
+    let mut stats = PingStats::default();
+
     for line in output.lines() {
-        if line.contains("rtt min/avg/max") {
+        let is_summary_line = line.contains("rtt min/avg/max") || line.contains("round-trip min/avg/max");
+        if is_summary_line {
             if let Some(stats_part) = line.split('=').nth(1) {
                 let nums: Vec<f64> = stats_part
                     .trim()
@@ -155,39 +186,36 @@ fn parse_ping_stats(output: &str) -> Result<PingStats, Box<dyn Error>> {
                     .filter_map(|s| s.trim().split_whitespace().next())
                     .filter_map(|s| s.parse().ok())
                     .collect();
-                
+
                 if nums.len() >= 4 {
-                    min = nums[0];
-                    avg = nums[1];
-                    max = nums[2];
-                    stddev = nums[3];
+                    stats.min = Some(nums[0]);
+                    stats.avg = Some(nums[1]);
+                    stats.max = Some(nums[2]);
+                    stats.stddev = Some(nums[3]);
                 }
             }
         }
-        
+
         // Parse packet loss: "10 packets transmitted, 9 received, 10% packet loss"
+        // (Linux) or "2 packets transmitted, 0 packets received, 100.0% packet loss" (Darwin).
         if line.contains("packet loss") {
             if let Some(percent_str) = line.split(',').nth(2) {
                 if let Some(num_str) = percent_str.trim().split('%').next() {
                     if let Some(num) = num_str.split_whitespace().last() {
-                        loss_percent = num.parse().unwrap_or(0.0);
+                        stats.loss_percent = num.parse().ok();
                     }
                 }
             }
         }
     }
-    
-    // Calculate jitter (stddev/avg ratio)
-    let jitter = if avg > 0.0 { (stddev / avg) * 100.0 } else { 0.0 };
-    
-    Ok(PingStats {
-        min,
-        max,
-        avg,
-        stddev,
-        loss_percent,
-        jitter,
-    })
+
+    // Jitter (stddev/avg ratio) is only meaningful once both inputs parsed.
+    stats.jitter = match (stats.stddev, stats.avg) {
+        (Some(stddev), Some(avg)) if avg > 0.0 => Some((stddev / avg) * 100.0),
+        _ => None,
+    };
+
+    stats
 }
 
 #[cfg(test)]
@@ -213,11 +241,62 @@ PING google.com (142.250.80.46) 56(84) bytes of data.
 2 packets transmitted, 2 received, 0% packet loss, time 1001ms
 rtt min/avg/max/mdev = 14.200/14.650/15.100/0.450 ms
 "#;
-        
-        let stats = parse_ping_stats(output).unwrap();
-        assert!((stats.min - 14.2).abs() < 0.1);
-        assert!((stats.avg - 14.65).abs() < 0.1);
-        assert_eq!(stats.loss_percent, 0.0);
+
+        let stats = parse_ping_stats(output);
+        assert!((stats.min.unwrap() - 14.2).abs() < 0.1);
+        assert!((stats.avg.unwrap() - 14.65).abs() < 0.1);
+        assert_eq!(stats.loss_percent, Some(0.0));
+    }
+
+    fn fixture(name: &str) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("harness/fixtures/ping")
+            .join(name);
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {:?}: {}", path, e))
+    }
+
+    #[test]
+    fn darwin_ok_fixture_parses_real_numbers() {
+        let stats = parse_ping_stats(&fixture("darwin-ping-ok.txt"));
+        assert_eq!(stats.min, Some(61.541));
+        assert_eq!(stats.avg, Some(62.641));
+        assert_eq!(stats.max, Some(65.020));
+        assert_eq!(stats.stddev, Some(1.395));
+        assert_eq!(stats.loss_percent, Some(0.0));
+    }
+
+    #[test]
+    fn darwin_timeout_fixture_is_unavailable_not_zero() {
+        let stats = parse_ping_stats(&fixture("darwin-ping-timeout.txt"));
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.avg, None);
+        assert_eq!(stats.max, None);
+        assert_eq!(stats.stddev, None);
+        assert_eq!(stats.jitter, None);
+        assert_eq!(stats.loss_percent, Some(100.0));
+    }
+
+    #[test]
+    fn darwin_df_toobig_fixture_reports_unavailable_despite_trailing_stats_block() {
+        // Darwin prints a normal-looking "statistics" block even when the
+        // probe itself failed with "sendto: Message too long". There is no
+        // round-trip line in this fixture, so the parser must not fabricate
+        // one from the trailing packet-loss line alone.
+        let stats = parse_ping_stats(&fixture("darwin-ping-df-toobig.txt"));
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.avg, None);
+        assert_eq!(stats.loss_percent, Some(100.0));
+    }
+
+    #[test]
+    fn no_summary_line_never_yields_zero() {
+        let stats = parse_ping_stats("nothing recognizable here\n");
+        assert_eq!(stats.min, None);
+        assert_eq!(stats.avg, None);
+        assert_eq!(stats.max, None);
+        assert_eq!(stats.stddev, None);
+        assert_eq!(stats.jitter, None);
+        assert_eq!(stats.loss_percent, None);
     }
 }
 

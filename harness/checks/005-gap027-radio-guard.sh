@@ -57,9 +57,18 @@ check_lacks "invalid run's human output has no retained_capacity wording" "retai
 check_contains "invalid run's human output states derived is none" "derived: none" \
     printf '%s' "$human"
 
-# --- a stable synthetic run (no injected change) stays valid and does carry a ratio ---
-valid_out="$(lg_json --interface en0 --rate-mbps 1 --duration-secs 1 --concurrency 1 --live-event)"
+# --- a stable synthetic run (no injected change) stays valid and does carry a
+#     ratio. Rate/duration are kept low enough that the CLI's fixed-size demo
+#     phase (a trickle per tick) clears the GAP-047 undershoot floor instead
+#     of tripping it — this check is about radio stability, not the budget
+#     gate, which 006 covers on its own. ---
+valid_out="$(lg_json --interface en0 --rate-mbps 0.1 --duration-secs 1 --concurrency 1 --live-event)"
 if [ -n "$valid_out" ]; then
+    valid_validity="$(printf '%s' "$valid_out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(json.dumps(d.get("validity")))
+' 2>/dev/null)"
     valid_derived="$(printf '%s' "$valid_out" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
@@ -67,8 +76,10 @@ print("present" if d.get("derived") is not None else "null")
 ' 2>/dev/null)"
     if [ "$valid_derived" = "present" ]; then
         pass "stable run without injected change stays valid and carries a ratio"
+    elif printf '%s' "$valid_validity" | grep -q "RadioUnavailable"; then
+        skip "stable run without injected change stays valid and carries a ratio" "Wi-Fi not associated on this host right now"
     else
-        fail "stable run without injected change stays valid and carries a ratio" "derived missing on valid run"
+        fail "stable run without injected change stays valid and carries a ratio" "validity=$valid_validity derived missing on valid run"
     fi
 else
     skip "stable run without injected change stays valid and carries a ratio" "no live radio source"

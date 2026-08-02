@@ -30,14 +30,32 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 1
 fi
 
+# A gate is only worth having if it's cheap enough to run every round. Anything
+# slower than this gets called out so it can be moved onto fixtures/synthetic
+# state instead of paying real platform or network cost per assertion.
+SLOW_CHECK_SECS="${FP_SLOW_CHECK_SECS:-25}"
+
 ran_any=0
+slow_files=()
 for f in "${files[@]}"; do
     matches_filter "$f" || continue
     ran_any=1
     section "$(basename "$f" .sh)"
+    _started=$SECONDS
     # shellcheck disable=SC1090
     source "$f"
+    _elapsed=$((SECONDS - _started))
+    if [ "$_elapsed" -gt "$SLOW_CHECK_SECS" ]; then
+        slow_files+=("$(basename "$f") ${_elapsed}s")
+        printf '  %s! %ss — over the %ss budget; move assertions onto fixtures%s\n' \
+            "$_c_yel" "$_elapsed" "$SLOW_CHECK_SECS" "$_c_off"
+    fi
 done
+
+if [ ${#slow_files[@]} -gt 0 ]; then
+    printf '\n%sslow check files:%s\n' "$_c_yel" "$_c_off"
+    for s in "${slow_files[@]}"; do printf '    %s\n' "$s"; done
+fi
 
 if [ "$ran_any" = 0 ]; then
     printf 'No check files matched filter: %s\n' "${filters[*]}"

@@ -72,3 +72,47 @@ check_contains "human output surfaces a stop reason line" "stop reason:" \
 # --- ramp: zero ramp steps must not be accepted as "start at full rate" ---
 check_fails "load-guard rejects a zero-step ramp" \
     "$BIN" load-guard --interface en0 --rate-mbps 1 --duration-secs 1 --concurrency 1 --live-event --ramp-steps 0
+
+# --- a phase that completes normally but moved far less than its target byte
+#     volume must not be reported as a healthy ratio. The CLI's demo phase
+#     sends a fixed trickle per tick, so a large rate/duration budget against
+#     it reliably undershoots without needing to fake anything else. ---
+undershoot_out="$("$BIN" load-guard --interface en0 --rate-mbps 5 --duration-secs 2 --concurrency 1 --maintenance --json 2>/dev/null | sed -n '/^{/,$p')"
+if [ -z "$undershoot_out" ]; then
+    skip "phase that undershoots target is marked invalid with no ratio" "no output (radio/counter source unavailable)"
+else
+    undershoot_validity="$(printf '%s' "$undershoot_out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(json.dumps(d.get("validity")))
+' 2>/dev/null)"
+    if printf '%s' "$undershoot_validity" | grep -q "PhaseTargetUndershoot"; then
+        pass "phase that undershoots target is marked invalid (PhaseTargetUndershoot)"
+    else
+        fail "phase that undershoots target is marked invalid (PhaseTargetUndershoot)" "got: $undershoot_validity"
+    fi
+
+    undershoot_derived="$(printf '%s' "$undershoot_out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print("null" if d.get("derived") is None else "present")
+' 2>/dev/null)"
+    if [ "$undershoot_derived" = "null" ]; then
+        pass "undershooting phase emits no derived collapse/retention ratio in --json"
+    else
+        fail "undershooting phase emits no derived collapse/retention ratio in --json" "derived field present"
+    fi
+fi
+
+check_lacks "undershooting phase's human output has no collapse_ratio wording" "collapse_ratio=" \
+    "$BIN" load-guard --interface en0 --rate-mbps 5 --duration-secs 2 --concurrency 1 --maintenance
+
+# --- human output must never leak Rust's Option debug formatting. The
+#     duration/undershoot fix and this fix landed together because both were
+#     found in the same real run; lock both from the same evidence. ---
+check_lacks "human output never contains a Some( debug artifact" "Some(" \
+    "$BIN" load-guard --interface en0 --rate-mbps 1 --duration-secs 1 --concurrency 1 --live-event
+check_lacks "invalid run's human output never contains a Some( debug artifact" "Some(" \
+    "$BIN" load-guard --interface en0 --rate-mbps 5 --duration-secs 2 --concurrency 1 --maintenance
+check_lacks "roamed run's human output never contains a Some( debug artifact" "Some(" \
+    "$BIN" load-guard --interface en0 --rate-mbps 1 --duration-secs 1 --concurrency 1 --live-event --inject-band-change

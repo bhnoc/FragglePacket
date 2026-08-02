@@ -7,9 +7,9 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 
 | Sprint | Scope | State |
 | --- | --- | --- |
-| 0 | smoke/acid harnesses, `src/cli/` refactor | harnesses done and committed; refactor in progress |
-| 1 | P0 gaps 001, 019, 025, 027, 047 | not started |
-| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | not started |
+| 0 | smoke/acid harnesses, `src/cli/` refactor | **done, pushed** (0daf3c4). main.rs 2551→21 lines |
+| 1 | P0 gaps 001, 019, 025, 027, 047 | 019/025/027/047 **done** (5e496fe); 001 outstanding; 2 defects out for fix |
+| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | 009/021/022 in progress |
 | 3 | capture/PCAP/MSS 007, 008, 010, 026, 066 | not started |
 | 4 | iperf3 load matrix 006, 031-034, 036, 039, 040, 045, 046 | not started |
 | 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | not started |
@@ -89,6 +89,19 @@ trusted. Both existing gates were negative-tested this way.
 - **GAP-009 root cause located.** `src/network_tests/rtt.rs:150` matches
   `"rtt min/avg/max"` (Linux). Darwin emits `round-trip min/avg/max/stddev`, so
   every successful macOS run reports 0.0 for min/avg/max/jitter.
+
+## Skills available for the infrastructure-dependent gaps
+
+Two project skills exist that cover access this build otherwise cannot reach.
+Read them before writing anything that needs remote probes or AP telemetry;
+they likely already encode the access pattern, so don't reinvent it.
+
+- **`precog-ops`** — operating the Black Hat Precog wireless probes through the
+  wired bastion. Directly relevant to GAP-038 (distributed probe orchestrator),
+  GAP-041 (remote probe health preflight), GAP-042, GAP-045, GAP-051.
+- **`arista-ops`** — read-only Arista CV-CUE operations. Relevant to GAP-037
+  (AP generation/radio-mode matrix), GAP-043 (telemetry counter liveness),
+  GAP-051, GAP-055 (RF survey), GAP-058 (wired edge/LLDP/PoE).
 
 ## Local tooling confirmed present
 

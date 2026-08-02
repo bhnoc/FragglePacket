@@ -135,10 +135,10 @@ fn print_human_report(report: &PreflightReport) {
                 }
             };
             println!(
-                "  {:32} ip={:<16} advertised={:<6} negotiated_alpn={:<8} verdict={}",
+                "  {:32} ip={:<16} advertised={:<14} negotiated_alpn={:<8} verdict={}",
                 ep.host,
                 ep.resolved_ip.clone().unwrap_or_else(|| "?".to_string()),
-                ep.advertised.map(|b| b.to_string()).unwrap_or_else(|| "?".to_string()),
+                ep.advertised.map(|a| a.as_str().to_string()).unwrap_or_else(|| "n/a".to_string()),
                 ep.negotiated_alpn.clone().unwrap_or_else(|| "-".to_string()),
                 verdict_str
             );

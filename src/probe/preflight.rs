@@ -90,12 +90,42 @@ impl EndpointVerdict {
     }
 }
 
+/// Whether an endpoint advertises h3 support (Alt-Svc). Kept as three states
+/// on purpose: an undetermined probe (couldn't complete a lower-protocol
+/// handshake or parse a response) must never collapse into `NotAdvertised`,
+/// or a probe failure silently becomes "confirmed unsupported" -- the same
+/// unknown-becoming-a-value trap that runs through this whole gap list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Advertisement {
+    /// Alt-Svc header (or fallback probe) confirmed an h3 advertisement.
+    Advertised,
+    /// A valid lower-protocol response was parsed and it carried no h3
+    /// Alt-Svc advertisement. This is a confirmed negative.
+    NotAdvertised,
+    /// Could not complete a lower-protocol handshake or parse a response at
+    /// all, so advertisement status is simply unknown.
+    Undetermined,
+}
+
+impl Advertisement {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Advertisement::Advertised => "advertised",
+            Advertisement::NotAdvertised => "not-advertised",
+            Advertisement::Undetermined => "undetermined",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndpointResult {
     pub host: String,
     pub resolved_ip: Option<String>,
     pub protocol: String,
-    pub advertised: Option<bool>,
+    /// `None` when advertisement isn't a meaningful concept for this
+    /// protocol (h1/h2 have no advertisement mechanism); `Some(_)` for h3.
+    pub advertised: Option<Advertisement>,
     pub negotiated_alpn: Option<String>,
     pub verdict: EndpointVerdict,
     pub detail: String,
@@ -145,28 +175,44 @@ pub fn resolve_for_preflight(host: &str, forced_ip: Option<IpAddr>) -> Option<Ip
     super::resolve::resolve_hostname(host).ok()
 }
 
-/// Fetch response headers over HTTP/1.1 or HTTP/2 (whichever the peer
-/// negotiates) to read `Alt-Svc`, which is how HTTP/3 support is advertised.
-/// Returns `None` if we couldn't even complete a lower-protocol handshake --
-/// in that case advertised capability is unknown, not "unsupported".
+/// Fetch response headers over HTTP/1.1 to read `Alt-Svc`, which is how
+/// HTTP/3 support is advertised.
+///
+/// Deliberately pins ALPN to `http/1.1` only (not `["h2", "http/1.1"]`).
+/// Requesting h2 and then writing a plaintext HTTP/1.1 request onto whatever
+/// the peer picks was the root cause of a real bug here: Cloudflare and
+/// Google both select h2 when offered, the plaintext request is garbage on
+/// an h2 binary stream, the read returns framing bytes with no `Alt-Svc`
+/// line, and the probe silently reported "not advertised" for two endpoints
+/// that plainly do advertise h3. Pinning to `http/1.1` costs nothing here --
+/// we only need the headers, not real h2 performance -- and guarantees the
+/// response we parse is the protocol we sent.
+///
+/// Returns `Err` (-> `Advertisement::Undetermined`) if we couldn't complete
+/// the handshake, get a response, or find a recognizable status line --
+/// never silently turning "couldn't tell" into "confirmed absent".
 fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result<Option<String>, String> {
     let addr = SocketAddr::new(ip, port);
-    let stream = TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("tcp connect: {}", e))?;
+    let mut stream = TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("tcp connect: {}", e))?;
     stream.set_read_timeout(Some(timeout)).ok();
     stream.set_write_timeout(Some(timeout)).ok();
 
-    let connector = native_tls::TlsConnector::builder()
-        .danger_accept_invalid_certs(true)
-        .request_alpns(&["h2", "http/1.1"])
-        .build()
-        .map_err(|e| format!("tls connector: {}", e))?;
+    let mut config = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+        .with_no_client_auth();
+    config.alpn_protocols = vec![b"http/1.1".to_vec()];
 
-    let mut tls = connector
-        .connect(host, stream)
-        .map_err(|e| format!("tls handshake: {}", e))?;
+    let server_name: rustls::pki_types::ServerName<'static> = host
+        .to_string()
+        .try_into()
+        .map_err(|e| format!("invalid server name: {:?}", e))?;
+    let mut conn = rustls::ClientConnection::new(Arc::new(config), server_name)
+        .map_err(|e| format!("tls client config: {}", e))?;
+    let mut tls = rustls::Stream::new(&mut conn, &mut stream);
 
     let request = format!(
-        "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: fraggle-packet-preflight/0.1\r\nConnection: close\r\n\r\n",
+        "GET / HTTP/1.1\r\nHost: {}\r\nUser-Agent: fraggle-packet-preflight/0.1\r\nConnection: close\r\n\r\n",
         host
     );
     tls.write_all(request.as_bytes()).map_err(|e| format!("write: {}", e))?;
@@ -192,6 +238,13 @@ fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result
         }
     }
 
+    if !looks_like_http_response(&buf) {
+        return Err(format!(
+            "response did not parse as HTTP/1.1 ({} bytes read)",
+            buf.len()
+        ));
+    }
+
     let headers = String::from_utf8_lossy(&buf).to_lowercase();
     for line in headers.lines() {
         if line.starts_with("alt-svc:") {
@@ -199,6 +252,17 @@ fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result
         }
     }
     Ok(None)
+}
+
+/// Sanity check that what we read is a real HTTP/1.1 response and not
+/// binary framing from a protocol we didn't ask for -- the exact failure
+/// mode that made the old h2-then-plaintext probe silently useless.
+fn looks_like_http_response(buf: &[u8]) -> bool {
+    if buf.is_empty() {
+        return false;
+    }
+    let head = String::from_utf8_lossy(&buf[..buf.len().min(16)]);
+    head.starts_with("HTTP/1.")
 }
 
 fn find_header_end(buf: &[u8]) -> Option<usize> {
@@ -376,11 +440,15 @@ fn negotiate_h3(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> (Endpoi
 /// Curl-based Alt-Svc probe kept as a fallback for environments where the
 /// direct TLS path above can't reach a peer (matches the existing
 /// `check_quic_support` heuristic used elsewhere in this codebase).
-pub fn curl_alt_svc(host: &str, timeout_secs: u64) -> Option<String> {
+///
+/// Returns `Err` (undetermined) when curl itself fails to run or produces
+/// nothing usable -- never collapsed into "no header found".
+pub fn curl_alt_svc(host: &str, timeout_secs: u64) -> Result<Option<String>, String> {
     let output = Command::new("curl")
         .args([
             "-s",
             "-I",
+            "--http1.1",
             "--max-time",
             &timeout_secs.to_string(),
             &format!("https://{}", host),
@@ -388,12 +456,21 @@ pub fn curl_alt_svc(host: &str, timeout_secs: u64) -> Option<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .output()
-        .ok()?;
+        .map_err(|e| format!("curl spawn failed: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!("curl exited with {}", output.status));
+    }
+
     let headers = String::from_utf8_lossy(&output.stdout);
-    headers
+    if !headers.to_lowercase().starts_with("http/1.") {
+        return Err("curl output did not parse as an HTTP/1.1 response".to_string());
+    }
+
+    Ok(headers
         .lines()
         .find(|l| l.to_lowercase().starts_with("alt-svc:"))
-        .map(|l| l["alt-svc:".len()..].trim().to_string())
+        .map(|l| l["alt-svc:".len()..].trim().to_string()))
 }
 
 /// Run the full preflight for one (protocol, host) pair.
@@ -438,11 +515,28 @@ pub fn preflight_one(
         Protocol::Http3 => {
             // Step 1: advertised capability, obtained over a working lower
             // protocol (falls back to curl if the direct TLS path fails to
-            // even connect, e.g. no h2/h1 stack reachable).
+            // even parse a response, e.g. no h1 stack reachable at all).
+            // A transport/parse failure on BOTH probes stays Undetermined --
+            // it must never be reported the same as a confirmed absence.
             let advertised = match fetch_alt_svc(host, ip, port, timeout) {
-                Ok(Some(alt_svc)) => Some(alt_svc_advertises_h3(&alt_svc)),
-                Ok(None) => Some(false),
-                Err(_) => curl_alt_svc(host, timeout.as_secs().max(1)).map(|v| alt_svc_advertises_h3(&v)),
+                Ok(Some(alt_svc)) if alt_svc_advertises_h3(&alt_svc) => Advertisement::Advertised,
+                Ok(_) => Advertisement::NotAdvertised,
+                Err(direct_err) => match curl_alt_svc(host, timeout.as_secs().max(1)) {
+                    Ok(Some(alt_svc)) if alt_svc_advertises_h3(&alt_svc) => Advertisement::Advertised,
+                    Ok(_) => Advertisement::NotAdvertised,
+                    Err(_) => {
+                        return EndpointResult {
+                            host: host.to_string(),
+                            resolved_ip: Some(ip.to_string()),
+                            protocol: protocol.as_str().to_string(),
+                            advertised: Some(Advertisement::Undetermined),
+                            negotiated_alpn: None,
+                            verdict: EndpointVerdict::Timeout,
+                            detail: format!("could not determine Alt-Svc advertisement: {}", direct_err),
+                            elapsed_ms: start.elapsed().as_millis() as u64,
+                        };
+                    }
+                },
             };
 
             // Step 2: negotiated capability -- a real QUIC handshake.
@@ -454,8 +548,8 @@ pub fn preflight_one(
                 // false-diagnosis fix -- do not let a failed/timed-out
                 // handshake against a non-advertising host read as network
                 // interference.
-                (Some(false), v) if v != EndpointVerdict::Ok => {
-                    detail = format!("{} (no Alt-Svc h3 advertisement)", detail);
+                (Advertisement::NotAdvertised, v) if v != EndpointVerdict::Ok => {
+                    detail = format!("{} (confirmed no Alt-Svc h3 advertisement)", detail);
                     EndpointVerdict::Unsupported
                 }
                 (_, v) => v,
@@ -465,7 +559,7 @@ pub fn preflight_one(
                 host: host.to_string(),
                 resolved_ip: Some(ip.to_string()),
                 protocol: protocol.as_str().to_string(),
-                advertised,
+                advertised: Some(advertised),
                 negotiated_alpn: alpn,
                 verdict: final_verdict,
                 detail,
@@ -559,7 +653,7 @@ mod tests {
             host: host.to_string(),
             resolved_ip: Some("203.0.113.1".to_string()),
             protocol: "h3".to_string(),
-            advertised: Some(true),
+            advertised: Some(Advertisement::Advertised),
             negotiated_alpn: None,
             verdict,
             detail: String::new(),

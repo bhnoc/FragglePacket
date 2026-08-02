@@ -90,6 +90,10 @@ pub enum Commands {
     Preflight(commands::preflight::PreflightArgs),
     /// Analyze a PCAP/pcapng capture: vantage point, capture health, qualified MTU/loss verdicts (GAP-019)
     PcapReport(commands::pcap_report::PcapReportArgs),
+    /// Detect ICMP rate-limiting/batching artifacts by comparing normal vs elevated probe cadence (GAP-021)
+    ProbeRate(commands::probe_rate::ProbeRateArgs),
+    /// First-hop gateway isolation with non-ICMP fallback when echo is suppressed (GAP-022)
+    FirstHop(commands::firsthop::FirstHopArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -128,6 +132,8 @@ pub fn dispatch(args: Args) {
         Some(Commands::LoadGuard(a)) => commands::load_guard::run(&a),
         Some(Commands::Preflight(a)) => commands::preflight::run(&a),
         Some(Commands::PcapReport(a)) => commands::pcap_report::run(&a),
+        Some(Commands::ProbeRate(a)) => commands::probe_rate::run(&a),
+        Some(Commands::FirstHop(a)) => commands::firsthop::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

@@ -224,6 +224,40 @@ fn ctrlc_handler(cancel: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+/// Renders an optional measurement for a human reader. Deliberately never
+/// spells out `None`/`Some(...)` — this gap list keeps getting bitten by
+/// unknowns rendered as though they were readings, so "not available" must
+/// stay visually distinct from a real value without looking like a debug dump.
+fn fmt_opt<T: std::fmt::Display>(v: &Option<T>) -> String {
+    match v {
+        Some(x) => x.to_string(),
+        None => "unavailable".to_string(),
+    }
+}
+
+fn format_radio_line(snap: &fraggle_packet::load_guard::RadioSnapshot) -> String {
+    if !snap.associated {
+        return "not associated".to_string();
+    }
+    format!(
+        "band={} channel={} width={} rssi={} noise={}",
+        fmt_opt(&snap.band),
+        fmt_opt(&snap.channel),
+        match snap.width_mhz {
+            Some(w) => format!("{w}MHz"),
+            None => "unavailable".to_string(),
+        },
+        match snap.rssi_dbm {
+            Some(r) => format!("{r}dBm"),
+            None => "unavailable".to_string(),
+        },
+        match snap.noise_dbm {
+            Some(n) => format!("{n}dBm"),
+            None => "unavailable".to_string(),
+        },
+    )
+}
+
 fn print_human(report: &GuardReport) {
     println!(
         "[{}] load-guard interface={} mode={:?}",
@@ -246,17 +280,8 @@ fn print_human(report: &GuardReport) {
         Validity::Valid => println!("  validity: valid"),
         Validity::Invalid(reason) => println!("  validity: invalid ({})", reason),
     }
-    println!(
-        "  radio before: band={:?} channel={:?} width={:?}MHz rssi={:?}dBm",
-        report.radio.before.band,
-        report.radio.before.channel,
-        report.radio.before.width_mhz,
-        report.radio.before.rssi_dbm
-    );
-    println!(
-        "  radio after:  band={:?} channel={:?} width={:?}MHz rssi={:?}dBm",
-        report.radio.after.band, report.radio.after.channel, report.radio.after.width_mhz, report.radio.after.rssi_dbm
-    );
+    println!("  radio before: {}", format_radio_line(&report.radio.before));
+    println!("  radio after:  {}", format_radio_line(&report.radio.after));
     println!(
         "  counters before: rx_bytes={} tx_bytes={}",
         report.counters_before.rx_bytes, report.counters_before.tx_bytes

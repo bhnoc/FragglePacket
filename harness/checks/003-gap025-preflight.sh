@@ -90,6 +90,7 @@ print(list(nv.keys())[0] if isinstance(nv, dict) else nv)
     defaults_out="$(pf_json --protocol http3 --timeout-ms 5000)"
     if [ -z "$defaults_out" ]; then
         skip "live: known-capable defaults negotiate h3 end to end" "no network / preflight produced no JSON"
+        skip "live: an endpoint that negotiates h3 is never reported advertised=not-advertised" "no network / preflight produced no JSON"
     else
         ok_count="$(printf '%s' "$defaults_out" | python3 -c '
 import json, sys
@@ -102,5 +103,50 @@ print(sum(1 for e in eps if e["verdict"] == "ok"))
         else
             fail "live: at least one built-in known-capable endpoint negotiates h3" "ok_count=$ok_count"
         fi
+
+        # --- the advertised/negotiated contradiction bug: cloudflare.com and
+        # google.com are known to send a real Alt-Svc h3 header, so if their
+        # handshake negotiates h3 they must never simultaneously be reported
+        # as not advertising it. (mensura.cdn-apple.com is legitimately
+        # excluded here: it's a QUIC-native measurement endpoint with no
+        # HTTP/1.1 Alt-Svc header at all, so not-advertised+ok is a true
+        # state for it, not a bug -- this check only covers hosts confirmed
+        # to advertise via a real header.) This is what broke when the
+        # Alt-Svc probe requested ALPN ["h2","http/1.1"] and then wrote a
+        # plaintext HTTP/1.1 request onto whatever the peer picked, silently
+        # losing the Alt-Svc header whenever h2 was selected. ---
+        contradiction="$(printf '%s' "$defaults_out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+eps = d["protocols"][0]["endpoints"]
+known_advertisers = {"cloudflare.com", "google.com"}
+bad = [e["host"] for e in eps if e["host"] in known_advertisers and e["verdict"] == "ok" and e.get("advertised") == "not-advertised"]
+print(",".join(bad))
+' 2>/dev/null)"
+        if [ -n "$contradiction" ]; then
+            fail "live: an endpoint that negotiates h3 is never reported advertised=not-advertised" "contradiction on: $contradiction"
+        else
+            pass "live: an endpoint that negotiates h3 is never reported advertised=not-advertised"
+        fi
     fi
+fi
+
+# --- undetermined Alt-Svc probes must render distinctly from a confirmed
+# negative. --force-ip 192.0.2.1 is TEST-NET-1 (RFC 5737): guaranteed
+# non-routable, so the TCP connect for the Alt-Svc probe cannot complete and
+# this is deterministic and needs no live reachable network. ---
+undetermined_out="$(pf_json --no-defaults --endpoint gap025-undetermined-probe.invalid --force-ip 192.0.2.1 --protocol http3 --timeout-ms 300)"
+if [ -z "$undetermined_out" ]; then
+    fail "unresolvable-by-force-ip probe renders advertised=undetermined, not not-advertised" "no JSON output from preflight"
+else
+    advertised_state="$(printf '%s' "$undetermined_out" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(d["protocols"][0]["endpoints"][0].get("advertised"))
+' 2>/dev/null)"
+    case "$advertised_state" in
+        undetermined) pass "unresolvable-by-force-ip probe renders advertised=undetermined, not not-advertised" ;;
+        not-advertised) fail "unresolvable-by-force-ip probe renders advertised=undetermined, not not-advertised" "got not-advertised: a probe failure was collapsed into a confirmed negative" ;;
+        *) fail "unresolvable-by-force-ip probe renders advertised=undetermined, not not-advertised" "got: $advertised_state" ;;
+    esac
 fi
