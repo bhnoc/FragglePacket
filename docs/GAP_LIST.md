@@ -54,6 +54,11 @@ feature has been scheduled or implemented.
 | GAP-035 | P1 | No radio-state guard around every load phase | A post-test check showed strong 6 GHz RF, but a roam, channel-width change, PHY-rate change, or power-save transition during an individual phase could invalidate attribution. | Snapshot allowlisted band/channel/width/RSSI/noise/PHY rate/MCS before and after every phase; detect changes; mark affected results invalid; never persist SSID, BSSID, MAC, Bluetooth, or unrelated platform data. |
 | GAP-036 | P2 | No test-endpoint capability discovery | The controlled server already exposed independent iperf3 listeners on 443-445, but the client workflow initially assumed only 443. That delayed port-specific and asymmetric tests. | Probe an explicit allowlist of authorized endpoint ports, validate iperf version/features, record listener purpose, and select independent listeners automatically without broad port scanning or server mutation. |
 | GAP-037 | P1 | No AP-generation, radio-mode, and client-capability compatibility matrix | The failing client negotiated 802.11ax on a 6 GHz/80 MHz link, but the infrastructure may use Arista Wi-Fi 7 APs whose 802.11be radio mode, firmware, and scheduler also serve non-MLO HE clients. Client-only results cannot distinguish a general WLAN policy from a Wi-Fi 7 backward-compatibility datapath defect. | Record AP model/firmware/power mode, negotiated HE/EHT mode, MLO state, band/width/NSS and client chipset; repeat the signed threshold test across Wi-Fi 7 AP in BE mode, the same AP/radio in AX mode, a Wi-Fi 6E AP, and native Wi-Fi 7 versus Wi-Fi 6E clients; produce a compatibility verdict matrix. |
+| GAP-038 | P1 | No distributed wireless-probe orchestrator | Twenty-four authorized Precog probes span conference-center VLANs and radios, but FragglePacket cannot safely inventory, label, batch, or correlate them through a management-only bastion. | Add a controller that enforces management/test-node separation, stable redacted labels, bounded concurrency, pre/post radio snapshots, per-node timeouts, signed manifests, and merged fleet summaries without persisting management addresses or credentials. |
+| GAP-039 | P1 | iperf JSON parsing is not version- or direction-aware | Precog clients span iperf3 3.9 and 3.16 while the Mac uses 3.21. Version 3.9 returned empty `--bidir` results against one server, and reverse UDP reported offered bitrate and total/lost packet counts rather than achieved receive throughput. | Detect client/server versions and feature compatibility; validate required JSON fields; fall back to paired normal/reverse listeners; distinguish offered, sent, received, and estimated received rates; never turn missing fields into zero-loss results. |
+| GAP-040 | P1 | No public-listener allocation and baseline-floor control | XMission exposed multiple listeners, enabling concurrent directional sessions, but each listener accepts one test and old-client reverse UDP showed a roughly 0.6-1.0% floor. Shared public-service/NAT effects can contaminate comparisons. | Discover only authorized listener ranges, lease one listener per active session, cap concurrency, interleave directional controls, estimate endpoint loss floor by client version, detect busy/rate-limit responses, and qualify public-endpoint results. |
+| GAP-041 | P1 | No remote probe health and dependency preflight | One trusted node had a broken iperf binary due to missing `libiperf.so.0`, one repeatedly timed out, and three presented changed SSH host keys. Treating those as network failures would corrupt fleet conclusions. | Preflight executable/library health, clock, route, radio association, disk/CPU, and endpoint reachability; quarantine unhealthy nodes; require independently verified host-key rotation; report excluded nodes and reasons. |
+| GAP-042 | P1 | No PHY-normalized fleet comparison | Fixed 100+100 Mbps load produced a sharp VHT-versus-HE split, but client PHY rates and generations differ. Fixed rates can conflate normal airtime saturation with compatibility defects. | Calculate offered airtime/PHY fractions per phase, enforce comparable normalized targets, stratify by PHY generation/driver/kernel, and require strong-RF directional controls before attributing a cohort difference to AP backward compatibility. |
 
 ## Resolved during this investigation
 
@@ -290,3 +295,26 @@ feature has been scheduled or implemented.
   downstream traffic. Two surrounding H3 simultaneous runs delivered only
   55.6 and 28.1 Mbps download with low responsiveness; the intervening H2 run
   completed at 317.0 Mbps download. The incident remained active.
+
+### 2026-08-02 — Distributed Precog wireless controls
+
+- Twenty-one of twenty-four authorized probes were reachable through the
+  management-only bastion. Three changed SSH host keys and were excluded. One
+  reachable probe had a broken iperf shared library and one timed out during
+  the 100 Mbps phase; neither was treated as a network result.
+- The usable fleet separated into older VHT/5.10/iperf3-3.9 probes and newer
+  HE/6.1/iperf3-3.16 probes, all using 5 GHz / 40 MHz wireless links across
+  multiple VLANs and locations.
+- At 100 Mbps each way against independent XMission listeners, eleven VHT
+  probes showed 2.0-47.9% downstream loss, averaging 27.0%, while upstream
+  loss averaged only 0.095%. Eight valid HE probes averaged 0.98% downstream
+  loss with zero upstream loss.
+- Strong-RF matched controls sharpened the cohort result. VHT P05 was clean
+  directionally at 100 Mbps, then rose from 0.669% directional downstream loss
+  to 14.673% simultaneous loss with no host-interface errors or drops. HE P15
+  stayed at its approximately 0.7% directional floor during 100+100 Mbps and
+  also added no interface errors or drops.
+- The cohort split is consistent with a legacy VHT/client-stack interaction on
+  the C-460 WLAN, but fixed offered rate and differing PHY capacity remain
+  confounders. A PHY-normalized repeat and AP/client mapping are required
+  before claiming a C-460 backward-compatibility defect.

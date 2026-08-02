@@ -211,6 +211,28 @@ RF remained strong on the same 6 GHz / 80 MHz channel at -59 dBm with a 720
 Mbps transmit rate. Claims that the issue had stopped were not supported by the
 controlled recurrence test.
 
+## Distributed Precog wireless cohort
+
+The management-only bastion relayed commands to distributed wireless probes;
+it did not generate test traffic. All load originated on downstream probes and
+used independent XMission listeners.
+
+| Cohort | Valid nodes | Client stack | Test | Mean upstream loss | Mean downstream loss | Range downstream |
+| --- | ---: | --- | --- | ---: | ---: | ---: |
+| Older VHT | 11 | 5 GHz/40 MHz, kernel 5.10, iperf3 3.9 | UDP 100+100 Mbps | 0.095% | 27.02% | 2.01-47.94% |
+| Newer HE | 8 | 5 GHz/40 MHz, kernel 6.1, iperf3 3.16 | UDP 100+100 Mbps | 0% | 0.98% | 0.62-2.87% |
+
+| Matched strong-RF control | Directional download loss | Simultaneous download loss | Simultaneous upload loss | Host errors/drops |
+| --- | ---: | ---: | ---: | ---: |
+| VHT P05 | 0.669% at 100 Mbps | 14.673% at 100+100 Mbps | 0.002% | 0 |
+| HE P15 | 0.729% at 100 Mbps | 0.665% at 100+100 Mbps | 0% | 0 |
+
+This is a strong generation-correlated signal across multiple locations and
+VLANs. It is consistent with a C-460 legacy-client/airtime-scheduler interaction
+but is not yet proof of an AP firmware defect: the VHT and HE clients also have
+different PHY capacity, drivers, kernels, and iperf versions. Repeat at equal
+fractions of measured directional capacity and map each probe to its AP/radio.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path
@@ -235,3 +257,4 @@ the test with firewall/NAT and circuit telemetry.
 - [`dual-uplink-client-probe-20260802.md`](dual-uplink-client-probe-20260802.md)
 - [`wired-control-20260802.md`](wired-control-20260802.md)
 - [`wifi-duplex-threshold-20260802.md`](wifi-duplex-threshold-20260802.md)
+- [`precog-distributed-wireless-20260802.md`](precog-distributed-wireless-20260802.md)
