@@ -18,6 +18,7 @@ support a blanket clamp.
 
 ## Committed reports
 
+- `single-sheet-evidence-report-20260802.md` — executive evidence, exclusions, root-cause assessment, and decisive next test
 - `COMPARISON.md` — living non-2.4 GHz result and hypothesis matrix
 - `location-a-baseline-20260801.md` — room WLAN baseline
 - `location-a-blackhatusa-control-20260802.md` — same-room general Black Hat WLAN control
