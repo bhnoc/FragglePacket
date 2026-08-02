@@ -55,6 +55,45 @@ sys.exit(0 if any(k in blob for k in ("synthetic", "fake", "simulated")) else 1)
             "$BIN" load-guard $base --fake-radio
     fi
 
+    # A report whose signals have different origins cannot be described by one
+    # top-level provenance field. gateway-bracket sampled real ICMP while its
+    # throughput came from a synthetic generator, and stamped the whole report
+    # `data_source: live` — so a fictitious 96.7% loss figure read as a network
+    # measurement. Per-signal provenance, or withhold the derived figure.
+    if net_guard; then
+        gw="$(ipconfig getoption en0 router 2>/dev/null)"
+        if [ -z "$gw" ]; then
+            skip "synthetic throughput is not presented as a live measurement" "no gateway on en0"
+        else
+            gwj="$("$BIN" gateway-bracket --gateway "$gw" --interface en0 \
+                --phase-duration-secs 1 --json 2>/dev/null | sed -n '/^{/,$p')"
+            if [ -z "$gwj" ]; then
+                skip "synthetic throughput is not presented as a live measurement" "no JSON"
+            elif printf '%s' "$gwj" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+phases = d.get("phases") or []
+loaded = [p for p in phases if str(p.get("phase", "")).lower() != "idle"]
+# Either the derived loss figure is withheld, or its provenance is stated
+# somewhere that a consumer of the artifact alone can see.
+for p in loaded:
+    if p.get("throughput_loss_pct") is None:
+        continue
+    blob = (json.dumps(p) + json.dumps({k: v for k, v in d.items() if k != "phases"})).lower()
+    if not any(t in blob for t in ("synthetic", "demo", "simulated", "not-a-measurement")):
+        sys.exit(1)
+sys.exit(0)
+' 2>/dev/null; then
+                pass "synthetic throughput is not presented as a live measurement"
+            else
+                fail "synthetic throughput is not presented as a live measurement" \
+                    "a loss percentage from the demo generator is stamped live with no qualifier"
+            fi
+        fi
+    else
+        skip "synthetic throughput is not presented as a live measurement" "FP_HARNESS_OFFLINE=1"
+    fi
+
     # The marker must reflect reality, not be hardcoded: a real run must NOT
     # claim to be synthetic. Guarded because it pays real radio sampling cost.
     if net_guard; then
