@@ -59,6 +59,7 @@ feature has been scheduled or implemented.
 | GAP-040 | P1 | No public-listener allocation and baseline-floor control | XMission exposed multiple listeners, enabling concurrent directional sessions, but each listener accepts one test and old-client reverse UDP showed a roughly 0.6-1.0% floor. Shared public-service/NAT effects can contaminate comparisons. | Discover only authorized listener ranges, lease one listener per active session, cap concurrency, interleave directional controls, estimate endpoint loss floor by client version, detect busy/rate-limit responses, and qualify public-endpoint results. |
 | GAP-041 | P1 | No remote probe health and dependency preflight | One trusted node had a broken iperf binary due to missing `libiperf.so.0`, one repeatedly timed out, and three presented changed SSH host keys. Treating those as network failures would corrupt fleet conclusions. | Preflight executable/library health, clock, route, radio association, disk/CPU, and endpoint reachability; quarantine unhealthy nodes; require independently verified host-key rotation; report excluded nodes and reasons. |
 | GAP-042 | P1 | No PHY-normalized fleet comparison | Fixed 100+100 Mbps load produced a sharp VHT-versus-HE split, but client PHY rates and generations differ. Fixed rates can conflate normal airtime saturation with compatibility defects. | Calculate offered airtime/PHY fractions per phase, enforce comparable normalized targets, stratify by PHY generation/driver/kernel, and require strong-RF directional controls before attributing a cohort difference to AP backward compatibility. |
+| GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on P05/P15 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
 
 ## Resolved during this investigation
 
@@ -325,3 +326,7 @@ feature has been scheduled or implemented.
   1.67% downstream loss and P15 125+125 Mbps produced 0.578%. Much of the
   fixed-100 cohort gap is capacity/airtime driven; the residual issue is poor
   strong-RF legacy-VHT downstream efficiency.
+- Privileged `iw` station counters on P05/P15 remained frozen during known
+  100+100 Mbps traffic. They cannot localize loss or support a zero-retry/drop
+  conclusion. Ordinary interface counters showed no host errors/drops, but AP
+  or over-the-air evidence is still required.

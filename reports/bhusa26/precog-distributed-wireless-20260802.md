@@ -132,6 +132,18 @@ breaks legacy clients" claim. It leaves a narrower and still actionable issue:
 strong-RF legacy VHT clients have far poorer C-460 downstream efficiency than
 HE clients and are therefore driven into airtime/queue loss much sooner.
 
+## Counter-liveness limitation
+
+Ordinary interface error/drop counters advanced normally as a telemetry source
+and showed no added host errors/drops during the P05/P15 matched controls.
+Privileged wireless station counters were also readable, but their RX packet,
+TX packet, retry, failure, beacon-loss, and miscellaneous-drop values did not
+advance during a known six-second 100+100 Mbps phase on either node.
+
+Those frozen driver counters are unusable. Their zero delta is not evidence of
+zero MAC retries or radio drops. Loss localization still requires live C-460
+AP/controller queue and retry counters or an over-the-air capture.
+
 ## Interpretation
 
 The incident signature is not confined to one Mac, one AP, one VLAN, 6 GHz, or
