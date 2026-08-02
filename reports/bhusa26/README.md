@@ -20,6 +20,7 @@ blanket clamp.
 - `location-a-mgm-external-control-20260802.md` — external-infrastructure control
 - `location-b-blackhatusa-downstairs-20260802.md` — downstairs cross-AP/weak-RF baseline
 - `location-c-downstairs-strong-radio-retest-20260802.md` — clean downstairs 6 GHz reproduction
+- `dual-uplink-client-probe-20260802.md` — fixed-port TCP/UDP and NAT-affinity probe
 - `wifi-diagnostics-20260801-235547.txt` — sanitized RF/platform snapshot
 - `tcp-traceroute-20260801-235547.txt` — TCP/443 path sample
 

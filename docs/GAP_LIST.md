@@ -46,6 +46,7 @@ feature has been scheduled or implemented.
 | GAP-027 | P0 | Load tests do not monitor Wi-Fi association changes or qualify weak RF | A downstairs test began on 5 GHz and roamed to 2.4 GHz after the laptop moved three feet. Later stationary runs remained on weak 2.4 GHz but produced protocol errors and severe H2/H3 impairment. Without before/during/after radio state, mixed-association output could be mistaken for a transport failure. | Sample association identity, band, channel, RSSI, PHY rate, and counters before/during/after every load phase; invalidate results spanning a roam; flag weak/unstable RF; retain failure evidence without calculating protocol collapse ratios from invalid runs. |
 | GAP-028 | P1 | No multi-uplink ECMP/LAG hash and NAT-affinity diagnostic | Black Hat uses two 10 Gb provider links. A non-symmetric hash, per-packet spraying, unstable NAT ownership, one bad hash bucket, or unequal member policy could explain why bidirectional QUIC fails while directional QUIC and H2 remain healthy. | Sweep fixed UDP/TCP client ports and destinations, preserve each 5-tuple, record repeated STUN mappings/public egress identity, detect bimodal outcomes and mid-flow rebinding, compare forward/reverse/bidirectional performance, and report evidence for stable per-flow affinity versus path migration. |
 | GAP-029 | P1 | No controlled one-circuit-at-a-time comparison workflow | Client-only tests cannot prove which WAN member or shared edge owns a failure. The decisive test requires the same bundle with WAN A only, WAN B only, and both active while collecting member counters. | Export a signed/repeatable test manifest; coordinate pre/post snapshots; label circuit state; ingest per-member utilization, drops, policer, errors, NAT/firewall ownership, and route changes; compare A-only, B-only, and dual-active verdicts without FragglePacket changing production routing itself. |
+| GAP-030 | P1 | No matched wired-versus-Wi-Fi fault-domain control | Generic UDP was lossless at 250 Mbps each way and directionally at 350 Mbps, but lost 8-30% downstream at 350 Mbps bidirectional on strong Wi-Fi. Client-only evidence cannot distinguish WLAN airtime/queue policy from the dual WAN paths. | Run the same signed fixed-port matrix on wireless and wired clients in the same routed policy domain; record interface/radio state and edge counters; attribute a failure to WLAN, shared edge, or WAN only when the matched control supports it. |
 
 ## Resolved during this investigation
 
@@ -185,3 +186,28 @@ feature has been scheduled or implemented.
   MSS, weak RF, one AP, or client-wide QUIC behavior.
 - MSS again remained destination-specific: Apple 1460, Cloudflare 1400, and
   Google 1412 on route MTU 1500.
+
+### 2026-08-02 — Fixed-port iperf3 dual-uplink probe
+
+- A controlled iperf3 3.21 server was available at `test.protoevidence.com` on
+  TCP/UDP port 443. A two-second directional TCP discovery delivered about 515
+  Mbps with zero retransmissions; reverse delivered about 500 Mbps with one.
+- Ten three-second bidirectional TCP source-port buckets varied from 33-307
+  Mbps upload and 160-576 Mbps download. Client-to-server retransmissions ranged
+  from 156 to 21,412 while the reverse sender reported zero in every bucket.
+- Ten bidirectional UDP buckets at 50 Mbps each way were lossless. At 250 Mbps
+  each way, nine were lossless and one showed 0.164% downstream loss.
+- Six bidirectional UDP buckets at 350 Mbps each way showed essentially zero
+  upload loss but 8.3-30.1% downstream loss, averaging about 20.4%. The same
+  350 Mbps flows were lossless in both directions when run one direction at a
+  time on representative ports. This independently proves a bidirectional
+  downstream-loss trigger with generic UDP.
+- One fixed STUN socket retained the same public mapping throughout a ten-second
+  failing 350 Mbps bidirectional run; two STUN responses timed out while UDP
+  downstream loss reached 12.2%. Twenty distinct STUN source ports all used one
+  public IPv4 address. No client-visible NAT rebinding or egress-IP split was
+  observed.
+- The port sweep did not form a healthy/bad bimodal split; every 350 Mbps bucket
+  showed the same directional failure. One isolated bad ECMP/LAG member is less
+  likely than shared queue/policer/WLAN behavior, but only member telemetry,
+  wired comparison, and A-only/B-only circuit tests can localize it.

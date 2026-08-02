@@ -86,6 +86,51 @@ Not yet run. This requires an authorized network-team maintenance window.
 | Failure follows one public NAT address | Egress/NAT-specific policy or state owner |
 | Failure follows particular fixed source ports | Bad hash bucket or member-path selection |
 
+## Fixed-port iperf3 dual-uplink probe
+
+Test endpoint: `test.protoevidence.com:443`, iperf3 3.21. Tests ran from the
+stable downstairs 6 GHz association. Public NAT address and mapped ports are
+intentionally omitted.
+
+### TCP controls
+
+| Test | Upload | Download | Upload retransmissions | Download retransmissions |
+| --- | ---: | ---: | ---: | ---: |
+| Directional discovery | Approximately 515 Mbps | Not run concurrently | 0 | N/A |
+| Reverse discovery | N/A | Approximately 500 Mbps | N/A | 1 |
+| Bidirectional port 40010 | 237.4 Mbps | 356.0 Mbps | 20,591 | 0 |
+| Bidirectional port 40011 | 116.1 Mbps | 568.3 Mbps | 2,934 | 0 |
+| Bidirectional port 40012 | 287.5 Mbps | 368.7 Mbps | 3,464 | 0 |
+| Bidirectional port 40013 | 130.5 Mbps | 497.1 Mbps | 12,805 | 0 |
+| Bidirectional port 40014 | 100.5 Mbps | 576.4 Mbps | 1,572 | 0 |
+| Bidirectional port 40015 | 265.2 Mbps | 255.2 Mbps | 17,200 | 0 |
+| Bidirectional port 40016 | 198.4 Mbps | 160.0 Mbps | 21,412 | 0 |
+| Bidirectional port 40017 | 33.3 Mbps | 470.0 Mbps | 156 | 0 |
+| Bidirectional port 40018 | 208.4 Mbps | 294.9 Mbps | 19,202 | 0 |
+| Bidirectional port 40019 | 306.8 Mbps | 305.9 Mbps | 9,723 | 0 |
+
+### UDP threshold and direction controls
+
+| Mode | Rate per direction | Ports | Upload loss | Download loss | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Bidirectional | 50 Mbps | 10 | 0% | 0% | Clean |
+| Bidirectional | 250 Mbps | 10 | 0% | 0% on 9 ports; 0.164% on 1 | Essentially clean |
+| Bidirectional | 350 Mbps | 6 | Approximately 0% | 8.3-30.1%; 20.4% average | Directional failure on every bucket |
+| Upload-only | 350 Mbps | 3 representative ports | 0% | N/A | Clean |
+| Download-only | 350 Mbps | 3 representative ports | N/A | 0% | Clean |
+| Bidirectional plus STUN | 350 Mbps for 10 s | 1 | 0% | 12.2% | NAT mapping stayed stable |
+
+### Client-visible affinity conclusions
+
+| Question | Result | Meaning |
+| --- | --- | --- |
+| Does one live UDP socket change public mapping under failing load? | No | No evidence of mid-session NAT rebinding |
+| Do twenty source ports expose multiple public IPs? | No | Common public NAT/prefix visible; circuit selection remains unknown |
+| Do fixed ports split into healthy and bad groups at 350 Mbps? | No | One isolated bad hash bucket/member is less likely |
+| Does generic UDP fail below the H3 collapse aggregate rate? | No; 250+250 Mbps was clean | Raw UDP capacity alone does not explain H3 collapse |
+| Does 350 Mbps fail one direction at a time? | No | Loss requires simultaneous bidirectional load |
+| Can Wi-Fi versus dual WAN now be distinguished? | No | Requires a wired matched run or per-member telemetry |
+
 ## Source reports
 
 - [`location-a-baseline-20260801.md`](location-a-baseline-20260801.md)
@@ -93,3 +138,4 @@ Not yet run. This requires an authorized network-team maintenance window.
 - [`location-a-mgm-external-control-20260802.md`](location-a-mgm-external-control-20260802.md)
 - [`location-b-blackhatusa-downstairs-20260802.md`](location-b-blackhatusa-downstairs-20260802.md)
 - [`location-c-downstairs-strong-radio-retest-20260802.md`](location-c-downstairs-strong-radio-retest-20260802.md)
+- [`dual-uplink-client-probe-20260802.md`](dual-uplink-client-probe-20260802.md)
