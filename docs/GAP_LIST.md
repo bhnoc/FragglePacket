@@ -43,6 +43,7 @@ feature has been scheduled or implemented.
 | GAP-024 | P2 | Cross-SSID tests lack a stable privacy-safe AP identity | Switching from the room SSID to the general SSID changed band, channel, signal, and PHY rate, but platform redaction prevented determining whether both radios belonged to one physical AP. | Generate a locally stable salted AP/radio identifier from BSSID without storing or displaying the BSSID; record band/channel so same-AP, cross-radio, roaming, and cross-AP comparisons are distinguishable. |
 | GAP-025 | P0 | Protocol tests do not preflight endpoint capability | HTTP/3-only failed against `speed.cloudflare.com` and `www.apple.com`, while Cloudflare's main site, Google, and Apple's dedicated measurement endpoint supported HTTP/3 from the same WLAN. An endpoint without QUIC could be misdiagnosed as network blocking. | Preflight ALPN/Alt-Svc and a protocol-valid handshake against multiple known-capable endpoints; separate unsupported endpoint, handshake rejection, timeout, and network filtering verdicts; never infer blocking from one host. |
 | GAP-026 | P1 | MSS analysis does not correlate multiple destinations with PMTU | On the external MGM control, Apple, Cloudflare, and Google all negotiated MSS 1238 while 1500-byte DF packets succeeded. Individual warnings cannot express the strong evidence for a TCP-specific path policy or distinguish it from a low PMTU. | Probe multiple independent destinations, cluster negotiated/on-wire MSS values, compare them with confirmed route/path MTU, and report whether evidence supports peer-specific MSS, uniform TCP clamping/proxying, or a true PMTU ceiling. |
+| GAP-027 | P0 | Load tests do not monitor Wi-Fi association changes or qualify weak RF | A downstairs test began on 5 GHz and roamed to 2.4 GHz after the laptop moved three feet. Later stationary runs remained on weak 2.4 GHz but produced protocol errors and severe H2/H3 impairment. Without before/during/after radio state, mixed-association output could be mistaken for a transport failure. | Sample association identity, band, channel, RSSI, PHY rate, and counters before/during/after every load phase; invalidate results spanning a roam; flag weak/unstable RF; retain failure evidence without calculating protocol collapse ratios from invalid runs. |
 
 ## Resolved during this investigation
 
@@ -139,3 +140,25 @@ feature has been scheduled or implemented.
   1500-byte IPv4 DF probes succeeded with zero loss. This is strong evidence of
   a uniform TCP-specific clamp or proxy policy rather than a 1280-byte path-MTU
   ceiling, subject to final SYN/SYN-ACK capture confirmation.
+
+### 2026-08-02 — Downstairs BlackHatUSA2026 cross-AP baseline
+
+- The initial association was 5 GHz channel 40 at -77 dBm and 97 Mbps PHY. A
+  three-foot laptop move caused a roam to 2.4 GHz channel 5, invalidating two
+  setup runs. Stationary official runs stayed on 2.4 GHz at roughly -71 to
+  -75 dBm and 68-103 Mbps PHY.
+- Stationary unloaded Internet latency was 21.06 ms average with 3.43 ms
+  standard deviation and zero loss. The shared gateway again suppressed ICMP.
+- HTTP/3 directional completed at 8.92 Mbps down and 66.38 Mbps up, with 2.89
+  seconds of download-loaded responsiveness delay. The simultaneous H3 run
+  aborted after 10.7 seconds with a protocol error; its partial capacity values
+  are not accepted as a collapse baseline.
+- HTTP/2 directional completed at 2.46 Mbps down and 34.03 Mbps up. Under
+  simultaneous load it delivered 2.08 Mbps down and 18.62 Mbps up, with 5.31
+  seconds overall loaded latency and 10.91 seconds for loaded HTTP.
+- This location shows severe downstream impairment across both H2 and H3 under
+  weak 2.4 GHz RF. It is not a clean reproduction of the upstairs
+  simultaneous-only H3 symptom; it is evidence of a separate coverage/capacity
+  problem on the general WLAN.
+- MSS remained destination-specific and matched the upstairs general WLAN:
+  Apple 1460, Cloudflare 1400, and Google 1412. No blanket clamp was observed.

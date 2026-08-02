@@ -16,6 +16,7 @@ Black Hat was destination-specific and did not support a blanket clamp.
 - `location-a-baseline-20260801.md` — room WLAN baseline
 - `location-a-blackhatusa-control-20260802.md` — same-room general Black Hat WLAN control
 - `location-a-mgm-external-control-20260802.md` — external-infrastructure control
+- `location-b-blackhatusa-downstairs-20260802.md` — downstairs cross-AP/weak-RF baseline
 - `wifi-diagnostics-20260801-235547.txt` — sanitized RF/platform snapshot
 - `tcp-traceroute-20260801-235547.txt` — TCP/443 path sample
 
