@@ -162,3 +162,24 @@ feature has been scheduled or implemented.
   problem on the general WLAN.
 - MSS remained destination-specific and matched the upstairs general WLAN:
   Apple 1460, Cloudflare 1400, and Google 1412. No blanket clamp was observed.
+
+### 2026-08-02 — Downstairs strong-radio Black Hat reproduction
+
+- Switching to a nearby room SSID produced a stable 6 GHz channel 197 / 80 MHz
+  association at -55 dBm, with PHY rate increasing from 864 to 1,200 Mbps.
+  Unloaded gateway latency averaged 4.58 ms and Internet latency averaged 19.72
+  ms, both with zero loss.
+- HTTP/3 directional capacity reached 679.28 Mbps down and 331.66 Mbps up.
+  Under simultaneous load it fell to 41.44 Mbps down and 165.54 Mbps up, so
+  download retained only 6.1% of directional capacity. The run also lost a
+  connection after 13.4 seconds.
+- On the same radio, HTTP/2 reached 749.62 Mbps down and 617.65 Mbps up
+  directionally, then 333.81 Mbps down and 394.86 Mbps up simultaneously with
+  no failure. H2 retained 44.5% of directional download and remained balanced.
+- This cleanly reproduces the Black Hat simultaneous-H3 failure hundreds of
+  feet from the original room on a different channel, subnet, gateway, and
+  nearby radio while strong RF and H2 remain healthy. The leading fault domain
+  is shared Black Hat controller/upstream QUIC handling or queue policy, not
+  MSS, weak RF, one AP, or client-wide QUIC behavior.
+- MSS again remained destination-specific: Apple 1460, Cloudflare 1400, and
+  Google 1412 on route MTU 1500.
