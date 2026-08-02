@@ -318,3 +318,10 @@ feature has been scheduled or implemented.
   the C-460 WLAN, but fixed offered rate and differing PHY capacity remain
   confounders. A PHY-normalized repeat and AP/client mapping are required
   before claiming a C-460 backward-compatibility defect.
+- PHY-normalized representative testing narrowed the claim. VHT P05 showed
+  8.3-18.0% directional downstream loss at 150-250 Mbps while upload remained
+  effectively lossless past 200 Mbps; HE P15 stayed near 0.6-0.75% downstream
+  loss through 250 Mbps. At scaled simultaneous loads, P05 60+60 Mbps produced
+  1.67% downstream loss and P15 125+125 Mbps produced 0.578%. Much of the
+  fixed-100 cohort gap is capacity/airtime driven; the residual issue is poor
+  strong-RF legacy-VHT downstream efficiency.

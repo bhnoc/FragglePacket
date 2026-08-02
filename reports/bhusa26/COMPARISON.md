@@ -233,6 +233,23 @@ but is not yet proof of an AP firmware defect: the VHT and HE clients also have
 different PHY capacity, drivers, kernels, and iperf versions. Repeat at equal
 fractions of measured directional capacity and map each probe to its AP/radio.
 
+### PHY-normalized follow-up
+
+| Control | VHT P05 | HE P15 |
+| --- | --- | --- |
+| Directional downstream at 150 Mbps | 10.439% loss | 0.709% loss |
+| Directional downstream at 200 Mbps | 8.333% loss | 0.747% loss |
+| Directional downstream at 250 Mbps | 17.972% loss | 0.644% loss |
+| Scaled simultaneous target | 60+60 Mbps | 125+125 Mbps |
+| Scaled simultaneous downstream loss | 1.670% | 0.578% |
+
+The normalized simultaneous result largely collapses the fixed-100 cohort gap,
+so normal capacity/airtime differences explain much of that table. The
+remaining anomaly is P05's poor downstream-only directional efficiency despite
+strong RF and clean upload beyond 200 Mbps. Ask Arista to investigate legacy
+VHT downstream scheduling/efficiency, but do not present this as a proven
+generic C-460 bidirectional defect.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

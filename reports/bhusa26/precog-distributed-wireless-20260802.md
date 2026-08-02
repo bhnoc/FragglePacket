@@ -98,6 +98,40 @@ detailed phase. Its directional controls were healthy, host-interface counters
 were clean, and downstream loss rose by about 22 times only under simultaneous
 load. P15 remained strong on a 2x2 HE/40 MHz association and did not degrade.
 
+## PHY-normalized follow-up
+
+Fixed 100+100 Mbps is not equivalent airtime across VHT and HE clients. The
+strong representatives were therefore tested directionally at higher rates and
+then simultaneously at rates scaled to their usable directional range.
+
+### Directional UDP sweep
+
+| Node | Cohort | Target | Upload loss | Downstream loss | Estimated downstream received payload |
+| --- | --- | ---: | ---: | ---: | ---: |
+| P05 | VHT | 150 Mbps | 0.001% | 10.439% | 134.3 Mbps |
+| P05 | VHT | 200 Mbps | 0.001% | 8.333% | 183.3 Mbps |
+| P05 | VHT | 250 Mbps | 0.004%; sender reached 233.5 Mbps | 17.972% | 205.1 Mbps |
+| P15 | HE | 150 Mbps | 0% | 0.709% | 149.1 Mbps |
+| P15 | HE | 200 Mbps | 0% | 0.747% | 198.6 Mbps |
+| P15 | HE | 250 Mbps | 0% | 0.644% | 248.6 Mbps |
+
+P05 has a pronounced downstream-only efficiency ceiling even directionally;
+its upload remains effectively lossless beyond 200 Mbps. P15 remains symmetric
+and clean through 250 Mbps.
+
+### Scaled simultaneous control
+
+| Node | Target each way | Upload loss | Downstream loss | Estimated downstream received payload |
+| --- | ---: | ---: | ---: | ---: |
+| P05 VHT | 60 Mbps | 0.005% | 1.670% | 59.0 Mbps |
+| P15 HE | 125 Mbps | 0% | 0.578% | 124.4 Mbps |
+
+Scaling offered load to the cohorts' different usable capacity largely removes
+the dramatic fixed-100 loss split. This weakens a generic "simultaneous traffic
+breaks legacy clients" claim. It leaves a narrower and still actionable issue:
+strong-RF legacy VHT clients have far poorer C-460 downstream efficiency than
+HE clients and are therefore driven into airtime/queue loss much sooner.
+
 ## Interpretation
 
 The incident signature is not confined to one Mac, one AP, one VLAN, 6 GHz, or
@@ -105,12 +139,11 @@ one public test server. A large, directionally consistent split correlates with
 the older VHT/client cohort across many locations, while the newer HE cohort is
 mostly healthy at the same fixed load.
 
-This is consistent with a legacy-client interaction in the C-460 radio,
-scheduler, WMM queueing, or compatibility datapath. It is not yet proof of an
-Arista firmware defect because the cohorts also differ in PHY capacity, Linux
-kernel, driver, hardware, and iperf version. Several VHT clients were unable to
-achieve the requested upload rate, so normal airtime saturation contributes to
-some results.
+The initial fixed-rate result is substantially explained by differing usable
+PHY/airtime capacity. The residual issue is a directionally asymmetric legacy
+VHT downstream ceiling that could arise from normal client limitations, driver
+behavior, C-460 airtime scheduling, WMM queueing, or compatibility datapath.
+It is not proof of an Arista firmware defect.
 
 ## Next discriminators
 
