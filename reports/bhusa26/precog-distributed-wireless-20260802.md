@@ -370,6 +370,46 @@ The retained core-gateway control was again fully suppressed: every selected
 node received zero of 25 idle replies and zero of 100 loaded replies. It still
 provides no latency-under-load measurement.
 
+## Maximum-throughput command tuning
+
+Known-good listeners were used to compare stream count, application block size,
+and zero-copy on PC3 (Wi-Fi 5, iperf3 3.9) and PV03 (Wi-Fi 6, iperf3 3.16).
+Both clients have eight CPUs, use CUBIC, and expose 212,992-byte default maximum
+socket buffers. A forced multi-megabyte `-w` was therefore not tested.
+
+| Candidate | PC3 received | PV03 received | Qualification |
+| --- | ---: | ---: | --- |
+| `-P 4 -l 128K` | 176 Mbps | 60.2 Mbps | Opening baseline; PV endpoint transient |
+| `-P 4 -l 128K -Z` | 172 Mbps | 393 Mbps | Zero-copy did not improve PC3 |
+| `-P 8 -l 128K -Z` | 163 Mbps | 324 Mbps | More streams reduced PC3 |
+| `-P 8 -l 256K -Z` | 138 Mbps | 395 Mbps | No PC benefit |
+| `-P 8 -l 512K -Z` | 148 Mbps | 454 Mbps | Highest PV result |
+| `-P 16 -l 128K -Z` | 129 Mbps | Invalid | PV receiver interval stretched to 15.84 seconds |
+| Final `-P 4 -l 128K` | 115 Mbps | 304 Mbps | Confirms substantial endpoint/time drift |
+
+iperf3 3.16 can run parallel streams on separate threads, whereas the older
+3.9 client does not have that architecture. One universal maximum command is
+therefore inferior to version/cohort-aware profiles:
+
+```text
+# PC / Wi-Fi 5 / iperf3 3.9
+iperf3 -c HOST -p PORT -t 20 -O 3 -P 4 -l 128K -J
+
+# PV / Wi-Fi 6 / iperf3 3.16
+iperf3 -c HOST -p PORT -t 20 -O 3 -P 8 -l 512K -Z -J
+```
+
+For a single portable fleet command, use `-P 4 -l 128K -Z`; it avoids the old-
+client multi-stream penalty while enabling zero-copy where useful. `-O 3`
+excludes slow start from the reported interval, and `-J` preserves validation
+fields. Do not add a large `-w` until socket maxima are deliberately raised and
+validated on both client and server.
+
+These profiles target synthetic best-case upload throughput, not normal
+application behavior or the fixed-rate downstream-loss investigation. Public
+listener drift makes them provisional; finalize them against the controlled
+internal endpoint with randomized repeated trials.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

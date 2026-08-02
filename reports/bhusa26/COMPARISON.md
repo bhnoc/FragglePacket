@@ -355,6 +355,19 @@ all admission timeouts. Per-node changes were non-monotonic, so these runs do
 not identify a preferred block size. Core ICMP remained fully suppressed in
 both idle and loaded phases.
 
+### Maximum-throughput profiles
+
+| Client cohort | Recommended command suffix | Observed tuning peak |
+| --- | --- | ---: |
+| Wi-Fi 5 / iperf3 3.9 | `-t 20 -O 3 -P 4 -l 128K -J` | 176 Mbps on PC3 |
+| Wi-Fi 6 / iperf3 3.16 | `-t 20 -O 3 -P 8 -l 512K -Z -J` | 454 Mbps on PV03 |
+| Portable mixed fleet | `-t 20 -O 3 -P 4 -l 128K -Z -J` | Conservative compromise |
+
+Eight and sixteen streams reduced throughput on the old client. Sixteen streams
+also produced an invalid 15.84-second PV receiver summary. The opening/final
+baselines drifted from 176 to 115 Mbps on PC3 and 60 to 304 Mbps on PV03, so
+public-endpoint tuning is provisional and requires controlled repetition.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

@@ -62,6 +62,7 @@ feature has been scheduled or implemented.
 | GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on PC6/PV03 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
 | GAP-044 | P1 | No local-gateway latency-under-load bracket | Concurrent gateway ping localized PC6 queueing to a path already containing the WLAN downlink: average RTT rose from 1.646 ms idle to 7.146 ms during a 23.550% downstream-loss phase, while PV03 remained near idle. FragglePacket cannot coordinate or interpret this near-side control. | Pair idle, upload, download, and simultaneous load phases with interface-bound first-hop probes; report loss and RTT deltas; correlate their timeline with throughput loss; fall back when ICMP is suppressed; warn that small ICMP packets may receive different queue treatment. |
 | GAP-045 | P1 | No synchronized public-listener admission validation | Twenty-one probes started four-stream TCP tests on 21 ports in the same second after port-open checks, but only 12 completed. Eight never established a test connection and one partially admitted streams before timeout. Treating these as zero throughput would falsely implicate clients. | Implement a barrier-synchronized fanout with per-listener protocol admission, server-wide concurrency/capacity metadata, start/end skew validation, partial-stream detection, safety timeouts, minimum valid-cohort rules, and explicit endpoint/admission verdicts that never become zero-throughput measurements. |
+| GAP-046 | P2 | No version-aware maximum-throughput tuner | iperf3 3.9 and 3.16 reacted differently to parallel streams and zero-copy. PC3 peaked with four streams/128 KiB while PV03 peaked with eight streams/512 KiB/zero-copy; sixteen streams produced an invalid receiver duration. Public baseline drift was also large. | Add randomized repeated candidate trials, version/capability detection, CPU/socket-limit preflight, duration validation, endpoint-drift brackets, cohort-specific profiles, and separate synthetic-maximum versus representative-application verdicts. Never force socket windows beyond validated client/server maxima. |
 
 ## Resolved during this investigation
 
@@ -377,3 +378,11 @@ feature has been scheduled or implemented.
   individual PV/PC nodes moved sharply in both directions while others stayed
   stable. Public-endpoint samples cannot select an optimal application block
   size without interleaved repetition and controlled endpoint telemetry.
+- Targeted tuning found different provisional maxima by client generation and
+  iperf version. PC3/iperf3-3.9 performed best at four streams and 128 KiB;
+  additional streams reduced throughput. PV03/iperf3-3.16 reached 454 Mbps at
+  eight streams, 512 KiB, and zero-copy. Sixteen streams produced an invalid
+  15.84-second receiver duration.
+- Opening/final baseline drift was severe on the public endpoints, so the
+  profiles are provisional. This produced GAP-046 for version-aware randomized
+  tuning with socket/CPU and endpoint-drift controls.
