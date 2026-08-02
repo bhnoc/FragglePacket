@@ -272,3 +272,11 @@ feature has been scheduled or implemented.
   streams, and an 800 ns guard interval. The evidence now favors Wi-Fi
   airtime/controller queue scheduling over MSS, MTU, client CPU, host drops,
   one UDP port policy, or raw dual-uplink capacity.
+- The deployed radios were confirmed as Arista C-460 Wi-Fi 7 APs, and the
+  investigation originated from multiple training-class attendees reporting
+  ordinary application failures. Single-client airtime saturation explains
+  the controlled 600-650 Mbps cliff but cannot alone dismiss the multi-user
+  incident. Exact firmware/CV-CUE version, C-460 restart and beacon-loss
+  history, PoE++ versus reduced-functionality PoE+ state, Ethernet member,
+  per-radio utilization, client count, and WMM/OFDMA queue counters are now
+  required evidence.

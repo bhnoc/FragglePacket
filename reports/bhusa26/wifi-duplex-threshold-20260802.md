@@ -11,6 +11,14 @@ The strongest current hypothesis is airtime/controller queue scheduling for
 UDP on the WLAN path. A Wi-Fi-VLAN-specific firewall/NAT/egress policy remains
 possible because wired and Wi-Fi expose different public egress identities.
 
+This investigation began after multiple attendees in a training class reported
+real application problems during ordinary use. The deployed APs were confirmed
+as Arista C-460 Wi-Fi 7 units. That operational context is distinct from the
+single-client saturation test: offered load near one client's PHY rate explains
+the laboratory loss cliff, but does not by itself explain a room of affected
+users. A fleet-wide C-460 firmware, power-mode, radio-scheduler, QoS, or shared
+configuration problem remains a leading candidate.
+
 ## Test conditions
 
 - Endpoint: `test.protoevidence.com`, independent iperf3 listeners on TCP/UDP
@@ -132,6 +140,13 @@ mode, MLO SSID state, client HE/EHT classification, and per-client WMM/OFDMA
 counters. Check the deployed release against current Arista field notices
 before changing traffic policy.
 
+The AP model is now confirmed as C-460. Arista specifies that this platform is
+4x4 on each access radio, has two 10 GbE PoE++ interfaces, and can run with
+reduced functionality on PoE+. Verify negotiated power class, LLDP power
+allocation, active Ethernet interface/speed, and whether any radio capability
+was reduced. Also compare the installed firmware with the current C-460 field
+notices and inspect AP uptime/restart/beacon-loss history.
+
 ### Decisive compatibility matrix
 
 | AP/radio condition | Client | Result meaning |
@@ -153,6 +168,19 @@ During a 10-second 350 Mbps-each-way reproduction, collect synchronized:
 3. firewall inside/outside queue, session owner, NAT node, and policy counters;
 4. both 10 Gb circuit member utilization, discards, policer, and errors; and
 5. an egress-policy swap or A-only/B-only run if operationally possible.
+
+For the confirmed C-460 deployment, also collect:
+
+- exact AP and CV-CUE versions, upgrade history, uptime, crash/restart reason,
+  and beacon-loss events;
+- PoE standard, allocated/drawn power, reduced-functionality state, Ethernet
+  member/link speed, and port errors;
+- radio channel utilization, non-Wi-Fi utilization, client count, aggregate
+  airtime, retries, and airtime fairness during the affected class;
+- SSID traffic-shaping source, per-user limits, RADIUS-delivered policy, QoS
+  mapping, and whether the SSID radios are in 802.11be/MLO mode; and
+- comparison against a C-460 on a maintenance firmware release and, if
+  available, a Wi-Fi 6E AP under the same VLAN and SSID policy.
 
 If drops appear before controller egress, the WLAN path is confirmed. If the
 controller remains clean and drops follow one NAT/egress identity, the fault is
