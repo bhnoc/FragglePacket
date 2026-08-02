@@ -1,0 +1,31 @@
++-o AppleBCMWLANSkywalkInterface  <class IOUserNetworkWLAN, id 0x100000ff2, registered, matched, active, busy 0 (6085 ms), retain 27>
+  | {
+  |   "kOSBundleDextUniqueIdentifier" = <bf4014f126adca6158d1b91a459f6ba06bff27b96c102b1c09a372baad64d15e>
+  |   "IO80211BSSID" = <000000000000>
+  |   "IO80211RSNDone" = Yes
+  |   "IOInterfaceType" = 6
+  |   "IO80211ChannelBandwidth" = 80
+  |   "IOUserServerPreserveUserspaceReboot" = Yes
+  |   "IOUserServerOneProcess" = Yes
+  |   "IO80211CountryCode" = "US"
+  |   "mDNS_Keepalive" = Yes
+  |   "IO80211SSID" = "<SSID Redacted>"
+  |   "IO80211InterfaceRole" = "Infrastructure"
+  |   "IOPropertyMatch" = {"IOUserClass"="AppleBCMWLANCore"}
+  |   "IOServiceDEXTEntitlements" = "com.apple.developer.driverkit.family.networking"
+  |   "IOInterfaceNamePrefix" = "en"
+  |   "IOUserServerCDHash" = "299a9cbab2b4844fe28639e18ab474accc04396c"
+  |   "built-in" = <00>
+  |   "IOPersonalityPublisher" = "com.apple.DriverKit-AppleBCMWLAN"
+  |   "IO80211ChannelFrequency" = 6935
+  |   "IOUserServerName" = "com.apple.bcmwlan"
+  |   "IOMACAddress" = <02:00:00:00:00:01>
+  |   "IO80211Channel" = 197
+  |   "CFBundleIdentifier" = "com.apple.DriverKit-AppleBCMWLAN"
+  |   "IOInterfaceName" = "en0"
+  |   "IOInterfaceUnit" = 0
+  |   "IO80211Locale" = "FCC"
+  |   "IO80211Band" = "6 GHz"
+  |   "IOMatchCategory" = "IODefaultMatchCategory"
+  |   "IOProbeScore" = 0
+  | }

@@ -251,7 +251,17 @@ pub struct LoadGuard {
     pub budget: LoadBudget,
     pub interface: String,
     pub default_route_is_tunnel: bool,
+    /// Full-detail source (RSSI/noise/PHY/MCS) for the pre/post snapshots.
+    /// On macOS this is `system_profiler`, costing several seconds per call —
+    /// paid exactly twice per run, never inside the phase loop.
     radio: RadioSource,
+    /// Cheap source polled repeatedly during the phase for roam/band-change
+    /// detection. Defaults to `radio` if no faster source is supplied (e.g.
+    /// in tests), so behavior is correct even without a fast path — just not
+    /// fast. On macOS the CLI supplies `radio::snapshot_fast` (`ioreg`, ~30ms)
+    /// here, which cannot report RSSI/noise/MCS but is 200+x cheaper and
+    /// sufficient for the in-phase signal this guard actually needs.
+    radio_fast: RadioSource,
     counters: CounterSource,
     sample_interval: Duration,
     radio_sample_interval: Duration,
@@ -273,13 +283,21 @@ impl LoadGuard {
             budget,
             interface: interface.into(),
             default_route_is_tunnel,
+            radio_fast: radio.clone(),
             radio,
             counters,
             sample_interval: Duration::from_millis(200),
-            // Real radio sampling (system_profiler) can take seconds; sample it
-            // on its own, coarser cadence so it never throttles the tick loop.
-            radio_sample_interval: Duration::from_secs(2),
+            // In-phase polling cadence for the (cheap) fast radio source.
+            radio_sample_interval: Duration::from_millis(500),
         })
+    }
+
+    /// Supplies a cheap radio source for in-phase polling, distinct from the
+    /// full-detail source used for the pre/post snapshots. See the `radio_fast`
+    /// field doc for why this split exists.
+    pub fn with_fast_radio_source(mut self, radio_fast: RadioSource) -> Self {
+        self.radio_fast = radio_fast;
+        self
     }
 
     #[cfg(test)]
@@ -307,7 +325,10 @@ impl LoadGuard {
 
         let during_radio: Arc<Mutex<Vec<RadioSnapshot>>> = Arc::new(Mutex::new(Vec::new()));
         let radio_thread_stop = Arc::new(AtomicBool::new(false));
-        let radio_source = self.radio.clone();
+        // In-phase polling uses the cheap fast source (ioreg on macOS, ~30ms)
+        // rather than the full-detail source (system_profiler, ~8s) used for
+        // before/after — see the `radio_fast` field doc.
+        let radio_source = self.radio_fast.clone();
         let radio_interval = self.radio_sample_interval;
         let during_radio_writer = during_radio.clone();
         let radio_thread_stop_reader = radio_thread_stop.clone();

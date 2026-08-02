@@ -56,6 +56,13 @@ pub struct LoadGuardArgs {
     #[arg(long)]
     pub inject_cancel: bool,
 
+    /// For the demo/test harness only: never call system_profiler/ioreg —
+    /// use synthetic radio state for every sample (still respecting the
+    /// other --inject-* flags for band-change/weak-RF injection). Keeps the
+    /// harness fast and deterministic; a real run should never pass this.
+    #[arg(long)]
+    pub fake_radio: bool,
+
     #[arg(long)]
     pub json: bool,
 }
@@ -151,18 +158,39 @@ pub fn run(args: &LoadGuardArgs) {
 
     let inject_band_change = args.inject_band_change;
     let inject_weak_rf = args.inject_weak_rf;
+    let fake_radio = args.fake_radio;
     let call_count = std::sync::atomic::AtomicUsize::new(0);
+    // Full-detail source (RSSI/noise/PHY/MCS) for the pre/post snapshots.
+    // Only called twice per run, so system_profiler's several-second cost is
+    // paid exactly twice, never inside the phase loop — except under
+    // --fake-radio, which never shells out at all (harness-only).
     let radio = RadioSource::new(move || {
         let n = call_count.fetch_add(1, Ordering::SeqCst);
         if inject_band_change && n > 0 {
             Ok(roamed_snapshot())
         } else if inject_weak_rf {
             Ok(weak_snapshot())
-        } else if n == 0 {
-            // Real first sample where possible; fixture-equivalent fallback otherwise.
-            Ok(fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| strong_snapshot()))
+        } else if fake_radio {
+            Ok(strong_snapshot())
         } else {
             Ok(fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| strong_snapshot()))
+        }
+    });
+
+    // Cheap source (ioreg, ~30ms) polled repeatedly during the phase. Cannot
+    // report RSSI/noise/MCS, but carries band/channel/width — enough to
+    // detect a roam or band change, which is the only thing in-phase polling
+    // needs. Still honors the synthetic injection flags so the CLI's
+    // roam-detection demo/test path works without real Wi-Fi.
+    let fast_call_count = std::sync::atomic::AtomicUsize::new(0);
+    let radio_fast = RadioSource::new(move || {
+        let n = fast_call_count.fetch_add(1, Ordering::SeqCst);
+        if inject_band_change && n > 0 {
+            Ok(roamed_snapshot())
+        } else if fake_radio {
+            Ok(strong_snapshot())
+        } else {
+            Ok(fraggle_packet::load_guard::radio::snapshot_fast().unwrap_or_else(|_| strong_snapshot()))
         }
     });
 
@@ -173,7 +201,7 @@ pub fn run(args: &LoadGuardArgs) {
     });
 
     let guard = match LoadGuard::new(budget, interface.clone(), default_route_is_tunnel, radio, counters) {
-        Ok(g) => g,
+        Ok(g) => g.with_fast_radio_source(radio_fast),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);

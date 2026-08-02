@@ -37,20 +37,26 @@ impl RadioSnapshot {
     }
 
     /// A non-identifying fingerprint of the current association, built only
-    /// from allowlisted fields (band/channel/width/phy). This is NOT a stable
-    /// AP identity (that's GAP-024's salted-identifier job) — it exists so a
+    /// from allowlisted fields (band/channel/width). This is NOT a stable AP
+    /// identity (that's GAP-024's salted-identifier job) — it exists so a
     /// roam/band-change can be detected structurally without ever touching a
     /// BSSID or MAC.
+    ///
+    /// Deliberately excludes `phy_mode`: the cheap `ioreg`-backed fast source
+    /// used for in-phase polling never populates it, so including it would
+    /// make a full snapshot's fingerprint mismatch a fast snapshot's on every
+    /// single comparison — a false roam on every run, not just a real one.
+    /// Band/channel/width alone is the same signal a real roam or band change
+    /// produces and is available from both sources.
     pub fn association_fingerprint(&self) -> Option<String> {
         if !self.associated {
             return None;
         }
         Some(format!(
-            "{}:{}:{}:{}",
+            "{}:{}:{}",
             self.band.as_deref().unwrap_or("?"),
             self.channel.map(|c| c.to_string()).unwrap_or_default(),
             self.width_mhz.map(|w| w.to_string()).unwrap_or_default(),
-            self.phy_mode.as_deref().unwrap_or("?"),
         ))
     }
 
@@ -101,7 +107,10 @@ pub fn classify_rf(snap: &RadioSnapshot) -> RfQuality {
     }
 }
 
-/// Live unprivileged snapshot via `system_profiler SPAirPortDataType`.
+/// Live unprivileged snapshot via `system_profiler SPAirPortDataType`. Full
+/// detail (RSSI/noise/PHY rate/MCS) but costs ~8s per call on this class of
+/// machine — reserved for the before/after snapshots, never for in-phase
+/// polling.
 pub fn snapshot_live() -> Result<RadioSnapshot, String> {
     let out = Command::new("system_profiler")
         .arg("SPAirPortDataType")
@@ -115,6 +124,61 @@ pub fn snapshot_live() -> Result<RadioSnapshot, String> {
     }
     let text = String::from_utf8_lossy(&out.stdout);
     Ok(parse_airport_text(&text))
+}
+
+/// Cheap (~30ms) unprivileged snapshot via `ioreg`, used for in-phase roam
+/// polling where `system_profiler`'s ~8s cost would otherwise dominate the
+/// run. Carries only band/channel/width — no RSSI/noise/MCS/PHY-mode, which
+/// `ioreg` does not expose for this driver — enough to detect a roam or band
+/// change (GAP-027's in-phase signal) but not enough to qualify RF quality.
+/// `ioreg`'s raw output also contains `IO80211SSID`/`IO80211BSSID`; the
+/// parser below never reads those keys, matching the same allowlist
+/// discipline as the `system_profiler` path.
+pub fn snapshot_fast() -> Result<RadioSnapshot, String> {
+    let out = Command::new("ioreg")
+        .args(["-c", "AppleBCMWLANSkywalkInterface", "-r", "-l"])
+        .output()
+        .map_err(|e| format!("failed to run ioreg: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("ioreg exited with {:?}", out.status.code()));
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(parse_ioreg_wlan(&text))
+}
+
+/// Parses `ioreg -c AppleBCMWLANSkywalkInterface -r -l` output. Deliberately
+/// only looks for `IO80211Channel`/`IO80211Band`/`IO80211ChannelBandwidth` —
+/// never `IO80211SSID` or `IO80211BSSID`, which appear in the same block.
+pub fn parse_ioreg_wlan(text: &str) -> RadioSnapshot {
+    let mut snap = RadioSnapshot::unavailable();
+
+    for line in text.lines() {
+        // ioreg's tree-drawing prefix (`| |   `) varies with nesting depth,
+        // so match on the quoted key + " = " rather than a fixed line
+        // prefix. `IO80211ChannelBandwidth` is checked before `IO80211Band`
+        // since the latter's key text is a substring-adjacent but distinct
+        // field — using the full quoted key avoids any ambiguity.
+        if let Some(v) = extract_ioreg_value(line, "\"IO80211Channel\" = ") {
+            snap.channel = v.trim().parse::<u32>().ok();
+        } else if let Some(v) = extract_ioreg_value(line, "\"IO80211ChannelBandwidth\" = ") {
+            snap.width_mhz = v.trim().parse::<u32>().ok();
+        } else if let Some(v) = extract_ioreg_value(line, "\"IO80211Band\" = ") {
+            // ioreg prints `"6 GHz"` (with a space); system_profiler's format
+            // (and this module's fingerprint/RfQuality logic) use `6GHz`.
+            let cleaned = v.trim().trim_matches('"').replace(' ', "");
+            if !cleaned.is_empty() {
+                snap.band = Some(cleaned);
+            }
+        }
+        // IO80211SSID / IO80211BSSID intentionally not matched or stored.
+    }
+
+    snap.associated = snap.channel.is_some();
+    snap
+}
+
+fn extract_ioreg_value<'a>(line: &'a str, key_eq: &str) -> Option<&'a str> {
+    line.find(key_eq).map(|idx| &line[idx + key_eq.len()..])
 }
 
 /// Parse from a captured fixture (or live output) string. Kept separate from
@@ -246,5 +310,45 @@ mod tests {
         for line in FIXTURE.lines() {
             assert!(!line.trim_start().starts_with("SSID"));
         }
+    }
+
+    const IOREG_FIXTURE: &str = include_str!("../../harness/fixtures/wifi/ioreg-bcmwlan.txt");
+
+    #[test]
+    fn parses_ioreg_fixture_channel_band_width() {
+        let snap = parse_ioreg_wlan(IOREG_FIXTURE);
+        assert!(snap.associated);
+        assert_eq!(snap.channel, Some(197));
+        assert_eq!(snap.band, Some("6GHz".to_string()));
+        assert_eq!(snap.width_mhz, Some(80));
+        // ioreg does not expose these fields for this driver.
+        assert_eq!(snap.rssi_dbm, None);
+        assert_eq!(snap.noise_dbm, None);
+        assert_eq!(snap.mcs_index, None);
+        assert_eq!(snap.phy_mode, None);
+    }
+
+    #[test]
+    fn ioreg_parse_never_reads_ssid_or_bssid() {
+        // The fixture's raw text does contain SSID/BSSID lines (that's the
+        // point of the test — ioreg's real output always does); the parser
+        // must never surface them anywhere in the resulting snapshot.
+        assert!(IOREG_FIXTURE.contains("IO80211SSID"));
+        assert!(IOREG_FIXTURE.contains("IO80211BSSID"));
+        let snap = parse_ioreg_wlan(IOREG_FIXTURE);
+        let debug = format!("{snap:?}");
+        assert!(!debug.contains("Redacted"));
+        assert!(!debug.to_lowercase().contains("bssid"));
+    }
+
+    #[test]
+    fn ioreg_and_airport_fixtures_agree_on_band_channel_width() {
+        // Both fixtures were captured from the same real association; the
+        // fast path's allowlisted fields must match the full path's.
+        let full = parse_airport_text(FIXTURE);
+        let fast = parse_ioreg_wlan(IOREG_FIXTURE);
+        assert_eq!(full.channel, fast.channel);
+        assert_eq!(full.band, fast.band);
+        assert_eq!(full.width_mhz, fast.width_mhz);
     }
 }

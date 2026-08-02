@@ -1,21 +1,16 @@
 //! QUIC PMTUD
 //!
-//! Uses `quinn` to establish a QUIC connection (with ALPN `h3`) and then
-//! probes MTU at the UDP payload level by opening a bidirectional stream and
-//! sending progressively larger frames. Relies on the operating system to
-//! drop DF-set packets that exceed the path MTU; because quinn runs on top of
-//! UDP with IP_DONTFRAG effectively enabled on most platforms, we can spot a
-//! break point where writes start stalling.
-//!
-//! Intentionally lightweight: we do not attempt spec-compliant QUIC datagram
-//! PMTUD negotiation. The goal is a real-world signal for "QUIC is worse than
-//! TCP on this path", which happens behind some UDP-mangling middleboxes.
+//! Every tested size must earn its verdict from evidence. A size counts as
+//! path-confirmed only when a QUIC handshake completes with all datagrams
+//! pinned to that size, which proves the padded datagram crossed the path in
+//! both directions. A successful local `send_to()` is explicitly not evidence.
 
 use crate::framework::{
     Diagnosis, DiagnosisSeverity, NetworkTest, TestCategory, TestResult, TestStatus,
 };
+use crate::probe::pmtu_evidence::{probe_pmtu_evidence, SizeOutcome};
+use crate::probe::resolve_hostname;
 use std::error::Error;
-use std::net::{ToSocketAddrs, UdpSocket};
 use std::time::Duration;
 
 pub struct QuicPmtudTest {
@@ -64,106 +59,119 @@ impl NetworkTest for QuicPmtudTest {
         result.add_metadata(
             "cli_command",
             format!(
-                "for s in 1200 1300 1400 1472 1492 8972; do printf 'U%.0s' $(seq 1 $s) | nc -u -w 1 {} {}; done",
+                "for s in 1200 1300 1400 1472 1492 8972; do \
+                 echo \"size $s needs a protocol response to count; a bare 'nc -u' send proves nothing\"; \
+                 done  # see fraggle-packet quic {} -p {}",
                 target, self.port
             ),
         );
 
-        let addr_str = format!("{}:{}", target, self.port);
-        let addr = match addr_str.to_socket_addrs()?.next() {
-            Some(a) => a,
-            None => {
-                result.set_status(TestStatus::Failed);
-                return Ok(result);
-            }
-        };
-
-        let bind_addr = if addr.is_ipv4() {
-            "0.0.0.0:0"
-        } else {
-            "[::]:0"
-        };
-        let socket = match UdpSocket::bind(bind_addr) {
-            Ok(s) => s,
+        let ip = match resolve_hostname(target) {
+            Ok(ip) => ip,
             Err(e) => {
                 result.set_status(TestStatus::Failed);
-                result.add_metadata("error", format!("bind: {}", e));
+                result.add_metadata("error", format!("resolve: {}", e));
                 return Ok(result);
             }
         };
-        let _ = socket.set_read_timeout(Some(Duration::from_secs(self.timeout_secs)));
-        let _ = socket.set_write_timeout(Some(Duration::from_secs(self.timeout_secs)));
-        set_df(&socket);
 
-        let mut biggest_ok: Option<usize> = None;
-        let mut first_failure: Option<usize> = None;
-        for size in &self.sizes {
-            let payload = vec![0u8; *size];
-            match socket.send_to(&payload, addr) {
-                Ok(n) if n == *size => {
-                    biggest_ok = Some(*size);
-                    result.add_metric(format!("size_{}_sent", size), n as f64);
-                }
-                Ok(_) => {
-                    first_failure.get_or_insert(*size);
-                    result.add_metric(format!("size_{}_sent", size), 0.0);
-                }
-                Err(e) => {
-                    first_failure.get_or_insert(*size);
-                    result.add_metadata(format!("size_{}_error", size), e.to_string());
+        let evidence = probe_pmtu_evidence(
+            target,
+            ip,
+            self.port,
+            &self.sizes,
+            Duration::from_secs(self.timeout_secs),
+        );
+
+        result.add_metadata("resolved_ip", ip.to_string());
+        result.add_metadata("df_applied", evidence.df.applied.to_string());
+        result.add_metadata("df_detail", evidence.df.detail.clone());
+        result.add_metadata("verdict", evidence.verdict.clone());
+
+        for s in &evidence.sizes {
+            result.add_metadata(format!("size_{}_outcome", s.size), s.outcome.as_str());
+            result.add_metadata(format!("size_{}_detail", s.size), s.detail.clone());
+        }
+
+        match evidence.confirmed_pmtu {
+            Some(c) => {
+                result.add_metric("confirmed_pmtu_bytes", c as f64);
+                if let Some(u) = evidence.smallest_unanswered() {
+                    if u > c {
+                        result.add_metric("first_unconfirmed_size", u as f64);
+                        result.set_status(TestStatus::Warning);
+                        result.add_diagnosis(
+                            Diagnosis::new(
+                                DiagnosisSeverity::Warning,
+                                "QUIC path MTU ceiling observed".to_string(),
+                                format!(
+                                    "A QUIC handshake completed with {}-byte datagrams to {} but \
+                                     not with {}-byte datagrams. The path carries the smaller size \
+                                     and not the larger; the ceiling lies between them.",
+                                    c, target, u
+                                ),
+                            )
+                            .with_recommendation(
+                                "Clamp the application's QUIC max_udp_payload_size below the ceiling",
+                            ),
+                        );
+                    } else {
+                        result.set_status(TestStatus::Success);
+                    }
+                } else {
+                    result.set_status(TestStatus::Success);
                 }
             }
-        }
-
-        if let Some(b) = biggest_ok {
-            result.add_metric("largest_udp_payload_sent", b as f64);
-        }
-        if let Some(fail) = first_failure {
-            result.add_metric("first_failure_size", fail as f64);
-            if biggest_ok.is_some() {
+            None => {
+                // No size earned a response, so there is no path MTU to report.
+                // Warning rather than Failed: the endpoint may simply not speak
+                // QUIC, which is not a network fault (see GAP-025).
                 result.set_status(TestStatus::Warning);
                 result.add_diagnosis(
                     Diagnosis::new(
                         DiagnosisSeverity::Warning,
-                        "QUIC/UDP Size Cap Observed".to_string(),
+                        "QUIC path MTU undetermined".to_string(),
                         format!(
-                            "UDP send to {} started to fail around {} bytes; packets up to {} \
-                             bytes went through. Could indicate a UDP-mangling middlebox or \
-                             path MTU issue that affects QUIC/HTTP3 but not TCP.",
-                            target,
-                            fail,
-                            biggest_ok.unwrap_or(0)
+                            "No tested size produced a protocol-valid response from {}. This is \
+                             ambiguous between a path MTU limit, filtered responses, and an \
+                             endpoint that does not serve QUIC. No path MTU is reported.",
+                            target
                         ),
                     )
-                    .with_recommendation("If QUIC is broken, applications may fall back to TCP/TLS; verify Alt-Svc behaviour")
-                    .with_recommendation("Consider clamping QUIC max_udp_payload_size via app config"),
+                    .with_recommendation(
+                        "Run 'fraggle-packet preflight' to check whether this endpoint offers QUIC at all",
+                    )
+                    .with_recommendation(
+                        "Test a known-QUIC-capable endpoint such as cloudflare.com to separate endpoint from network",
+                    ),
                 );
-            } else {
-                result.set_status(TestStatus::Failed);
             }
-        } else {
-            result.set_status(TestStatus::Success);
+        }
+
+        if !evidence.df.applied {
+            result.add_diagnosis(
+                Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "Don't-fragment could not be set".to_string(),
+                    format!(
+                        "DF was requested but not applied ({}). Any confirmed size may describe \
+                         fragmented delivery rather than a true path MTU.",
+                        evidence.df.detail
+                    ),
+                ),
+            );
+        }
+
+        let local_refusals: Vec<String> = evidence
+            .sizes
+            .iter()
+            .filter(|s| s.outcome == SizeOutcome::SendFailedLocally)
+            .map(|s| s.size.to_string())
+            .collect();
+        if !local_refusals.is_empty() {
+            result.add_metadata("locally_refused_sizes", local_refusals.join(","));
         }
 
         Ok(result)
     }
 }
-
-#[cfg(target_os = "linux")]
-fn set_df(socket: &UdpSocket) {
-    use std::os::fd::AsRawFd;
-    let fd = socket.as_raw_fd();
-    let val: libc::c_int = libc::IP_PMTUDISC_DO;
-    unsafe {
-        libc::setsockopt(
-            fd,
-            libc::IPPROTO_IP,
-            libc::IP_MTU_DISCOVER,
-            &val as *const _ as *const libc::c_void,
-            std::mem::size_of::<libc::c_int>() as u32,
-        );
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn set_df(_socket: &UdpSocket) {}

@@ -1,5 +1,6 @@
 pub mod dns;
 pub mod icmp;
+pub mod pmtu_evidence;
 pub mod preflight;
 pub mod quic;
 pub mod resolve;
