@@ -140,12 +140,19 @@ mode, MLO SSID state, client HE/EHT classification, and per-client WMM/OFDMA
 counters. Check the deployed release against current Arista field notices
 before changing traffic policy.
 
-The AP model is now confirmed as C-460. Arista specifies that this platform is
+The AP model is now confirmed as C-460 and the deployed firmware as
+`21.3.0M-13`. Arista's public Field Notice 0131 specifically names C-460 builds
+`21.3.0M-8` and `21.3.0M-9` for recurrent beacon-loss restarts, so the deployed
+build is not in the affected set stated by that notice. That does not clear
+`M-13` of a different UDP queue, scheduler, or HE-compatibility defect; obtain
+its support-gated resolved/known-issue notes and TAC guidance.
+
+Arista specifies that this platform is
 4x4 on each access radio, has two 10 GbE PoE++ interfaces, and can run with
 reduced functionality on PoE+. Verify negotiated power class, LLDP power
 allocation, active Ethernet interface/speed, and whether any radio capability
-was reduced. Also compare the installed firmware with the current C-460 field
-notices and inspect AP uptime/restart/beacon-loss history.
+was reduced. Inspect AP uptime/restart/beacon-loss history even though the
+publicly noticed restart builds do not match.
 
 ### Decisive compatibility matrix
 
@@ -171,15 +178,15 @@ During a 10-second 350 Mbps-each-way reproduction, collect synchronized:
 
 For the confirmed C-460 deployment, also collect:
 
-- exact AP and CV-CUE versions, upgrade history, uptime, crash/restart reason,
-  and beacon-loss events;
+- CV-CUE version, `21.3.0M-13` upgrade history and known-issue notes, uptime,
+  crash/restart reason, and beacon-loss events;
 - PoE standard, allocated/drawn power, reduced-functionality state, Ethernet
   member/link speed, and port errors;
 - radio channel utilization, non-Wi-Fi utilization, client count, aggregate
   airtime, retries, and airtime fairness during the affected class;
 - SSID traffic-shaping source, per-user limits, RADIUS-delivered policy, QoS
   mapping, and whether the SSID radios are in 802.11be/MLO mode; and
-- comparison against a C-460 on a maintenance firmware release and, if
+- TAC-approved comparison against another C-460 firmware build and, if
   available, a Wi-Fi 6E AP under the same VLAN and SSID policy.
 
 If drops appear before controller egress, the WLAN path is confirmed. If the

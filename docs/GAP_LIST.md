@@ -280,3 +280,7 @@ feature has been scheduled or implemented.
   history, PoE++ versus reduced-functionality PoE+ state, Ethernet member,
   per-radio utilization, client count, and WMM/OFDMA queue counters are now
   required evidence.
+- The deployed C-460 firmware is `21.3.0M-13`. Arista's public C-460 beacon-loss
+  restart notice names `21.3.0M-8` and `21.3.0M-9`, so it does not directly
+  cover this build or the observed duplex-loss symptom. Obtain the `M-13`
+  known/resolved-issue notes and use only a TAC-approved firmware comparison.
