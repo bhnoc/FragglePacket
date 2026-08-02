@@ -200,8 +200,9 @@ pub fn run(args: &LoadGuardArgs) {
             .or_else(|_| Ok(InterfaceCounters::zero()))
     });
 
+    let radio_is_synthetic = fake_radio || inject_band_change || inject_weak_rf;
     let guard = match LoadGuard::new(budget, interface.clone(), default_route_is_tunnel, radio, counters) {
-        Ok(g) => g.with_fast_radio_source(radio_fast),
+        Ok(g) => g.with_fast_radio_source(radio_fast).with_synthetic_radio_marker(radio_is_synthetic),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);
@@ -296,6 +297,12 @@ fn print_human(report: &GuardReport) {
         report.interface,
         report.mode
     );
+    if report.radio_source == "synthetic" {
+        println!(
+            "  {} radio state in this report is SYNTHETIC (fabricated by --fake-radio/--inject-*), not sampled from real hardware",
+            "⚠".yellow()
+        );
+    }
     if report.default_route_is_tunnel {
         println!("  {} default route is a VPN tunnel; results outside an explicit bind may describe the tunnel, not this interface", "⚠".yellow());
     }

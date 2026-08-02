@@ -21,6 +21,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::time::Duration as StdDuration;
 
 use pcap_file::pcap::PcapReader;
 use pcap_file::pcapng::PcapNgReader;
@@ -112,8 +113,26 @@ pub struct PcapReport {
     pub checksum_offload: ChecksumOffloadSignal,
     pub tcp_anomalies: TcpAnomalyCounts,
     pub directions_seen: DirectionsSeen,
+    pub protocol_breakdown: ProtocolBreakdown,
     pub payload_analysis_suppressed: bool,
     pub notes: Vec<String>,
+}
+
+/// Per-protocol packet/byte counts for the GAP-008 comparison report. QUIC
+/// has no IANA-assigned transport number of its own (it rides on UDP), so
+/// `quic_candidate_*` is a heuristic (UDP/443 or a long-header-shaped first
+/// payload byte), never a certain classification.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProtocolBreakdown {
+    pub tcp_packets: u64,
+    pub tcp_bytes: u64,
+    pub udp_packets: u64,
+    pub udp_bytes: u64,
+    pub udp_flows: u64,
+    pub quic_candidate_packets: u64,
+    pub quic_candidate_bytes: u64,
+    pub icmp_packets: u64,
+    pub other_packets: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -208,7 +227,7 @@ fn analyze_pcap_classic<R: Read>(path: &Path, reader: R) -> Result<PcapReport, P
 
     while let Some(pkt) = pcap_reader.next_packet() {
         let pkt = pkt.map_err(|e| PcapReportError::Pcap(e.to_string()))?;
-        acc.observe(pkt.orig_len as u64, pkt.data.as_ref());
+        acc.observe(pkt.orig_len as u64, pkt.data.as_ref(), Some(pkt.timestamp));
     }
 
     // Classic pcap carries no per-interface drop-count block: it is
@@ -252,14 +271,14 @@ fn analyze_pcapng<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapRep
 
         if let Some(epb) = block.as_enhanced_packet() {
             let acc = acc.get_or_insert_with(|| Accumulator::new(u32::MAX, "Unknown".to_string()));
-            acc.observe(epb.original_len as u64, epb.data.as_ref());
+            acc.observe(epb.original_len as u64, epb.data.as_ref(), Some(epb.timestamp));
             continue;
         }
 
         if let Some(spb) = block.as_simple_packet() {
             let acc = acc.get_or_insert_with(|| Accumulator::new(u32::MAX, "Unknown".to_string()));
             let len = spb.original_len as u64;
-            acc.observe(len, spb.data.as_ref());
+            acc.observe(len, spb.data.as_ref(), None);
             continue;
         }
     }
@@ -293,6 +312,17 @@ struct Accumulator {
     out_of_order: u64,
     duplicate_acks: u64,
     tcp_sampled: u64,
+    tcp_packets: u64,
+    tcp_bytes: u64,
+    udp_packets: u64,
+    udp_bytes: u64,
+    quic_candidate_packets: u64,
+    quic_candidate_bytes: u64,
+    icmp_packets: u64,
+    other_packets: u64,
+    udp_flows: std::collections::HashSet<(u128, u16, u128, u16)>,
+    min_ts: Option<StdDuration>,
+    max_ts: Option<StdDuration>,
 }
 
 impl Accumulator {
@@ -315,13 +345,29 @@ impl Accumulator {
             out_of_order: 0,
             duplicate_acks: 0,
             tcp_sampled: 0,
+            tcp_packets: 0,
+            tcp_bytes: 0,
+            udp_packets: 0,
+            udp_bytes: 0,
+            quic_candidate_packets: 0,
+            quic_candidate_bytes: 0,
+            icmp_packets: 0,
+            other_packets: 0,
+            udp_flows: std::collections::HashSet::new(),
+            min_ts: None,
+            max_ts: None,
         }
     }
 
-    fn observe(&mut self, orig_len: u64, captured: &[u8]) {
+    fn observe(&mut self, orig_len: u64, captured: &[u8], ts: Option<StdDuration>) {
         self.packet_count += 1;
         self.byte_count += orig_len;
         self.first_ts_seen = true;
+
+        if let Some(t) = ts {
+            self.min_ts = Some(self.min_ts.map_or(t, |m| m.min(t)));
+            self.max_ts = Some(self.max_ts.map_or(t, |m| m.max(t)));
+        }
 
         if (captured.len() as u64) < orig_len {
             self.truncated = true;
@@ -339,12 +385,86 @@ impl Accumulator {
             self.oversize_count += 1;
         }
 
+        self.classify_protocol(captured, orig_len);
+
         if self.tcp_sampled >= MAX_TCP_SAMPLE_PACKETS {
             return;
         }
 
         let frame_complete = captured.len() as u64 == orig_len;
         self.inspect_packet(captured, frame_complete);
+    }
+
+    /// Lightweight per-packet protocol tally for the GAP-008 comparison
+    /// report. Separate from `inspect_packet`'s deeper TCP flow-state work
+    /// so a UDP/QUIC-heavy capture pays only for what it needs.
+    fn classify_protocol(&mut self, captured: &[u8], orig_len: u64) {
+        use etherparse::{LaxNetSlice, LaxSlicedPacket, TransportSlice};
+
+        let parsed = match LaxSlicedPacket::from_ethernet(captured) {
+            Ok(p) => p,
+            Err(_) => {
+                self.other_packets += 1;
+                return;
+            }
+        };
+
+        let net = match &parsed.net {
+            Some(n) => n,
+            None => {
+                self.other_packets += 1;
+                return;
+            }
+        };
+
+        let (src16, dst16): ([u8; 16], [u8; 16]) = match net {
+            LaxNetSlice::Ipv4(v4) => {
+                let mut s = [0u8; 16];
+                let mut d = [0u8; 16];
+                s[..4].copy_from_slice(&v4.header().source());
+                d[..4].copy_from_slice(&v4.header().destination());
+                (s, d)
+            }
+            LaxNetSlice::Ipv6(v6) => {
+                let mut s = [0u8; 16];
+                let mut d = [0u8; 16];
+                s.copy_from_slice(&v6.header().source());
+                d.copy_from_slice(&v6.header().destination());
+                (s, d)
+            }
+        };
+
+        match &parsed.transport {
+            Some(TransportSlice::Tcp(tcp)) => {
+                self.tcp_packets += 1;
+                self.tcp_bytes += orig_len;
+                let _ = (tcp.source_port(), tcp.destination_port());
+            }
+            Some(TransportSlice::Udp(udp)) => {
+                self.udp_packets += 1;
+                self.udp_bytes += orig_len;
+                let sp = udp.source_port();
+                let dp = udp.destination_port();
+                self.udp_flows.insert(FlowKey::normalized(src16, sp, dst16, dp).id());
+                // QUIC has no fixed port, but the near-universal convention
+                // is UDP/443; a long-header Initial packet's first byte also
+                // has its top bit set (0x80) with version bits following.
+                // This is a heuristic label, not a certain classification.
+                let payload = udp.payload();
+                let looks_like_quic_first_byte =
+                    payload.first().map(|b| b & 0x80 != 0).unwrap_or(false);
+                if sp == 443 || dp == 443 || looks_like_quic_first_byte {
+                    self.quic_candidate_packets += 1;
+                    self.quic_candidate_bytes += orig_len;
+                }
+            }
+            Some(TransportSlice::Icmpv4(_)) | Some(TransportSlice::Icmpv6(_)) => {
+                self.icmp_packets += 1;
+            }
+            None => {
+                self.other_packets += 1;
+            }
+        }
     }
 
     fn inspect_packet(&mut self, captured: &[u8], frame_complete: bool) {
@@ -577,6 +697,11 @@ impl Accumulator {
             ));
         }
 
+        let duration_secs = match (self.min_ts, self.max_ts) {
+            (Some(min), Some(max)) if max >= min => Some((max - min).as_secs_f64()),
+            _ => None,
+        };
+
         PcapReport {
             path: path.display().to_string(),
             health: CaptureHealth {
@@ -587,7 +712,7 @@ impl Accumulator {
                 truncated: self.truncated,
                 packet_count: self.packet_count,
                 byte_count: self.byte_count,
-                duration_secs: None,
+                duration_secs,
                 drops_known,
             },
             vantage: VantageClassification { vantage, confidence, evidence },
@@ -615,10 +740,71 @@ impl Accumulator {
                 bidirectional_tcp_flows: bidir_flows,
                 total_tcp_flows: total_flows,
             },
+            protocol_breakdown: ProtocolBreakdown {
+                tcp_packets: self.tcp_packets,
+                tcp_bytes: self.tcp_bytes,
+                udp_packets: self.udp_packets,
+                udp_bytes: self.udp_bytes,
+                udp_flows: self.udp_flows.len() as u64,
+                quic_candidate_packets: self.quic_candidate_packets,
+                quic_candidate_bytes: self.quic_candidate_bytes,
+                icmp_packets: self.icmp_packets,
+                other_packets: self.other_packets,
+            },
             payload_analysis_suppressed: self.truncated,
             notes,
         }
     }
+}
+
+/// GAP-008: a side-by-side comparison across two or more already-analyzed
+/// captures. Built from `PcapReport`s that were produced by streaming
+/// analysis, so comparing captures never requires holding more than one
+/// report's summary in memory at a time -- the source files themselves are
+/// never re-read or loaded whole.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PcapComparison {
+    pub reports: Vec<PcapReport>,
+    /// True if any compared report is host-side/offload-suspect. A
+    /// comparison inherits every input capture's limitations, so this must
+    /// be checked before any cross-capture claim is treated as network
+    /// evidence.
+    pub any_offload_suspect: bool,
+    pub notes: Vec<String>,
+}
+
+pub fn compare_reports(reports: Vec<PcapReport>) -> PcapComparison {
+    let any_offload_suspect = reports
+        .iter()
+        .any(|r| matches!(r.vantage.vantage, Vantage::HostOffloadSuspect));
+
+    let mut notes = Vec::new();
+    if any_offload_suspect {
+        notes.push(
+            "at least one compared capture is classified host-side/offload-suspect: \
+             retransmission/out-of-order/duplicate-ACK counts and TCP byte totals for that \
+             capture are NOT usable as on-wire network-fault evidence, and any comparison \
+             built from them inherits that limitation"
+                .to_string(),
+        );
+    }
+    if reports.iter().any(|r| r.health.truncated) {
+        notes.push(
+            "at least one compared capture is snaplen-truncated: payload-dependent \
+             comparisons for that capture are suppressed"
+                .to_string(),
+        );
+    }
+    if reports.iter().any(|r| r.health.drops_known.is_none()) {
+        notes.push(
+            "at least one compared capture has an unknown drop count: apparent differences \
+             in packet/flow counts between captures may reflect capture loss, not real \
+             traffic differences"
+                .to_string(),
+        );
+    }
+
+    PcapComparison { reports, any_offload_suspect, notes }
 }
 
 #[cfg(test)]

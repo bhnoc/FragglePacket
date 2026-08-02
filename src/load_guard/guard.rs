@@ -198,6 +198,11 @@ pub struct GuardReport {
     /// is no other code path that can populate it.
     pub derived: Option<DerivedMetrics>,
     pub default_route_is_tunnel: bool,
+    /// `"synthetic"` when the radio source was fabricated (harness
+    /// `--fake-radio`/`--inject-*`), `"live"` otherwise. A caller reading
+    /// only this artifact -- no access to the command line that produced it
+    /// -- must be able to tell a faked run from a real measurement.
+    pub radio_source: &'static str,
 }
 
 /// The one place a derived collapse/retention ratio may be produced. It is
@@ -265,6 +270,13 @@ pub struct LoadGuard {
     counters: CounterSource,
     sample_interval: Duration,
     radio_sample_interval: Duration,
+    /// Set by the caller when `radio`/`radio_fast` are fabricated (harness
+    /// `--fake-radio`/`--inject-*` flags) rather than sampled from real
+    /// hardware. Carried into every `GuardReport` so a saved artifact
+    /// declares its own provenance and can never be mistaken for a real
+    /// measurement -- the same failure shape as reporting an unmeasurable
+    /// value as zero, just for "is this real" instead of "what is the value".
+    radio_source_is_synthetic: bool,
 }
 
 impl LoadGuard {
@@ -289,7 +301,17 @@ impl LoadGuard {
             sample_interval: Duration::from_millis(200),
             // In-phase polling cadence for the (cheap) fast radio source.
             radio_sample_interval: Duration::from_millis(500),
+            radio_source_is_synthetic: false,
         })
+    }
+
+    /// Marks the radio source(s) as fabricated rather than sampled from real
+    /// hardware. The CLI calls this whenever `--fake-radio` or any
+    /// `--inject-*` flag is passed, so every artifact from that run declares
+    /// its own provenance instead of looking identical to a real measurement.
+    pub fn with_synthetic_radio_marker(mut self, is_synthetic: bool) -> Self {
+        self.radio_source_is_synthetic = is_synthetic;
+        self
     }
 
     /// Supplies a cheap radio source for in-phase polling, distinct from the
@@ -488,6 +510,7 @@ impl LoadGuard {
             raw,
             derived,
             default_route_is_tunnel: self.default_route_is_tunnel,
+            radio_source: if self.radio_source_is_synthetic { "synthetic" } else { "live" },
         }
     }
 }

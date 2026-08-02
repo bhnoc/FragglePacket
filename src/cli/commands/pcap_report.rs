@@ -9,10 +9,15 @@ pub struct PcapReportArgs {
     /// Output as JSON instead of a human-readable report
     #[arg(long)]
     pub json: bool,
+
+    /// Force comparison-mode output (GAP-008) even with one file. With two
+    /// or more files, comparison output is shown automatically.
+    #[arg(long)]
+    pub compare: bool,
 }
 
 pub fn run(args: &PcapReportArgs) {
-    use fraggle_packet::network_tests::pcap_report::analyze_pcap;
+    use fraggle_packet::network_tests::pcap_report::{analyze_pcap, compare_reports};
 
     let mut reports = Vec::new();
     let mut had_error = false;
@@ -27,6 +32,24 @@ pub fn run(args: &PcapReportArgs) {
         }
     }
 
+    let show_comparison = args.compare || reports.len() > 1;
+
+    if show_comparison {
+        let comparison = compare_reports(reports);
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&comparison).unwrap());
+        } else {
+            for report in &comparison.reports {
+                print_report(report);
+            }
+            print_comparison(&comparison);
+        }
+        if had_error && comparison.reports.is_empty() {
+            std::process::exit(1);
+        }
+        return;
+    }
+
     if args.json {
         println!("{}", serde_json::to_string_pretty(&reports).unwrap());
     } else {
@@ -38,6 +61,54 @@ pub fn run(args: &PcapReportArgs) {
     if had_error && reports.is_empty() {
         std::process::exit(1);
     }
+}
+
+fn print_comparison(comparison: &fraggle_packet::network_tests::pcap_report::PcapComparison) {
+    println!("{}", "== Comparison ==".cyan().bold());
+    println!(
+        "  {:<40} {:>12} {:>12} {:>12} {:>10} {:>10} {:>10}",
+        "file", "tcp_pkts", "udp_pkts", "quic_cand", "icmp", "flows(tcp)", "dur(s)"
+    );
+    for r in &comparison.reports {
+        println!(
+            "  {:<40} {:>12} {:>12} {:>12} {:>10} {:>10} {:>10}",
+            r.path,
+            r.protocol_breakdown.tcp_packets,
+            r.protocol_breakdown.udp_packets,
+            r.protocol_breakdown.quic_candidate_packets,
+            r.protocol_breakdown.icmp_packets,
+            r.directions_seen.total_tcp_flows,
+            r.health
+                .duration_secs
+                .map(|d| format!("{:.1}", d))
+                .unwrap_or_else(|| "?".to_string()),
+        );
+    }
+    for r in &comparison.reports {
+        println!(
+            "  {}: retransmissions={} out_of_order={} dup_acks={}{}",
+            r.path,
+            r.tcp_anomalies.retransmissions,
+            r.tcp_anomalies.out_of_order,
+            r.tcp_anomalies.duplicate_acks,
+            if r.tcp_anomalies.qualification_required {
+                " (NOT on-wire evidence: host-side/offload-suspect)".yellow().to_string()
+            } else {
+                String::new()
+            }
+        );
+    }
+    if comparison.any_offload_suspect {
+        println!(
+            "  {}",
+            "at least one capture is host-side/offload-suspect; see notes".yellow()
+        );
+    }
+    println!("{}", "-- Notes --".white().bold());
+    for n in &comparison.notes {
+        println!("  * {}", n);
+    }
+    println!();
 }
 
 fn print_report(report: &fraggle_packet::network_tests::pcap_report::PcapReport) {

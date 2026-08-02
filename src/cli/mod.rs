@@ -94,6 +94,14 @@ pub enum Commands {
     ProbeRate(commands::probe_rate::ProbeRateArgs),
     /// First-hop gateway isolation with non-ICMP fallback when echo is suppressed (GAP-022)
     FirstHop(commands::firsthop::FirstHopArgs),
+    /// Bounded packet capture with duration/size caps and safe privilege handoff (GAP-007)
+    Capture(commands::capture::CaptureArgs),
+    /// Pair idle/upload/download/simultaneous load phases with a first-hop gateway RTT/loss bracket (GAP-044)
+    GatewayBracket(commands::gateway_bracket::GatewayBracketArgs),
+    /// Bounded burst-loss/reordering/duplication/jitter probe with queue-delay correlation (GAP-066)
+    BurstAnalysis(commands::burst_analysis::BurstAnalysisArgs),
+    /// SYN/SYN-ACK MSS evidence (local/peer/middlebox) and multi-destination MSS clustering vs route MTU (GAP-010/GAP-026)
+    MssEvidence(commands::mss_evidence::MssEvidenceArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -134,6 +142,10 @@ pub fn dispatch(args: Args) {
         Some(Commands::PcapReport(a)) => commands::pcap_report::run(&a),
         Some(Commands::ProbeRate(a)) => commands::probe_rate::run(&a),
         Some(Commands::FirstHop(a)) => commands::firsthop::run(&a),
+        Some(Commands::Capture(a)) => commands::capture::run(&a),
+        Some(Commands::GatewayBracket(a)) => commands::gateway_bracket::run(&a),
+        Some(Commands::BurstAnalysis(a)) => commands::burst_analysis::run(&a),
+        Some(Commands::MssEvidence(a)) => commands::mss_evidence::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

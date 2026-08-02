@@ -24,6 +24,10 @@ pub mod scenario;
 pub mod pcap_report;
 pub mod probe_rate;
 pub mod firsthop;
+pub mod gateway_bracket;
+pub mod capture;
+pub mod burst_analysis;
+pub mod mss_evidence;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};
