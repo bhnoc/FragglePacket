@@ -9,8 +9,8 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 | --- | --- | --- |
 | 0 | smoke/acid harnesses, `src/cli/` refactor | **done, pushed** (0daf3c4). main.rs 2551→21 lines |
 | 1 | P0 gaps 001, 019, 025, 027, 047 | 019/025/027/047 **done** (5e496fe); 001 outstanding; 2 defects out for fix |
-| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | 009/021/022 in progress |
-| 3 | capture/PCAP/MSS 007, 008, 010, 026, 066 | not started |
+| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | 009/021/022/044 **done**; 002/003/004 in progress |
+| 3 | capture/PCAP/MSS 007, 008, 010, 026, 066 | **done, pushed** (1edc17c) |
 | 4 | iperf3 load matrix 006, 031-034, 036, 039, 040, 045, 046 | not started |
 | 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | not started |
 | 6 | STUN/NAT/ECN/media 005, 023, 028, 052, 054, 060 | not started |
@@ -44,6 +44,30 @@ sourced, not executed, so it inherits the helpers in `harness/lib.sh`:
 Every locking check must be proven to fail against the broken state before it is
 trusted. Both existing gates were negative-tested this way.
 
+## The recurring failure mode: a number with no referent
+
+Nearly every gap in this list is one bug wearing different clothes. Something
+cannot be measured, and instead of saying so the code emits a plausible number.
+Observed forms so far:
+
+- GAP-009: an unparsed ping summary became `0.0 ms` latency.
+- GAP-001: a successful `send_to()` became a confirmed 8,972-byte path MTU.
+- GAP-019: frame length compared against a bare 1500 became phantom oversize
+  frames, and host-side retransmissions became network fault counts.
+- GAP-027: a run that roamed mid-phase still produced a capacity retention ratio.
+- GAP-025: one endpoint's missing QUIC support became "the network blocks QUIC".
+- `--fake-radio`: fabricated RSSI/MCS values emitted with no marker, so a faked
+  report was byte-identical to a real measurement.
+- `gateway-bracket`: a synthetic generator undershooting its own budget became
+  `throughput_loss_pct: 96.7%` in a report stamped `data_source: live`.
+
+The last two arrived through *test affordances*, not parsers, which is why gate
+`020` exists. When reviewing any new capability, ask of every number: what would
+this read as if the underlying measurement silently failed? If the answer is "a
+normal-looking value", the type is wrong. Use `Option`, withhold derived figures
+whose inputs are invalid, and state provenance in the artifact rather than
+relying on the operator remembering which flags they passed.
+
 ## Ranked gotcha list, most likely to bite first
 
 1. **The default route on this machine is a VPN tunnel (`utun6`, MTU 1412), not
@@ -54,9 +78,10 @@ trusted. Both existing gates were negative-tested this way.
 2. **`harness/golden/*.help.txt` is the frozen pre-refactor CLI spec.** Never
    edit it to make a parity check pass. If a check fails, the code lost a flag.
    Adding new flags is fine; the gate only fails on loss.
-3. **`set_df()` in `src/network_tests/quic_pmtud.rs` is a no-op on non-Linux.**
-   Any DF-dependent probe silently loses its don't-fragment bit on macOS. Needs
-   `IP_DONTFRAG` for Darwin.
+3. **DF is now set correctly via `probe::pmtu_evidence::set_dont_fragment`**
+   (Darwin `IP_DONTFRAG`, Linux `IP_MTU_DISCOVER`), and it checks the setsockopt
+   result. Use it rather than writing a new DF path; the old `set_df` was a
+   silent no-op off Linux and every macOS probe measured fragmented delivery.
 4. **`*.json` is gitignored repo-wide.** `!/harness/fixtures/**` re-includes
    fixture JSON. New JSON test data outside that path will vanish from commits.
 5. **`reports/bhusa26/protocol-comparison-*.pcap` is 2.1 GB and gitignored.**
@@ -82,13 +107,18 @@ trusted. Both existing gates were negative-tested this way.
 
 ## Verified reproductions
 
-- **GAP-001 reproduced.** `fraggle-packet quic 1.1.1.1` reports `[PASS]` with
-  `largest_udp_payload_sent = 8972`. `src/network_tests/quic_pmtud.rs:103`
-  counts a successful `send_to` as success with no response required. Baseline
-  saved to `temp/gap001-before.txt`.
-- **GAP-009 root cause located.** `src/network_tests/rtt.rs:150` matches
-  `"rtt min/avg/max"` (Linux). Darwin emits `round-trip min/avg/max/stddev`, so
-  every successful macOS run reports 0.0 for min/avg/max/jitter.
+Both of these are now FIXED; kept as the record of what the bug looked like.
+
+- **GAP-001** reported `[PASS] largest_udp_payload_sent = 8972` because a
+  successful `send_to` counted as success. Now requires the peer to acknowledge
+  stream data carried in datagrams pinned to the tested size, and reports 1300
+  confirmed against this host's 1412-byte tunnel. Note a QUIC handshake alone is
+  NOT sufficient evidence: Initial packets pad only to 1200 bytes, so a
+  handshake completes on any path carrying 1200 regardless of the configured
+  maximum. That mistake produced a false 8972 confirmation mid-fix.
+- **GAP-009** reported 0.0 ms for every successful macOS run because
+  `rtt.rs` matched only Linux's `rtt min/avg/max/mdev`. Darwin emits
+  `round-trip min/avg/max/stddev`. Now `Option<f64>` across both platforms.
 
 ## Skills available for the infrastructure-dependent gaps
 
