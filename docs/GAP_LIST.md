@@ -386,3 +386,12 @@ feature has been scheduled or implemented.
 - Opening/final baseline drift was severe on the public endpoints, so the
   profiles are provisional. This produced GAP-046 for version-aware randomized
   tuning with socket/CPU and endpoint-drift controls.
+- Six optimized paired bidirectional stress tests used all 12 known-good public
+  listeners. Five became strongly upload-dominant, including Wi-Fi 6 clients.
+  Local-gateway average latency increased on every node, with loaded maxima of
+  63-185 ms, while all gateway pings were returned and radio signal stayed
+  within one dB.
+- The result is a valid saturation/bufferbloat signature, not proof of the
+  earlier fixed-rate legacy-client issue. FragglePacket must label unbounded
+  best-case saturation separately from normalized diagnostic load and preserve
+  per-direction stream count, block size, endpoint, and duration validity.

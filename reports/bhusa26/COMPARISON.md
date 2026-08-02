@@ -368,6 +368,23 @@ also produced an invalid 15.84-second PV receiver summary. The opening/final
 baselines drifted from 176 to 115 Mbps on PC3 and 60 to 304 Mbps on PV03, so
 public-endpoint tuning is provisional and requires controlled repetition.
 
+### Optimized bidirectional saturation
+
+| Device | Cohort | Upload | Download | Gateway idle avg | Gateway loaded avg/max |
+| --- | --- | ---: | ---: | ---: | ---: |
+| PC3 | Wi-Fi 5 | 122.1 Mbps | 27.1 Mbps | 1.912 ms | 28.415 / 67.252 ms |
+| PC15 | Wi-Fi 5 | 106.9 Mbps | 57.8 Mbps | 2.076 ms | 10.480 / 74.203 ms |
+| PC17 | Wi-Fi 5 | 94.9 Mbps | 36.8 Mbps | 1.695 ms | 15.335 / 66.387 ms |
+| PV03 | Wi-Fi 6 | 422.7 Mbps | 27.5 Mbps | 2.350 ms | 38.579 / 125.728 ms |
+| PV05 | Wi-Fi 6 | 243.0 Mbps sent; receiver invalid | 64.0 Mbps | 2.633 ms | 13.208 / 63.279 ms |
+| PV09 | Wi-Fi 6 | 128.7 Mbps | 135.7 Mbps | 2.507 ms | 40.195 / 184.765 ms |
+
+All six local gateways returned every ping and every radio stayed within one dB,
+but loaded gateway latency increased on every node. Maximum-rate bidirectional
+stress starved download on five of six clients, including HE. This is expected
+airtime/queue saturation behavior and must not be conflated with the fixed-rate
+legacy-client cohort comparison.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

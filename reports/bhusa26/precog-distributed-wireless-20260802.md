@@ -410,6 +410,49 @@ application behavior or the fixed-rate downstream-loss investigation. Public
 listener drift makes them provisional; finalize them against the controlled
 internal endpoint with randomized repeated trials.
 
+## Optimized maximum bidirectional saturation
+
+All 12 known-good listeners were paired across six representative clients.
+Independent upload and reverse-download processes started at the exact same
+epoch. PC clients used four streams/128 KiB in each direction; PV clients used
+eight streams/512 KiB/zero-copy in each direction. A responsive local default
+gateway replaced the ICMP-suppressed core target for idle/load latency.
+
+| Device | Cohort | Upload delivered | Download delivered | Upload retransmissions | Download retransmissions |
+| --- | --- | ---: | ---: | ---: | ---: |
+| PC3 | Wi-Fi 5 | 122.1 Mbps | 27.1 Mbps | 4 | 227 |
+| PC15 | Wi-Fi 5 | 106.9 Mbps | 57.8 Mbps | 6 | 211 |
+| PC17 | Wi-Fi 5 | 94.9 Mbps | 36.8 Mbps | 2 | 232 |
+| PV03 | Wi-Fi 6 | 422.7 Mbps | 27.5 Mbps | 17 | 580 |
+| PV05 | Wi-Fi 6 | 243.0 Mbps client-sent; receiver duration invalid | 64.0 Mbps | 12 | 659 |
+| PV09 | Wi-Fi 6 | 128.7 Mbps | 135.7 Mbps | 1,028 | 615 |
+
+PV05's upload receiver summary stretched to 24.48 seconds for a 20-second
+measured interval, so its receiver rate was rejected; the 243.0 Mbps client-
+sender rate is shown with qualification. Other displayed receiver intervals
+were approximately 20 seconds.
+
+| Device | Idle gateway avg | Loaded gateway avg | Increase | Loaded maximum | Gateway loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| PC3 | 1.912 ms | 28.415 ms | 26.503 ms | 67.252 ms | 0% |
+| PC15 | 2.076 ms | 10.480 ms | 8.404 ms | 74.203 ms | 0% |
+| PC17 | 1.695 ms | 15.335 ms | 13.640 ms | 66.387 ms | 0% |
+| PV03 | 2.350 ms | 38.579 ms | 36.229 ms | 125.728 ms | 0% |
+| PV05 | 2.633 ms | 13.208 ms | 10.575 ms | 63.279 ms | 0% |
+| PV09 | 2.507 ms | 40.195 ms | 37.688 ms | 184.765 ms | 0% |
+
+Every client retained all 100 loaded gateway replies, but average near-side RTT
+increased materially. The Wi-Fi 5 average rose from 1.894 to 18.077 ms; the
+Wi-Fi 6 average rose from 2.497 to 30.661 ms. Radio signal stayed within one dB
+on every probe, excluding a roam or major RF change during the phase.
+
+Five of six clients became strongly upload-dominant. This confirms that an
+unbounded maximum-throughput bidirectional command can saturate airtime/queues
+and reproduce downlink starvation even on healthy HE clients. It is therefore
+useful as a stress/bufferbloat test, but not as evidence that every HE client
+has the earlier fixed-100 legacy-client defect. PV09 was nearly balanced but
+showed heavy retransmission and the largest loaded gateway maximum.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source
