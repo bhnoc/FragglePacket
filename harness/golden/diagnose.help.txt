@@ -1,0 +1,10 @@
+Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison)
+
+Usage: fraggle-packet diagnose [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP (e.g., github.com, 8.8.8.8)
+
+Options:
+  -p, --port <PORT>  Port to test TCP on [default: 443]
+  -h, --help         Print help

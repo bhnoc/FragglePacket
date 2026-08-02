@@ -1,0 +1,9 @@
+Run a declarative scenario from a file or stdin
+
+Usage: fraggle-packet scenario <FILE>
+
+Arguments:
+  <FILE>  Path to scenario file ('-' for stdin)
+
+Options:
+  -h, --help  Print help

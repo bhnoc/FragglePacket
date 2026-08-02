@@ -1,0 +1,10 @@
+Raw JetDirect port 9100 PJL + bulk size sweep
+
+Usage: fraggle-packet printer-raw [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -p, --port <PORT>  Target port (default 9100) [default: 9100]
+  -h, --help         Print help

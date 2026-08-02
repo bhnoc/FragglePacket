@@ -1,0 +1,10 @@
+Query actual negotiated TCP MSS and detect middlebox rewriting
+
+Usage: fraggle-packet tcp-options [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -p, --port <PORT>  Target port (default 443) [default: 443]
+  -h, --help         Print help

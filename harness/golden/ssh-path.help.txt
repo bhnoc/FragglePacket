@@ -1,0 +1,11 @@
+SSH banner + optional authenticated echo data-path test
+
+Usage: fraggle-packet ssh-path [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -p, --port <PORT>  SSH port (default 22) [default: 22]
+  -u, --user <USER>  SSH user for the optional exec stage (also enables it)
+  -h, --help         Print help

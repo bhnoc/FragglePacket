@@ -1,0 +1,9 @@
+Quick ICMP-only MTU test
+
+Usage: fraggle-packet quick <TARGET>
+
+Arguments:
+  <TARGET>  Target IP address
+
+Options:
+  -h, --help  Print help

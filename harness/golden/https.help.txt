@@ -1,0 +1,11 @@
+Test HTTPS connectivity with stage-by-stage analysis (MTU blackhole detection)
+
+Usage: fraggle-packet https [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname (e.g., google.com, github.com)
+
+Options:
+  -T, --timeout <TIMEOUT>  Timeout in seconds [default: 10]
+  -d, --diagnose           Show diagnosis and recommendations
+  -h, --help               Print help

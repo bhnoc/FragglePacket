@@ -1,0 +1,10 @@
+Calculate safe MTU for VPN/SASE/Zero-Trust usage
+
+Usage: fraggle-packet vpn [OPTIONS] <VPN_TYPE>
+
+Arguments:
+  <VPN_TYPE>  VPN type (see --help for full list)
+
+Options:
+  -b, --base-mtu <BASE_MTU>  Base MTU to calculate from (default: auto-detect)
+  -h, --help                 Print help

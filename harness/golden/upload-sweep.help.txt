@@ -1,0 +1,10 @@
+HTTP(S) upload size sweep (detects data-stall blackholes)
+
+Usage: fraggle-packet upload-sweep [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname
+
+Options:
+  -p, --port <PORT>  Target port (default 443) [default: 443]
+  -h, --help         Print help
