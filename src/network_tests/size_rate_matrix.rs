@@ -218,13 +218,18 @@ mod tests {
 
     #[test]
     fn packet_rate_ceiling_and_byte_rate_policing_produce_distinguishable_verdicts() {
-        // Packet-rate-ceiling shaped matrix: constant-byte-rate sweep shows
-        // loss rising sharply as size shrinks; constant-packet-rate sweep
-        // stays flat.
+        // Ground truth from the field investigation (docs/GAP_LIST.md /
+        // duplex-threshold characterization): at a fixed ~350 Mbps each way,
+        // Wi-Fi downstream loss went from 16.3% at 1,472-byte payloads to
+        // 65.1% at 200-byte payloads -- same byte rate, ~7.4x the packet
+        // rate (7360 vs 1000 offered at the smaller size), ~4x the loss.
+        // Wired stayed under 0.5% and was lossless at 1,200 bytes over the
+        // same packet-rate matrix -- the flat control this classifier must
+        // NOT flag as a byte-rate-policing signature.
         let ceiling_matrix = SizeRateMatrix {
             mode: DirectionMode::Directional,
-            constant_byte_rate: vec![point(1472, 1000, 837, 1.0), point(200, 7300, 2551, 1.0)],
-            constant_packet_rate: vec![point(1472, 1000, 990, 1.0), point(200, 1000, 985, 1.0)],
+            constant_byte_rate: vec![point(1472, 1000, 837, 1.0), point(200, 7360, 2569, 1.0)],
+            constant_packet_rate: vec![point(1472, 1000, 995, 1.0), point(200, 1000, 998, 1.0)],
         };
         // Byte-rate-policing shaped matrix: constant-packet-rate sweep shows
         // loss rising as size (and thus byte rate) grows; constant-byte-rate
@@ -238,8 +243,16 @@ mod tests {
         let ceiling_verdict = classify_pressure(&ceiling_matrix);
         let policing_verdict = classify_pressure(&policing_matrix);
 
-        assert!(matches!(ceiling_verdict, PressureVerdict::PacketRateCeiling { .. }));
-        assert!(matches!(policing_verdict, PressureVerdict::ByteRatePolicing { .. }));
+        assert!(
+            matches!(ceiling_verdict, PressureVerdict::PacketRateCeiling { .. }),
+            "expected PacketRateCeiling for the field-evidence Wi-Fi matrix, got {:?}",
+            ceiling_verdict
+        );
+        assert!(
+            matches!(policing_verdict, PressureVerdict::ByteRatePolicing { .. }),
+            "expected ByteRatePolicing, got {:?}",
+            policing_verdict
+        );
     }
 
     #[test]

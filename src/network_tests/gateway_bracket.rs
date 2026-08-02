@@ -81,6 +81,16 @@ pub struct GatewayPhaseResult {
     /// report it.
     pub bytes_transferred: Option<u64>,
     pub throughput_loss_pct: Option<f64>,
+    /// `"synthetic-demo-generator"` when `bytes_transferred`/`throughput_loss_pct`
+    /// came from the fixed-size `SyntheticPhase` byte generator rather than
+    /// real traffic (true for every non-idle phase today, since a real
+    /// iperf3-backed phase is later sprints' job), `"live"` once a real
+    /// phase is wired in, `"n/a"` for idle (no load is presented at all).
+    /// ICMP/RTT provenance is tracked separately by `icmp_state` and the
+    /// gateway probe itself, which really is live even when the paired
+    /// throughput number is not -- a single report-level marker cannot
+    /// describe both, so each signal states its own.
+    pub throughput_source: &'static str,
 }
 
 impl GatewayPhaseResult {
@@ -301,6 +311,18 @@ pub fn run_phase(
         icmp_received: icmp.received,
         avg_rtt_ms,
         max_rtt_ms,
+        throughput_source: if kind == PhaseKind::Idle {
+            "n/a"
+        } else {
+            // The paired load phase is always the synthetic demo byte
+            // generator today (see `SyntheticPhase` docs) -- a real
+            // iperf3-backed phase is GAP-031-034's job. Marking this
+            // "synthetic-demo-generator" here, not "live", is what keeps a
+            // fabricated loss percentage from being read as a real network
+            // measurement even though the ICMP/RTT samples in this same
+            // record genuinely are live.
+            "synthetic-demo-generator"
+        },
         samples,
         fallback,
         bytes_transferred: Some(bt),
@@ -345,6 +367,7 @@ mod tests {
             fallback: None,
             bytes_transferred: Some(100),
             throughput_loss_pct: Some(5.0),
+            throughput_source: "synthetic-demo-generator",
         };
         assert_eq!(result.rtt_delta_ms(Some(2.0)), Some(5.0));
         assert_eq!(result.rtt_delta_ms(None), None);

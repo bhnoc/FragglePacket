@@ -34,6 +34,12 @@ pub struct PhaseLatency {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BufferbloatReport {
+    /// Names the platform tool that produced every figure in this report,
+    /// so a reader never has to guess (or assume) where the numbers came
+    /// from. Currently always `NETWORK_QUALITY_BIN` when `tool_available`
+    /// is true; kept as its own field rather than folded into a comment so
+    /// downstream consumers (e.g. cross-platform reports) can rely on it.
+    pub measurement_tool: &'static str,
     pub interface: Option<String>,
     pub default_route_is_tunnel: bool,
     pub test_endpoint: Option<String>,
@@ -75,11 +81,12 @@ impl ResponsivenessGrade {
     }
 }
 
-fn grade_from_phases(idle: &PhaseLatency, up: &PhaseLatency, down: &PhaseLatency, sim: &PhaseLatency) -> Option<ResponsivenessGrade> {
-    let vals: Option<Vec<f64>> = [idle, up, down, sim]
-        .iter()
-        .map(|p| p.responsiveness_rpm)
-        .collect();
+/// Grades on the three *loaded* phases only. Idle deliberately never carries
+/// an RPM figure (no load is offered, so RPM isn't meaningful for it -- see
+/// `run_bufferbloat`), so requiring all four phases here would make the
+/// grade permanently uncomputable regardless of how healthy the network is.
+fn grade_from_phases(up: &PhaseLatency, down: &PhaseLatency, sim: &PhaseLatency) -> Option<ResponsivenessGrade> {
+    let vals: Option<Vec<f64>> = [up, down, sim].iter().map(|p| p.responsiveness_rpm).collect();
     let vals = vals?;
     let worst = vals.into_iter().fold(f64::INFINITY, f64::min);
     Some(ResponsivenessGrade::from_worst_rpm(worst))
@@ -187,6 +194,7 @@ pub struct BufferbloatConfig {
 pub fn run_bufferbloat(cfg: &BufferbloatConfig) -> BufferbloatReport {
     if !std::path::Path::new(NETWORK_QUALITY_BIN).exists() {
         return BufferbloatReport {
+            measurement_tool: NETWORK_QUALITY_BIN,
             interface: cfg.interface.clone(),
             default_route_is_tunnel: cfg.default_route_is_tunnel,
             test_endpoint: None,
@@ -255,7 +263,7 @@ pub fn run_bufferbloat(cfg: &BufferbloatConfig) -> BufferbloatReport {
         Err(_) => PhaseLatency::default(),
     };
 
-    let grade = grade_from_phases(&idle_phase, &upload_loaded, &download_loaded, &simultaneous);
+    let grade = grade_from_phases(&upload_loaded, &download_loaded, &simultaneous);
 
     let mut errors = Vec::new();
     for (name, r) in [
@@ -270,6 +278,7 @@ pub fn run_bufferbloat(cfg: &BufferbloatConfig) -> BufferbloatReport {
     }
 
     BufferbloatReport {
+        measurement_tool: NETWORK_QUALITY_BIN,
         interface: cfg.interface.clone(),
         default_route_is_tunnel: cfg.default_route_is_tunnel,
         test_endpoint,
@@ -295,6 +304,7 @@ mod tests {
         // this test, so this covers the parse/grade path directly instead;
         // the missing-binary path is exercised by the CLI harness gate.
         let report = BufferbloatReport {
+            measurement_tool: NETWORK_QUALITY_BIN,
             interface: None,
             default_route_is_tunnel: false,
             test_endpoint: None,
@@ -308,6 +318,7 @@ mod tests {
             unavailable_reason: Some("not present".to_string()),
         };
         assert!(!report.tool_available);
+        assert_eq!(report.measurement_tool, NETWORK_QUALITY_BIN);
         assert!(report.base_rtt_ms.is_none());
         assert!(report.responsiveness_grade.is_none());
     }
@@ -356,20 +367,31 @@ mod tests {
     }
 
     #[test]
-    fn grade_is_none_when_any_phase_missing_rpm() {
+    fn grade_is_none_when_any_loaded_phase_missing_rpm() {
         let complete = PhaseLatency { responsiveness_rpm: Some(300.0), ..Default::default() };
         let missing = PhaseLatency::default();
-        assert!(grade_from_phases(&complete, &complete, &complete, &missing).is_none());
+        assert!(grade_from_phases(&complete, &complete, &missing).is_none());
+    }
+
+    #[test]
+    fn grade_never_requires_idle_rpm() {
+        // Idle deliberately never carries an RPM figure -- a grade must
+        // still be computable from the three loaded phases alone, or every
+        // real run (idle never has RPM) would report an uncomputable grade
+        // regardless of how healthy the network is.
+        let healthy = PhaseLatency { responsiveness_rpm: Some(500.0), ..Default::default() };
+        let grade = grade_from_phases(&healthy, &healthy, &healthy).unwrap();
+        assert_eq!(grade, ResponsivenessGrade::Excellent);
     }
 
     #[test]
     fn grade_takes_the_worst_phase_not_the_average() {
-        // A field-shaped scenario: three healthy phases, one collapsed
+        // A field-shaped scenario: two healthy phases, one collapsed
         // simultaneous phase. Averaging would mask exactly the collapse
         // GAP-004 requires surfacing.
         let healthy = PhaseLatency { responsiveness_rpm: Some(500.0), ..Default::default() };
         let collapsed = PhaseLatency { responsiveness_rpm: Some(50.0), ..Default::default() };
-        let grade = grade_from_phases(&healthy, &healthy, &healthy, &collapsed).unwrap();
+        let grade = grade_from_phases(&healthy, &healthy, &collapsed).unwrap();
         assert_eq!(grade, ResponsivenessGrade::Poor);
     }
 }

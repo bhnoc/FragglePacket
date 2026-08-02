@@ -399,6 +399,24 @@ the test with firewall/NAT and circuit telemetry.
 | Force wired VLAN through Wi-Fi egress A | Remains healthy while Wi-Fi through A fails | Access/controller path is primary |
 | A-only and B-only are healthy, but dual-active fails | Fails only dual-active | Inspect ECMP symmetry, state ownership/synchronization, and hashing |
 
+## Remote-room wired UDP/TCP control
+
+| Transport and mode | Upload | Download | Gateway average/max | Interpretation |
+| --- | ---: | ---: | ---: | --- |
+| UDP directional | 350.0 Mbps; 0% loss | 350.0 Mbps; 0% loss | 0.5 ms idle | Both directions independently clean |
+| UDP simultaneous run 1 | 349.9 Mbps; 0.042% loss | 350.0 Mbps; 0% loss | 0.5/0.6 ms | Wireless downstream-loss signature absent |
+| UDP simultaneous run 2 | 350.0 Mbps; 0% loss | 350.0 Mbps; 0.006% loss | 0.4/0.6 ms | Repeat remained clean |
+| TCP directional | 350.0 Mbps; 0 retransmissions | 207.2 Mbps; 0 reported retransmissions | 0.5 ms idle | Download endpoint/path below target |
+| TCP simultaneous run 1 | 349.8 Mbps; 0 retransmissions | 215.0 Mbps; 0 reported retransmissions | 0.9/2.6 ms | No downstream collapse or first-hop queueing |
+| TCP simultaneous run 2 | 349.8 Mbps; 0 retransmissions | 297.8 Mbps; 23 reported retransmissions | 0.9/2.9 ms | No downstream collapse or first-hop queueing |
+
+This runner was wired at 1 Gbps full duplex in a different room/VLAN and added
+zero NIC errors or drops. Because most Salt Lake public listeners did not admit
+tests, the valid run used Salt Lake for upload and XMission Southern Ute for
+reverse download. That path difference limits absolute TCP comparison, but the
+clean 350+350 Mbps UDP result and flat sub-millisecond first hop provide a
+strong second-location wired control against general WAN saturation.
+
 ## Source reports
 
 - [`location-a-baseline-20260801.md`](location-a-baseline-20260801.md)
@@ -410,3 +428,4 @@ the test with firewall/NAT and circuit telemetry.
 - [`wired-control-20260802.md`](wired-control-20260802.md)
 - [`wifi-duplex-threshold-20260802.md`](wifi-duplex-threshold-20260802.md)
 - [`precog-distributed-wireless-20260802.md`](precog-distributed-wireless-20260802.md)
+- [`wired-remote-room-control-20260802.md`](wired-remote-room-control-20260802.md)

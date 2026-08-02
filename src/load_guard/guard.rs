@@ -81,6 +81,12 @@ pub enum InvalidReason {
     /// configured load was actually presented, so no derived ratio may be
     /// read off it — same failure shape as a roam invalidating a run.
     PhaseTargetUndershoot,
+    /// The radio source was fabricated (`--fake-radio`/`--inject-*`), not
+    /// sampled from real hardware. A run that never measured radio state
+    /// cannot support a radio-derived conclusion, so it is invalidated the
+    /// same structural way an undershooting phase is -- this is what also
+    /// blocks `derived` from being populated, not just a cosmetic label.
+    SyntheticRadioSource,
 }
 
 impl std::fmt::Display for InvalidReason {
@@ -94,6 +100,7 @@ impl std::fmt::Display for InvalidReason {
             InvalidReason::RadioUnavailable => "radio state unavailable",
             InvalidReason::PhaseDurationExceeded => "phase ran materially longer than the requested duration",
             InvalidReason::PhaseTargetUndershoot => "phase moved far less than its target byte volume",
+            InvalidReason::SyntheticRadioSource => "radio source was fabricated (--fake-radio/--inject-*), not sampled from real hardware",
         };
         f.write_str(s)
     }
@@ -203,7 +210,17 @@ pub struct GuardReport {
     /// only this artifact -- no access to the command line that produced it
     /// -- must be able to tell a faked run from a real measurement.
     pub radio_source: &'static str,
+    /// Always present, not conditional on validity: weak/unstable RF is only
+    /// evaluated at the before/after full-detail snapshots (and coincidentally
+    /// by any in-phase sample that happens to carry RSSI/noise, which the
+    /// cheap `ioreg`-backed fast source never does) -- there is no continuous
+    /// mid-phase RSSI/noise time series. A weak-RF episode confined entirely
+    /// to mid-phase, between snapshots, could go undetected.
+    pub rf_check_coverage_caveat: &'static str,
 }
+
+pub const RF_CHECK_COVERAGE_CAVEAT: &str = "weak/unstable RF is checked only at the before/after boundary \
+    snapshots, not via a continuous mid-phase time series; a weak-RF episode confined entirely to mid-phase could go undetected";
 
 /// The one place a derived collapse/retention ratio may be produced. It is
 /// structurally impossible to get `Some` back for an invalid run: the match
@@ -487,6 +504,14 @@ impl LoadGuard {
             match timeline.weakest_rf() {
                 RfQuality::Weak => Validity::Invalid(InvalidReason::WeakRf),
                 RfQuality::Unstable => Validity::Invalid(InvalidReason::UnstableRf),
+                // Every other Invalid arm above already reflects something
+                // real about the (possibly synthetic) samples -- a roam or
+                // weak RF injected on purpose is honestly reported as such.
+                // Only the path that would otherwise have concluded Valid is
+                // intercepted here: fabricated radio state cannot support
+                // "no roam, no weak RF, everything measured fine" as a
+                // conclusion, because nothing was actually measured.
+                _ if self.radio_source_is_synthetic => Validity::Invalid(InvalidReason::SyntheticRadioSource),
                 _ => Validity::Valid,
             }
         };
@@ -511,6 +536,7 @@ impl LoadGuard {
             derived,
             default_route_is_tunnel: self.default_route_is_tunnel,
             radio_source: if self.radio_source_is_synthetic { "synthetic" } else { "live" },
+            rf_check_coverage_caveat: RF_CHECK_COVERAGE_CAVEAT,
         }
     }
 }
@@ -718,5 +744,66 @@ mod tests {
             report.validity,
             Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
         );
+    }
+
+    #[test]
+    fn synthetic_radio_marker_invalidates_an_otherwise_healthy_run_with_no_ratio() {
+        // Stable radio + clean counters + on-target bytes would ordinarily
+        // read as Valid with a ratio. Marking the source synthetic must
+        // still block that conclusion -- fabricated radio state never
+        // measured anything, so "looks healthy" cannot become a verdict.
+        let budget = LoadBudget::maintenance(1.0, 1, 1);
+        let radio = RadioSource::new(|| Ok(strong_snapshot()));
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5))
+            .with_synthetic_radio_marker(true);
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert_eq!(report.radio_source, "synthetic");
+        assert_eq!(report.validity, Validity::Invalid(InvalidReason::SyntheticRadioSource));
+        assert!(report.derived.is_none());
+    }
+
+    #[test]
+    fn synthetic_marker_does_not_relabel_an_honest_injected_roam() {
+        // A roam injected on purpose through fabricated samples is still a
+        // real signal about those samples -- it must report Roamed, not get
+        // overridden by the generic synthetic-source fallback that only
+        // catches the "would otherwise have been Valid" path.
+        let budget = LoadBudget::maintenance(1.0, 1, 1);
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let radio = RadioSource::new(move || {
+            let n = calls.fetch_add(1, Ordering::SeqCst);
+            if n == 0 { Ok(strong_snapshot()) } else { Ok(roamed_snapshot()) }
+        });
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5))
+            .with_synthetic_radio_marker(true);
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert_eq!(report.validity, Validity::Invalid(InvalidReason::Roamed));
+    }
+
+    #[test]
+    fn live_radio_marker_allows_valid_with_ratio() {
+        let budget = LoadBudget::maintenance(1.0, 1, 1);
+        let radio = RadioSource::new(|| Ok(strong_snapshot()));
+        let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
+            .unwrap()
+            .with_sample_interval(Duration::from_millis(5))
+            .with_synthetic_radio_marker(false);
+        let report = guard.run(
+            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            Arc::new(AtomicBool::new(false)),
+        );
+        assert_eq!(report.radio_source, "live");
+        assert_eq!(report.validity, Validity::Valid);
+        assert!(report.derived.is_some());
     }
 }

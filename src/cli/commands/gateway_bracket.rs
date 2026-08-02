@@ -68,6 +68,7 @@ fn synthetic_report(interface: Option<String>, interface_is_tunnel: bool, gatewa
         fallback: None,
         bytes_transferred: Some(0),
         throughput_loss_pct: None,
+        throughput_source: "n/a",
     };
     let upload = GatewayPhaseResult {
         phase: PhaseKind::Upload,
@@ -80,6 +81,7 @@ fn synthetic_report(interface: Option<String>, interface_is_tunnel: bool, gatewa
         fallback: None,
         bytes_transferred: Some(120_000),
         throughput_loss_pct: Some(0.002),
+        throughput_source: "synthetic-injected",
     };
     let download = GatewayPhaseResult {
         phase: PhaseKind::Download,
@@ -92,6 +94,7 @@ fn synthetic_report(interface: Option<String>, interface_is_tunnel: bool, gatewa
         fallback: None,
         bytes_transferred: Some(115_000),
         throughput_loss_pct: Some(5.5),
+        throughput_source: "synthetic-injected",
     };
     let simultaneous = GatewayPhaseResult {
         phase: PhaseKind::Simultaneous,
@@ -104,6 +107,7 @@ fn synthetic_report(interface: Option<String>, interface_is_tunnel: bool, gatewa
         fallback: None,
         bytes_transferred: Some(70_000),
         throughput_loss_pct: Some(23.5),
+        throughput_source: "synthetic-injected",
     };
     GatewayBracketReport {
         interface,
@@ -257,9 +261,10 @@ fn print_human(report: &GatewayBracketReport) {
             let delta = phase.rtt_delta_ms(idle_baseline);
             println!("    rtt delta vs idle: {}", fmt_ms(delta));
             println!(
-                "    throughput: bytes_transferred={} loss={}",
+                "    throughput: bytes_transferred={} loss={} source={}",
                 phase.bytes_transferred.map(|b| b.to_string()).unwrap_or_else(|| "unavailable".to_string()),
-                fmt_pct(phase.throughput_loss_pct)
+                fmt_pct(phase.throughput_loss_pct),
+                phase.throughput_source
             );
         }
         if let Some(fb) = &phase.fallback {

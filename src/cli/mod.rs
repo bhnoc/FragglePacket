@@ -102,6 +102,28 @@ pub enum Commands {
     BurstAnalysis(commands::burst_analysis::BurstAnalysisArgs),
     /// SYN/SYN-ACK MSS evidence (local/peer/middlebox) and multi-destination MSS clustering vs route MTU (GAP-010/GAP-026)
     MssEvidence(commands::mss_evidence::MssEvidenceArgs),
+    /// Idle/upload-loaded/download-loaded/simultaneous latency via networkQuality (GAP-002)
+    Bufferbloat(commands::bufferbloat::BufferbloatArgs),
+    /// Controlled H1/H2/H3 comparison with directional vs simultaneous isolation (GAP-003/GAP-004)
+    ProtocolCompare(commands::protocol_compare::ProtocolCompareArgs),
+    /// Datagram-size/packet-rate pressure matrix distinguishing packet-rate ceilings from byte-rate policing (GAP-033)
+    SizeRateMatrix(commands::size_rate_matrix::SizeRateMatrixArgs),
+    /// Constant-aggregate flow-count sweep with DSCP marking-survival qualification (GAP-034)
+    FlowDscpMatrix(commands::flow_dscp_matrix::FlowDscpMatrixArgs),
+    /// Normalized, qualified per-phase interface-counter deltas (GAP-031)
+    CounterDeltas(commands::counter_deltas::CounterDeltasArgs),
+    /// Independently rate-controlled, time-aligned simultaneous upload/download sweep (GAP-032)
+    IndependentRates(commands::independent_rates::IndependentRatesArgs),
+    /// Controlled TCP-versus-UDP throughput/loss comparison against a user-supplied endpoint (GAP-006)
+    TcpVsUdp(commands::tcp_vs_udp::TcpVsUdpArgs),
+    /// Barrier-synchronized public-listener admission fanout: never reports a listener that never admitted as zero throughput (GAP-045)
+    AdmissionFanout(commands::admission_fanout::AdmissionFanoutArgs),
+    /// Authorized-only listener leasing with per-transport capacity/duration qualification and endpoint loss-floor declaration (GAP-040)
+    ListenerLease(commands::listener_lease::ListenerLeaseArgs),
+    /// Version-aware maximum-throughput tuner: randomized trials, duration validation, synthetic-max vs representative-application split (GAP-046)
+    ThroughputTuner(commands::throughput_tuner::ThroughputTunerArgs),
+    /// Version/direction-aware iperf3 JSON parsing and explicit-allowlist endpoint capability discovery (GAP-039/GAP-036)
+    IperfAnalyze(commands::iperf_analyze::IperfAnalyzeArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -146,6 +168,17 @@ pub fn dispatch(args: Args) {
         Some(Commands::GatewayBracket(a)) => commands::gateway_bracket::run(&a),
         Some(Commands::BurstAnalysis(a)) => commands::burst_analysis::run(&a),
         Some(Commands::MssEvidence(a)) => commands::mss_evidence::run(&a),
+        Some(Commands::Bufferbloat(a)) => commands::bufferbloat::run(&a),
+        Some(Commands::ProtocolCompare(a)) => commands::protocol_compare::run(&a),
+        Some(Commands::SizeRateMatrix(a)) => commands::size_rate_matrix::run(&a),
+        Some(Commands::FlowDscpMatrix(a)) => commands::flow_dscp_matrix::run(&a),
+        Some(Commands::CounterDeltas(a)) => commands::counter_deltas::run(&a),
+        Some(Commands::IndependentRates(a)) => commands::independent_rates::run(&a),
+        Some(Commands::TcpVsUdp(a)) => commands::tcp_vs_udp::run(&a),
+        Some(Commands::AdmissionFanout(a)) => commands::admission_fanout::run(&a),
+        Some(Commands::ListenerLease(a)) => commands::listener_lease::run(&a),
+        Some(Commands::ThroughputTuner(a)) => commands::throughput_tuner::run(&a),
+        Some(Commands::IperfAnalyze(a)) => commands::iperf_analyze::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

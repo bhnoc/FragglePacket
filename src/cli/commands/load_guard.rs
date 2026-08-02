@@ -288,6 +288,19 @@ fn format_radio_line(snap: &fraggle_packet::load_guard::RadioSnapshot) -> String
 }
 
 fn print_human(report: &GuardReport) {
+    if report.radio_source == "synthetic" {
+        // Unmissable, not a subtle warning line: this must be impossible to
+        // mistake for a real measurement even skimming the output.
+        println!();
+        println!(
+            "{}",
+            "*** SYNTHETIC RADIO STATE (harness only) — NOT A REAL MEASUREMENT ***"
+                .black()
+                .on_yellow()
+                .bold()
+        );
+        println!();
+    }
     println!(
         "[{}] load-guard interface={} mode={:?}",
         match report.validity {
@@ -336,4 +349,5 @@ fn print_human(report: &GuardReport) {
         ),
         None => println!("  derived: none (run invalid or not computable — no collapse/retention ratio reported)"),
     }
+    println!("  {} {}", "note:".dimmed(), report.rf_check_coverage_caveat);
 }

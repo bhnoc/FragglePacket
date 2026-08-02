@@ -59,20 +59,36 @@ check_lacks "invalid run's human output has no retained_capacity wording" "retai
 check_contains "invalid run's human output states derived is none" "derived: none" \
     printf '%s' "$human"
 
-# --- a stable synthetic run (no injected change, tiny budget that clears the
-#     GAP-047 undershoot floor) stays valid and does carry a ratio ---
+# --- a synthetic run with no injected change is STILL invalidated: a run
+#     whose radio state was fabricated never measured anything, so it must
+#     not be able to conclude "no roam, no weak RF, everything's fine" and
+#     carry a ratio -- fabricated-but-stable is not the same as measured-and-
+#     stable. This is the fix for the "faked run looked identical to a real
+#     measurement" defect: SyntheticRadioSource, not Valid, and no ratio. ---
 valid_out="$(lg_json --interface en0 --rate-mbps 0.01 --duration-secs 1 --concurrency 1 --live-event --fake-radio)"
 if [ -z "$valid_out" ]; then
-    fail "stable run without injected change stays valid and carries a ratio" "no output from load-guard --fake-radio"
+    fail "synthetic run with no injected change is still invalidated (SyntheticRadioSource), no ratio" \
+        "no output from load-guard --fake-radio"
 else
     valid_validity="$(printf '%s' "$valid_out" | json_get validity)"
     valid_derived="$(printf '%s' "$valid_out" | json_get derived)"
-    if [ "$valid_validity" = '"Valid"' ] && [ "$valid_derived" != "null" ] && [ -n "$valid_derived" ]; then
-        pass "stable run without injected change stays valid and carries a ratio"
+    if printf '%s' "$valid_validity" | grep -q "SyntheticRadioSource" && [ "$valid_derived" = "null" ]; then
+        pass "synthetic run with no injected change is still invalidated (SyntheticRadioSource), no ratio"
     else
-        fail "stable run without injected change stays valid and carries a ratio" "validity=$valid_validity derived=$valid_derived"
+        fail "synthetic run with no injected change is still invalidated (SyntheticRadioSource), no ratio" \
+            "validity=$valid_validity derived=$valid_derived"
     fi
 fi
+
+# --- the same run's --json carries radio_source=synthetic and its human
+#     output carries the unmissable SYNTHETIC banner, not just a subtle
+#     field -- the defect this locks: a faked run indistinguishable from a
+#     real measurement in a saved artifact ---
+check_contains "faked run's --json declares radio_source=synthetic" '"radio_source": "synthetic"' \
+    printf '%s' "$valid_out"
+check_contains "faked run's human output shows the unmissable SYNTHETIC banner" \
+    "SYNTHETIC RADIO STATE" \
+    "$BIN" load-guard --interface en0 --rate-mbps 0.01 --duration-secs 1 --concurrency 1 --live-event --fake-radio
 
 # --- privacy: never SSID/BSSID/MAC in output, human or json ---
 check_lacks "load-guard json output carries no MAC-style token" "02:00:00:00:00:01" \
