@@ -133,6 +133,11 @@ Direct invocation of `Raw9100BulkTest`.
 
 Direct invocation of `TcpOptionsEchoTest`.
 
+The test compares the established socket's `TCP_MAXSEG` with the MSS implied by
+the active route MTU. A warning means the reduction is larger than normal TCP
+option overhead; confirming an in-flight rewrite still requires a SYN/SYN-ACK
+packet capture.
+
 | Arg | Default | Notes |
 | --- | --- | --- |
 | `<TARGET>` | required | Hostname or IP |

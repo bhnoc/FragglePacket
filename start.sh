@@ -6,11 +6,42 @@ cd "$(dirname "$0")"
 BINARY="./target/release/fraggle-packet"
 DESKTOP_BINARY="./target/release/fraggle-desktop"
 
-# Check if built
-if [ ! -f "$BINARY" ]; then
-    echo "FragglePacket not built. Run ./setup.sh first."
-    exit 1
+# Rebuild release binaries when the Rust sources or manifests are newer.  The
+# launcher previously checked only for existence, which could silently run an
+# old GUI after source changes.
+is_stale() {
+    local binary="$1"
+
+    [ ! -x "$binary" ] && return 0
+    find Cargo.toml Cargo.lock main.rs src -type f -newer "$binary" -print -quit 2>/dev/null | grep -q .
+}
+
+build_release() {
+    local target="$1"
+
+    if ! command -v cargo >/dev/null 2>&1; then
+        echo "FragglePacket needs to be rebuilt, but cargo is not installed."
+        echo "Run ./setup.sh first."
+        exit 1
+    fi
+
+    echo "FragglePacket sources changed; rebuilding $target..."
+    cargo build --release --bin "$target"
+}
+
+if is_stale "$BINARY"; then
+    build_release fraggle-packet
 fi
+
+# Only require the GUI toolchain for launch modes that use the desktop app.
+# CLI and TUI commands remain usable on hosts without desktop dependencies.
+case "${1:-}" in
+    ""|-d|--desktop)
+        if is_stale "$DESKTOP_BINARY"; then
+            build_release fraggle-desktop
+        fi
+        ;;
+esac
 
 # Parse arguments
 case "${1:-}" in

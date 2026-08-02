@@ -1,0 +1,45 @@
+SANITIZED WIFI DIAGNOSTICS
+Captured: 2026-08-01 23:55 MDT
+
+NETWORK
+    Primary interface       : en0 (Wi-Fi)
+    Primary IPv4           : <redacted>
+    Primary IPv6           : None
+    DNS layout             : two private resolvers, one public fallback
+    Internet reachability  : Reachable
+
+WIFI
+    MAC Address            : <redacted>
+    SSID                   : <redacted>
+    BSSID                  : <redacted>
+    NetworkServiceID       : <redacted>
+    RSSI                   : -53 dBm
+    CCA                    : 0 %
+    Noise                  : -93 dBm
+    Tx Rate                : 1200.0 Mbps
+    Security               : WPA3 Personal
+    PHY Mode               : 802.11ax
+    MCS Index              : 11
+    Guard Interval         : 1600
+    NSS                    : 2
+    Channel                : 6 GHz channel 5 / 80 MHz
+    Country Code           : US
+    IPv4 Config Method     : DHCP
+    IPv4 Address           : <redacted>
+    IPv4 Router            : <redacted>
+    IPv6 Address           : None
+    Sniffer Supported      : Yes
+    Supports Wi-Fi 6E      : Yes
+
+WIFI FAULTS LAST HOUR
+    None
+
+WIFI RECOVERIES LAST HOUR
+    None
+
+WIFI LINK TESTS LAST HOUR
+    None
+
+REDACTION NOTE
+    Paired-device, AWDL, hardware-address, local-address, and unrelated power
+    sections were removed before this report was committed.

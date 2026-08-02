@@ -101,7 +101,8 @@ See [docs/PLATFORMS.md](docs/PLATFORMS.md) for per-OS feature matrix.
 ./start.sh --tui # launches the terminal UI
 ```
 
-`start.sh` falls back to the TUI if the desktop binary is missing.
+`start.sh` rebuilds release binaries when Rust sources are newer, and falls back
+to the TUI if the desktop binary is missing.
 
 ## start.sh flags
 

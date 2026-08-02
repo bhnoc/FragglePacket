@@ -12,5 +12,6 @@
 | [PLATFORMS.md](PLATFORMS.md) | Per-OS feature matrix |
 | [SCENARIOS.md](SCENARIOS.md) | Declarative scenario DSL |
 | [METRICS.md](METRICS.md) | Prometheus exporter |
+| [GAP_LIST.md](GAP_LIST.md) | Living field-investigation capability backlog and acceptance criteria |
 
 See the [project README](../README.md) for quickstart, CLI summary, and privileges guidance.

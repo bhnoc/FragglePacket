@@ -3,7 +3,10 @@
 Cargo.lock
 
 # Reports
-/reports/
+/reports/*
+!/reports/bhusa26/
+!/reports/bhusa26/**
+/reports/bhusa26/*.pcap
 *.json
 
 # IDE
@@ -19,4 +22,3 @@ Thumbs.db
 
 # Scratch / temp
 /temp/
-

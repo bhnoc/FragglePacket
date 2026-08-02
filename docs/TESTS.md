@@ -13,7 +13,7 @@ Each implementation of `fraggle_packet::framework::NetworkTest` ships with a nam
 | PathAnalysisTest | path_analysis.rs | Path Analysis (Traceroute) | PathAnalysis | No | Runs `tracepath` or `traceroute`, collects per-hop RTT and pmtu lines |
 | TcpHealthTest | tcp_health.rs | TCP Health Analysis | TCPHealth | No | Connect latency, retransmit hints, connection stability |
 | TcpSegmentationTest | tcp_segmentation.rs | TCP Segmentation Detection | TCPHealth | No | Compares negotiated MSS with interface MTU, flags segmentation surprises |
-| TcpOptionsEchoTest | tcp_options_echo.rs | TCP Options Echo | TCPHealth | No | SYN with SACK, timestamps, window scale, checks what the peer echoed back |
+| TcpOptionsEchoTest | tcp_options_echo.rs | TCP Options Echo | TCPHealth | No | Compares live TCP_MAXSEG with the active route MTU and flags only reductions beyond normal TCP-option allowance |
 | DnsTest | dns.rs | DNS Resolution | DNS | No | Multi-resolver A query via `dig`, timing and answer comparison |
 | DnsSecureCompareTest | dns_secure.rs | DNS Secure Comparison | DNS | No | Compares plain UDP DNS, DoH (`https://cloudflare-dns.com/dns-query`), and DoT responses |
 | HttpsTest | https.rs | HTTPS Stage-by-Stage | HTTPS | No | Splits DNS, TCP connect, TLS handshake, request, TTFB into discrete timings |
