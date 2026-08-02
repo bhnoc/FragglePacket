@@ -224,8 +224,8 @@ used independent XMission listeners.
 
 | Matched strong-RF control | Directional download loss | Simultaneous download loss | Simultaneous upload loss | Host errors/drops |
 | --- | ---: | ---: | ---: | ---: |
-| VHT P05 | 0.669% at 100 Mbps | 14.673% at 100+100 Mbps | 0.002% | 0 |
-| HE P15 | 0.729% at 100 Mbps | 0.665% at 100+100 Mbps | 0% | 0 |
+| VHT PC6 | 0.669% at 100 Mbps | 14.673% at 100+100 Mbps | 0.002% | 0 |
+| HE PV03 | 0.729% at 100 Mbps | 0.665% at 100+100 Mbps | 0% | 0 |
 
 This is a strong generation-correlated signal across multiple locations and
 VLANs. It is consistent with a C-460 legacy-client/airtime-scheduler interaction
@@ -235,7 +235,7 @@ fractions of measured directional capacity and map each probe to its AP/radio.
 
 ### PHY-normalized follow-up
 
-| Control | VHT P05 | HE P15 |
+| Control | VHT PC6 | HE PV03 |
 | --- | --- | --- |
 | Directional downstream at 150 Mbps | 10.439% loss | 0.709% loss |
 | Directional downstream at 200 Mbps | 8.333% loss | 0.747% loss |
@@ -245,14 +245,14 @@ fractions of measured directional capacity and map each probe to its AP/radio.
 
 The normalized simultaneous result largely collapses the fixed-100 cohort gap,
 so normal capacity/airtime differences explain much of that table. The
-remaining anomaly is P05's poor downstream-only directional efficiency despite
+remaining anomaly is PC6's poor downstream-only directional efficiency despite
 strong RF and clean upload beyond 200 Mbps. Ask Arista to investigate legacy
 VHT downstream scheduling/efficiency, but do not present this as a proven
 generic C-460 bidirectional defect.
 
 ### Gateway-under-load localization
 
-| Control | VHT P05 | HE P15 |
+| Control | VHT PC6 | HE PV03 |
 | --- | --- | --- |
 | Idle gateway RTT avg/max | 1.646 / 3.356 ms | 2.340 / 3.223 ms |
 | Download 150: loss; gateway avg/max | 5.518%; 4.116 / 13.816 ms | 0.444%; 2.460 / 3.503 ms |
@@ -260,8 +260,8 @@ generic C-460 bidirectional defect.
 | Simultaneous 100+100: downstream loss | 23.550% | 0.400% |
 | Simultaneous 100+100: gateway avg/max | 7.146 / 22.738 ms | 2.975 / 7.003 ms |
 
-P05's local-gateway latency increased with the exact downstream-loss condition;
-P15 remained close to idle. No gateway ICMP packets were lost. This places the
+PC6's local-gateway latency increased with the exact downstream-loss condition;
+PV03 remained close to idle. No gateway ICMP packets were lost. This places the
 queueing signal on a path that already includes the WLAN downlink and makes the
 WAN/public endpoint unlikely to be the sole cause, while small-packet ICMP
 treatment prevents treating it as proof of the exact drop location.

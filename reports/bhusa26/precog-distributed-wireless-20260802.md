@@ -7,7 +7,7 @@ locations and VLANs to determine whether the simultaneous downstream-loss
 signature is local to one Mac/AP or appears across the C-460 WLAN fleet.
 
 Management addresses, probe MACs, BSSIDs, SSIDs, credentials, and public NAT
-identities are intentionally omitted. Stable labels P01-P24 preserve result
+identities are intentionally omitted. Stable PC/PV device names preserve result
 correlation without publishing the management topology.
 
 ## Safety and topology
@@ -54,26 +54,26 @@ download throughput.
 
 | Node | Cohort | Upstream achieved | Upstream loss | Downstream loss | Qualification |
 | --- | --- | ---: | ---: | ---: | --- |
-| P02 | VHT | 24.4 Mbps | 0.504% | 5.910% | Upload rate limited |
-| P03 | VHT | 85.9 Mbps | 0% | 42.868% | Strong RF during inventory |
-| P04 | VHT | 42.8 Mbps | 0.363% | 2.009% | Upload rate limited |
-| P05 | VHT | 100.0 Mbps | 0.004% | 16.545% | Strong RF; detailed repeat below |
-| P06 | VHT | 56.0 Mbps | 0.086% | 17.672% | Upload rate limited |
-| P07 | VHT | 79.0 Mbps | 0.053% | 47.935% | Strong signal during inventory |
-| P08 | VHT | 99.3 Mbps | 0.002% | 42.965% | Stable -59 dBm; prior repeat 36.771% |
-| P09 | VHT | 69.2 Mbps | 0% | 30.535% | Upload rate limited |
-| P10 | VHT | 100.0 Mbps | 0% | 27.425% | Strong RF during inventory |
-| P11 | VHT | 87.2 Mbps | 0.002% | 33.427% | Strong RF during inventory |
-| P12 | VHT | 78.3 Mbps | 0.027% | 29.959% | Upload rate limited |
-| P15 | HE | 98.1 Mbps | 0% | 0.671% | Detailed control below |
-| P16 | HE | 98.1 Mbps | 0% | 0.761% | Clean |
-| P17 | HE | 98.0 Mbps | 0% | 0.646% | Clean |
-| P18 | HE | 98.0 Mbps | 0% | 1.002% | Near endpoint/client floor |
-| P19 | HE | 95.2 Mbps | 0% | 2.866% | HE outlier |
-| P20 | HE | N/A | N/A | N/A | Timed out; excluded |
-| P21 | HE | 98.1 Mbps | 0% | 0.630% | Clean |
-| P22 | HE | 59.5 Mbps | 0% | 0.619% | Upload rate limited; downstream clean |
-| P23 | HE | 98.1 Mbps | 0% | 0.669% | Clean |
+| PC2 | VHT | 24.4 Mbps | 0.504% | 5.910% | Upload rate limited |
+| PC3 | VHT | 85.9 Mbps | 0% | 42.868% | Strong RF during inventory |
+| PC4 | VHT | 42.8 Mbps | 0.363% | 2.009% | Upload rate limited |
+| PC6 | VHT | 100.0 Mbps | 0.004% | 16.545% | Strong RF; detailed repeat below |
+| PC8 | VHT | 56.0 Mbps | 0.086% | 17.672% | Upload rate limited |
+| PC10 | VHT | 79.0 Mbps | 0.053% | 47.935% | Strong signal during inventory |
+| PC13 | VHT | 99.3 Mbps | 0.002% | 42.965% | Stable -59 dBm; prior repeat 36.771% |
+| PC14 | VHT | 69.2 Mbps | 0% | 30.535% | Upload rate limited |
+| PC15 | VHT | 100.0 Mbps | 0% | 27.425% | Strong RF during inventory |
+| PC16 | VHT | 87.2 Mbps | 0.002% | 33.427% | Strong RF during inventory |
+| PC17 | VHT | 78.3 Mbps | 0.027% | 29.959% | Upload rate limited |
+| PV03 | HE | 98.1 Mbps | 0% | 0.671% | Detailed control below |
+| PV04 | HE | 98.1 Mbps | 0% | 0.761% | Clean |
+| PV05 | HE | 98.0 Mbps | 0% | 0.646% | Clean |
+| PV06 | HE | 98.0 Mbps | 0% | 1.002% | Near endpoint/client floor |
+| PV07 | HE | 95.2 Mbps | 0% | 2.866% | HE outlier |
+| PV09 | HE | N/A | N/A | N/A | Timed out; excluded |
+| PV10 | HE | 98.1 Mbps | 0% | 0.630% | Clean |
+| PV11 | HE | 59.5 Mbps | 0% | 0.619% | Upload rate limited; downstream clean |
+| PV12 | HE | 98.1 Mbps | 0% | 0.669% | Clean |
 
 ### Cohort summary
 
@@ -90,13 +90,13 @@ floor despite identical offered rates.
 
 | Node | PHY cohort | Directional upload | Directional download loss | Simultaneous upload loss | Simultaneous download loss | Interface error/drop delta |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| P05 | VHT | 99.99 Mbps / 0% loss | 0.669% | 0.002% | 14.673% | 0 |
-| P15 | HE | 98.12 Mbps / 0% loss | 0.729% | 0% | 0.665% | 0 |
+| PC6 | VHT | 99.99 Mbps / 0% loss | 0.669% | 0.002% | 14.673% | 0 |
+| PV03 | HE | 98.12 Mbps / 0% loss | 0.729% | 0% | 0.665% | 0 |
 
-P05 remained on a strong -50 dBm, 2x2 VHT/40 MHz association around the
+PC6 remained on a strong -50 dBm, 2x2 VHT/40 MHz association around the
 detailed phase. Its directional controls were healthy, host-interface counters
 were clean, and downstream loss rose by about 22 times only under simultaneous
-load. P15 remained strong on a 2x2 HE/40 MHz association and did not degrade.
+load. PV03 remained strong on a 2x2 HE/40 MHz association and did not degrade.
 
 ## PHY-normalized follow-up
 
@@ -108,23 +108,23 @@ then simultaneously at rates scaled to their usable directional range.
 
 | Node | Cohort | Target | Upload loss | Downstream loss | Estimated downstream received payload |
 | --- | --- | ---: | ---: | ---: | ---: |
-| P05 | VHT | 150 Mbps | 0.001% | 10.439% | 134.3 Mbps |
-| P05 | VHT | 200 Mbps | 0.001% | 8.333% | 183.3 Mbps |
-| P05 | VHT | 250 Mbps | 0.004%; sender reached 233.5 Mbps | 17.972% | 205.1 Mbps |
-| P15 | HE | 150 Mbps | 0% | 0.709% | 149.1 Mbps |
-| P15 | HE | 200 Mbps | 0% | 0.747% | 198.6 Mbps |
-| P15 | HE | 250 Mbps | 0% | 0.644% | 248.6 Mbps |
+| PC6 | VHT | 150 Mbps | 0.001% | 10.439% | 134.3 Mbps |
+| PC6 | VHT | 200 Mbps | 0.001% | 8.333% | 183.3 Mbps |
+| PC6 | VHT | 250 Mbps | 0.004%; sender reached 233.5 Mbps | 17.972% | 205.1 Mbps |
+| PV03 | HE | 150 Mbps | 0% | 0.709% | 149.1 Mbps |
+| PV03 | HE | 200 Mbps | 0% | 0.747% | 198.6 Mbps |
+| PV03 | HE | 250 Mbps | 0% | 0.644% | 248.6 Mbps |
 
-P05 has a pronounced downstream-only efficiency ceiling even directionally;
-its upload remains effectively lossless beyond 200 Mbps. P15 remains symmetric
+PC6 has a pronounced downstream-only efficiency ceiling even directionally;
+its upload remains effectively lossless beyond 200 Mbps. PV03 remains symmetric
 and clean through 250 Mbps.
 
 ### Scaled simultaneous control
 
 | Node | Target each way | Upload loss | Downstream loss | Estimated downstream received payload |
 | --- | ---: | ---: | ---: | ---: |
-| P05 VHT | 60 Mbps | 0.005% | 1.670% | 59.0 Mbps |
-| P15 HE | 125 Mbps | 0% | 0.578% | 124.4 Mbps |
+| PC6 VHT | 60 Mbps | 0.005% | 1.670% | 59.0 Mbps |
+| PV03 HE | 125 Mbps | 0% | 0.578% | 124.4 Mbps |
 
 Scaling offered load to the cohorts' different usable capacity largely removes
 the dramatic fixed-100 loss split. This weakens a generic "simultaneous traffic
@@ -141,32 +141,32 @@ authorized internal throughput endpoint is being prepared.
 
 | Node/phase | Public UDP result | Gateway loss | Gateway RTT min/avg/max |
 | --- | --- | ---: | --- |
-| P05 VHT idle | No load | 0% | 1.410 / 1.646 / 3.356 ms |
-| P05 upload 150 | 0.002% loss | 0% | 1.424 / 2.605 / 10.984 ms |
-| P05 download 150 | 5.518% loss; est. 141.7 Mbps received | 0% | 1.258 / 4.116 / 13.816 ms |
-| P05 simultaneous 100+100 | Upload 0.001% loss; download 23.550% loss | 0% | 1.454 / 7.146 / 22.738 ms |
-| P15 HE idle | No load | 0% | 1.993 / 2.340 / 3.223 ms |
-| P15 upload 150 | 0% loss; sender reached 148.2 Mbps | 0% | 1.816 / 2.854 / 5.511 ms |
-| P15 download 150 | 0.444% loss; est. 149.4 Mbps received | 0% | 1.703 / 2.460 / 3.503 ms |
-| P15 simultaneous 100+100 | Upload 0% loss; download 0.400% loss | 0% | 1.766 / 2.975 / 7.003 ms |
+| PC6 VHT idle | No load | 0% | 1.410 / 1.646 / 3.356 ms |
+| PC6 upload 150 | 0.002% loss | 0% | 1.424 / 2.605 / 10.984 ms |
+| PC6 download 150 | 5.518% loss; est. 141.7 Mbps received | 0% | 1.258 / 4.116 / 13.816 ms |
+| PC6 simultaneous 100+100 | Upload 0.001% loss; download 23.550% loss | 0% | 1.454 / 7.146 / 22.738 ms |
+| PV03 HE idle | No load | 0% | 1.993 / 2.340 / 3.223 ms |
+| PV03 upload 150 | 0% loss; sender reached 148.2 Mbps | 0% | 1.816 / 2.854 / 5.511 ms |
+| PV03 download 150 | 0.444% loss; est. 149.4 Mbps received | 0% | 1.703 / 2.460 / 3.503 ms |
+| PV03 simultaneous 100+100 | Upload 0% loss; download 0.400% loss | 0% | 1.766 / 2.975 / 7.003 ms |
 
-P05 gateway latency inflated in the same phases as downstream UDP loss and was
-largest during the reproduced simultaneous failure. P15 stayed close to its
+PC6 gateway latency inflated in the same phases as downstream UDP loss and was
+largest during the reproduced simultaneous failure. PV03 stayed close to its
 idle gateway baseline under the same phases. Because gateway replies traverse
 the client-facing wireless leg, this co-movement is strong evidence that the
-P05 impairment is already present on the WLAN side; it argues against the WAN,
+PC6 impairment is already present on the WLAN side; it argues against the WAN,
 dual uplinks, or public server being the sole cause.
 
 There was no gateway ICMP loss, and small ICMP packets can be queued or treated
 differently from bulk UDP. This test therefore localizes queueing latency but
 does not by itself identify the dropping component. The decisive follow-up is
-the same P05/P15 matrix against an authorized internal wired endpoint, paired
+the same PC6/PV03 matrix against an authorized internal wired endpoint, paired
 with live AP/controller radio and WMM queue counters.
 
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source
-and showed no added host errors/drops during the P05/P15 matched controls.
+and showed no added host errors/drops during the PC6/PV03 matched controls.
 Privileged wireless station counters were also readable, but their RX packet,
 TX packet, retry, failure, beacon-loss, and miscellaneous-drop values did not
 advance during a known six-second 100+100 Mbps phase on either node.

@@ -59,8 +59,8 @@ feature has been scheduled or implemented.
 | GAP-040 | P1 | No public-listener allocation and baseline-floor control | XMission exposed multiple listeners, enabling concurrent directional sessions, but each listener accepts one test and old-client reverse UDP showed a roughly 0.6-1.0% floor. Shared public-service/NAT effects can contaminate comparisons. | Discover only authorized listener ranges, lease one listener per active session, cap concurrency, interleave directional controls, estimate endpoint loss floor by client version, detect busy/rate-limit responses, and qualify public-endpoint results. |
 | GAP-041 | P1 | No remote probe health and dependency preflight | One trusted node had a broken iperf binary due to missing `libiperf.so.0`, one repeatedly timed out, and three presented changed SSH host keys. Treating those as network failures would corrupt fleet conclusions. | Preflight executable/library health, clock, route, radio association, disk/CPU, and endpoint reachability; quarantine unhealthy nodes; require independently verified host-key rotation; report excluded nodes and reasons. |
 | GAP-042 | P1 | No PHY-normalized fleet comparison | Fixed 100+100 Mbps load produced a sharp VHT-versus-HE split, but client PHY rates and generations differ. Fixed rates can conflate normal airtime saturation with compatibility defects. | Calculate offered airtime/PHY fractions per phase, enforce comparable normalized targets, stratify by PHY generation/driver/kernel, and require strong-RF directional controls before attributing a cohort difference to AP backward compatibility. |
-| GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on P05/P15 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
-| GAP-044 | P1 | No local-gateway latency-under-load bracket | Concurrent gateway ping localized P05 queueing to a path already containing the WLAN downlink: average RTT rose from 1.646 ms idle to 7.146 ms during a 23.550% downstream-loss phase, while P15 remained near idle. FragglePacket cannot coordinate or interpret this near-side control. | Pair idle, upload, download, and simultaneous load phases with interface-bound first-hop probes; report loss and RTT deltas; correlate their timeline with throughput loss; fall back when ICMP is suppressed; warn that small ICMP packets may receive different queue treatment. |
+| GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on PC6/PV03 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
+| GAP-044 | P1 | No local-gateway latency-under-load bracket | Concurrent gateway ping localized PC6 queueing to a path already containing the WLAN downlink: average RTT rose from 1.646 ms idle to 7.146 ms during a 23.550% downstream-loss phase, while PV03 remained near idle. FragglePacket cannot coordinate or interpret this near-side control. | Pair idle, upload, download, and simultaneous load phases with interface-bound first-hop probes; report loss and RTT deltas; correlate their timeline with throughput loss; fall back when ICMP is suppressed; warn that small ICMP packets may receive different queue treatment. |
 
 ## Resolved during this investigation
 
@@ -311,30 +311,30 @@ feature has been scheduled or implemented.
   probes showed 2.0-47.9% downstream loss, averaging 27.0%, while upstream
   loss averaged only 0.095%. Eight valid HE probes averaged 0.98% downstream
   loss with zero upstream loss.
-- Strong-RF matched controls sharpened the cohort result. VHT P05 was clean
+- Strong-RF matched controls sharpened the cohort result. VHT PC6 was clean
   directionally at 100 Mbps, then rose from 0.669% directional downstream loss
-  to 14.673% simultaneous loss with no host-interface errors or drops. HE P15
+  to 14.673% simultaneous loss with no host-interface errors or drops. HE PV03
   stayed at its approximately 0.7% directional floor during 100+100 Mbps and
   also added no interface errors or drops.
 - The cohort split is consistent with a legacy VHT/client-stack interaction on
   the C-460 WLAN, but fixed offered rate and differing PHY capacity remain
   confounders. A PHY-normalized repeat and AP/client mapping are required
   before claiming a C-460 backward-compatibility defect.
-- PHY-normalized representative testing narrowed the claim. VHT P05 showed
+- PHY-normalized representative testing narrowed the claim. VHT PC6 showed
   8.3-18.0% directional downstream loss at 150-250 Mbps while upload remained
-  effectively lossless past 200 Mbps; HE P15 stayed near 0.6-0.75% downstream
-  loss through 250 Mbps. At scaled simultaneous loads, P05 60+60 Mbps produced
-  1.67% downstream loss and P15 125+125 Mbps produced 0.578%. Much of the
+  effectively lossless past 200 Mbps; HE PV03 stayed near 0.6-0.75% downstream
+  loss through 250 Mbps. At scaled simultaneous loads, PC6 60+60 Mbps produced
+  1.67% downstream loss and PV03 125+125 Mbps produced 0.578%. Much of the
   fixed-100 cohort gap is capacity/airtime driven; the residual issue is poor
   strong-RF legacy-VHT downstream efficiency.
-- Privileged `iw` station counters on P05/P15 remained frozen during known
+- Privileged `iw` station counters on PC6/PV03 remained frozen during known
   100+100 Mbps traffic. They cannot localize loss or support a zero-retry/drop
   conclusion. Ordinary interface counters showed no host errors/drops, but AP
   or over-the-air evidence is still required.
-- Concurrent local-gateway probes added a near-side discriminator. P05 gateway
+- Concurrent local-gateway probes added a near-side discriminator. PC6 gateway
   RTT rose from 1.646 ms idle to 4.116 ms during a 150 Mbps download with
   5.518% downstream loss, then to 7.146 ms average and 22.738 ms maximum during
-  a 100+100 phase with 23.550% downstream loss. P15 stayed near its 2.340 ms
+  a 100+100 phase with 23.550% downstream loss. PV03 stayed near its 2.340 ms
   idle average and near the public-listener loss floor under matching phases.
 - Gateway ICMP had zero loss on both nodes and may receive favorable small-
   packet treatment. Its latency co-movement places queueing on a path already
