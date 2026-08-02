@@ -1,6 +1,6 @@
 # FragglePacket gap-closure handoff
 
-Building out all 66 open capabilities in `docs/GAP_LIST.md` as CLI features. No
+Building out all 67 open capabilities in `docs/GAP_LIST.md` as CLI features. No
 UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 
 ## Current state (2026-08-02)
@@ -8,11 +8,11 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 | Sprint | Scope | State |
 | --- | --- | --- |
 | 0 | smoke/acid harnesses, `src/cli/` refactor | **done, pushed** (0daf3c4). main.rs 2551→21 lines |
-| 1 | P0 gaps 001, 019, 025, 027, 047 | 019/025/027/047 **done** (5e496fe); 001 outstanding; 2 defects out for fix |
-| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | 009/021/022/044 **done**; 002/003/004 in progress |
+| 1 | P0 gaps 001, 019, 025, 027, 047 | **done, pushed** (ed856bb) |
+| 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | **done, pushed** (fdb6c96) |
 | 3 | capture/PCAP/MSS 007, 008, 010, 026, 066 | **done, pushed** (1edc17c) |
-| 4 | iperf3 load matrix 006, 031-034, 036, 039, 040, 045, 046 | not started |
-| 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | not started |
+| 4 | iperf3 load matrix 006, 031-034, 036, 039, 040, 045, 046 | **done, pushed** (fdb6c96) |
+| 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | in progress |
 | 6 | STUN/NAT/ECN/media 005, 023, 028, 052, 054, 060 | not started |
 | 7 | DNS/IPv6/DHCP/auth 014, 015, 048, 049, 056, 057, 059, 061 | not started |
 | 8 | fleet orchestration 029, 038, 041, 053, 064, 065 | not started |
@@ -42,7 +42,28 @@ sourced, not executed, so it inherits the helpers in `harness/lib.sh`:
 `$WORK_DIR`, and `net_guard`. One file per gap so parallel agents never collide.
 
 Every locking check must be proven to fail against the broken state before it is
-trusted. Both existing gates were negative-tested this way.
+trusted. Restore with `git checkout -- <file>`, never from a `cp` backup: a
+backup taken after sabotage preserves the sabotage. For a new untracked file,
+`git add -N <file>` first so `git checkout --` works on it.
+
+`acid.sh` preflights `cargo test --release --lib` and fails fast, naming the
+broken tests. Most check files open with a cargo-test assertion, so without that
+preflight two failing unit tests reported as 55 gate failures and buried the real
+regressions.
+
+Two suite-wide invariants sit above the per-gap gates:
+
+- `010-no-leftover-sabotage.sh` — catches sabotage markers and CLI args shadowed
+  by hardcoded literals, after a forgotten red/green revert shipped
+  `let fake_radio = false; // BROKEN` and silently disabled a flag.
+- `020-synthetic-provenance.sh` and `021-no-unreferenced-figures.sh` — enforce
+  that fabricated state declares itself and that a derived figure never outlives
+  its evidence. See the failure-mode section below.
+
+**Concurrency footgun:** with several agents editing at once, a unit test can
+fail intermittently because its source file is being rewritten mid-run. Before
+debugging an unexplained flake, check `git status` and file mtimes. This cost
+real time once already.
 
 ## The recurring failure mode: a number with no referent
 
