@@ -1,0 +1,126 @@
+use clap::{Parser, Subcommand};
+use colored::*;
+
+pub mod commands;
+pub mod common;
+
+#[derive(Parser, Debug)]
+#[command(name = "fraggle-packet")]
+#[command(author, version, about = "FragglePacket - Comprehensive MTU and Path Discovery Tool")]
+pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    #[command(flatten)]
+    pub global: GlobalArgs,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct GlobalArgs {
+    /// Target IP address (for quick ICMP test)
+    #[arg(short, long)]
+    pub target: Option<String>,
+
+    /// Starting minimum MTU (default: 576 - minimum IPv4)
+    #[arg(long, default_value_t = 576)]
+    pub min: usize,
+
+    /// Starting maximum MTU (default: 1500, use 9000 for jumbo frames)
+    #[arg(long, default_value_t = 1500)]
+    pub max: usize,
+
+    /// Timeout in milliseconds
+    #[arg(short = 'T', long, default_value_t = 2000)]
+    pub timeout_ms: u64,
+
+    /// Retries per probe
+    #[arg(short, long, default_value_t = 2)]
+    pub retries: usize,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Launch interactive TUI
+    Tui,
+    /// Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison)
+    Diagnose(commands::diagnose::DiagnoseArgs),
+    /// Test HTTPS connectivity with stage-by-stage analysis (MTU blackhole detection)
+    Https(commands::https::HttpsArgs),
+    /// Test multiple targets and compare path MTUs
+    Multi(commands::multi::MultiArgs),
+    /// Calculate safe MTU for VPN/SASE/Zero-Trust usage
+    Vpn(commands::vpn::VpnArgs),
+    /// Quick ICMP-only MTU test
+    Quick(commands::quick::QuickArgs),
+    /// Packet fuzzing for security testing
+    Fuzz(commands::fuzz::FuzzArgs),
+    /// Run test framework tests (DNS, HTTPS, TCP, RTT, Loss)
+    Test(commands::test::TestArgs),
+    /// TCP-based MTU discovery (no ICMP required)
+    Tcp(commands::tcp::TcpArgs),
+    /// Run all tests against common targets and give final verdict
+    KitchenSink(commands::kitchen_sink::KitchenSinkArgs),
+    /// HTTP(S) upload size sweep (detects data-stall blackholes)
+    UploadSweep(commands::upload_sweep::UploadSweepArgs),
+    /// SSH banner + optional authenticated echo data-path test
+    SshPath(commands::ssh_path::SshPathArgs),
+    /// Raw JetDirect port 9100 PJL + bulk size sweep
+    PrinterRaw(commands::printer_raw::PrinterRawArgs),
+    /// Query actual negotiated TCP MSS and detect middlebox rewriting
+    TcpOptions(commands::tcp_options::TcpOptionsArgs),
+    /// QUIC/UDP PMTUD probe
+    Quic(commands::quic::QuicArgs),
+    /// DoH/DoT vs plain DNS comparison
+    DnsSecure(commands::dns_secure::DnsSecureArgs),
+    /// Render a unified README_FIRST-style diagnosis of a target
+    Report(commands::report::ReportArgs),
+    /// Replay a PCAP file onto the wire (requires root)
+    Replay(commands::replay::ReplayArgs),
+    /// Active MTU probe using the native DSL + send-and-capture engine
+    Probe(commands::probe::ProbeArgs),
+    /// Run a declarative scenario from a file or stdin
+    Scenario(commands::scenario::ScenarioArgs),
+    /// Expose a Prometheus metrics scrape endpoint
+    Serve(commands::serve::ServeArgs),
+    /// Print a hexdump of a packet described by our DSL (demo helper)
+    DslDemo(commands::dsl_demo::DslDemoArgs),
+}
+
+pub fn dispatch(args: Args) {
+    println!("{}", "=".repeat(60).blue());
+    println!("{}", " FragglePacket v0.2 ".white().on_blue().bold());
+    println!("{}", "=".repeat(60).blue());
+    println!();
+
+    let global = &args.global;
+
+    match args.command {
+        Some(Commands::Tui) => {
+            let _ = crate::tui_app::run_tui();
+        }
+        Some(Commands::Diagnose(a)) => commands::diagnose::run(&a, global),
+        Some(Commands::Https(a)) => commands::https::run(&a),
+        Some(Commands::Multi(a)) => commands::multi::run(&a, global),
+        Some(Commands::Vpn(a)) => commands::vpn::run(&a, global),
+        Some(Commands::Quick(a)) => commands::quick::run(&a, global),
+        Some(Commands::Fuzz(a)) => commands::fuzz::run(&a),
+        Some(Commands::Test(a)) => commands::test::run(&a),
+        Some(Commands::Tcp(a)) => commands::tcp::run(&a, global),
+        Some(Commands::KitchenSink(a)) => commands::kitchen_sink::run(&a, global),
+        Some(Commands::UploadSweep(a)) => commands::upload_sweep::run(&a),
+        Some(Commands::SshPath(a)) => commands::ssh_path::run(&a),
+        Some(Commands::PrinterRaw(a)) => commands::printer_raw::run(&a),
+        Some(Commands::TcpOptions(a)) => commands::tcp_options::run(&a),
+        Some(Commands::Quic(a)) => commands::quic::run(&a),
+        Some(Commands::DnsSecure(a)) => commands::dns_secure::run(&a),
+        Some(Commands::Report(a)) => commands::report::run(&a),
+        Some(Commands::Replay(a)) => commands::replay::run(&a),
+        Some(Commands::Probe(a)) => commands::probe::run(&a),
+        Some(Commands::Scenario(a)) => commands::scenario::run(&a),
+        Some(Commands::Serve(a)) => commands::serve::run(&a),
+        Some(Commands::DslDemo(a)) => commands::dsl_demo::run(&a),
+        None => {
+            let _ = crate::tui_app::run_tui();
+        }
+    }
+}
