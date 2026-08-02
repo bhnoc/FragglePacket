@@ -36,6 +36,14 @@ investigation. That file is gitignored for size; these carves are not.
 
 ## iperf/
 
+Captured live against `speedtest.xmission.com:5201`. Local IP rewritten to
+`192.0.2.10` and the server to `198.51.100.20` (RFC 5737 documentation ranges).
+
 | File | What it proves |
 | --- | --- |
 | `iperf-version-local.txt` | Local client is iperf 3.21. GAP-039 concerns 3.9 vs 3.16 vs 3.21 JSON divergence, so version detection cannot be skipped. |
+| `tcp-forward-3.21.json` | Baseline shape: `end.sum_sent` and `end.sum_received`, no `end.sum`. |
+| `tcp-reverse-3.21.json` | Same shape in reverse. The received rate is the achieved one. |
+| `tcp-bidir-3.21.json` | Adds `sum_sent_bidir_reverse` and `sum_received_bidir_reverse`. A parser reading only `sum_sent`/`sum_received` silently reports one direction of a bidirectional test. |
+| `udp-reverse-3.21.json` | **The GAP-039 trap.** Carries `sum`, `sum_sent`, and `sum_received` at once. `sum_sent` reports `packets: 0` while `sum` reports 489 packets and `sum_received` reports 460 at a different `bits_per_second`. Reading `sum_sent.lost_percent` yields 0% loss from a field that counted zero packets, which is exactly the "never turn missing fields into zero-loss results" clause. |
+| `error-refused.json` | A refused connection still produces `start`, `intervals`, and `end` alongside a top-level `error` key. The error must be checked first or figures get read from an aborted run. |
