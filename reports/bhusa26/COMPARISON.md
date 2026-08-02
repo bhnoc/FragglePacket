@@ -131,6 +131,60 @@ intentionally omitted.
 | Does 350 Mbps fail one direction at a time? | No | Loss requires simultaneous bidirectional load |
 | Can Wi-Fi versus dual WAN now be distinguished? | No | Requires a wired matched run or per-member telemetry |
 
+## Matched wired Black Hat control
+
+The wired drop used a separate Black Hat VLAN and a 1 Gbps full-duplex Ethernet
+interface. This is a path control, not proof that wired and Wi-Fi traversed the
+same firewall, NAT node, or provider circuit.
+
+### Apple network-quality comparison
+
+| Access path | Protocol | Mode | Download | Upload | Overall loaded latency | Outcome |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| Strong 6 GHz Wi-Fi | H3 | Directional | 679.28 Mbps | 331.66 Mbps | N/A | Clean directional baseline |
+| Strong 6 GHz Wi-Fi | H3 | Simultaneous | 41.44 Mbps | 165.54 Mbps | 394 ms | Connection loss; download retained 6.1% |
+| Wired | H3 | Directional | 749.97 Mbps | 886.54 Mbps | N/A | Clean directional baseline |
+| Wired | H3 | Simultaneous | 674.18 Mbps | 880.17 Mbps | 56.98 ms | Clean; download retained 89.9% |
+| Strong 6 GHz Wi-Fi | H2 | Directional | 749.62 Mbps | 617.65 Mbps | N/A | Clean directional baseline |
+| Strong 6 GHz Wi-Fi | H2 | Simultaneous | 333.81 Mbps | 394.86 Mbps | 116 ms | Completed without failure |
+| Wired | H2 | Directional | 889.64 Mbps | 902.40 Mbps | N/A | Clean directional baseline |
+| Wired | H2 | Simultaneous | 850.28 Mbps | 852.74 Mbps | 12.63 ms | Clean and balanced |
+
+### Fixed-port transport comparison
+
+| Access path | Test | Ports | Upload result | Download result | Verdict |
+| --- | --- | ---: | --- | --- | --- |
+| Strong 6 GHz Wi-Fi | UDP, 350 Mbps each way | 6 | Approximately 0% loss | 8.3-30.1% loss on every port | Repeatable downstream-loss trigger |
+| Wired | UDP, 350 Mbps each way | 6 | 0% on 5 ports; 0.045% on 1 | 0% loss on every port | Trigger absent |
+| Strong 6 GHz Wi-Fi | TCP bidirectional | 10 | 33-307 Mbps; 156-21,412 retransmissions | 160-576 Mbps; remote sender reported 0 retransmissions | Severe asymmetric impairment |
+| Wired | TCP bidirectional | 6 | 940-947 Mbps; 0-22 retransmissions | 809-837 Mbps; remote sender reported 6,290-7,563 retransmissions | No throughput collapse; normalize counters before comparison |
+
+### Egress identity observation
+
+| Access path | STUN source ports | Client-visible public identity | Meaning |
+| --- | ---: | --- | --- |
+| Strong 6 GHz Wi-Fi | 20 | Stable identity A | No client-visible port-to-circuit split |
+| Wired | 20 | Stable identity B | Stable, but distinct from Wi-Fi |
+
+The clean wired control narrows the fault to the Wi-Fi/controller path or to
+VLAN-specific firewall, NAT, egress, or circuit policy. Because the two access
+paths exposed different public identities, it does not yet rule out the dual
+uplinks.
+
+## Wi-Fi/VLAN versus egress swap matrix
+
+The highest-value infrastructure test is to preserve the client access path
+while swapping its forced egress. Use redacted identities A and B to correlate
+the test with firewall/NAT and circuit telemetry.
+
+| Controlled test | Result | Interpretation |
+| --- | --- | --- |
+| Force Wi-Fi VLAN through wired egress B | Becomes healthy | Failure follows egress A: inspect its NAT/firewall owner, queue policy, and circuit |
+| Force Wi-Fi VLAN through wired egress B | Still fails | Wi-Fi/controller or Wi-Fi-VLAN-specific processing remains primary |
+| Force wired VLAN through Wi-Fi egress A | Begins failing | Failure follows egress A: dual-uplink/NAT/circuit path is primary |
+| Force wired VLAN through Wi-Fi egress A | Remains healthy while Wi-Fi through A fails | Access/controller path is primary |
+| A-only and B-only are healthy, but dual-active fails | Fails only dual-active | Inspect ECMP symmetry, state ownership/synchronization, and hashing |
+
 ## Source reports
 
 - [`location-a-baseline-20260801.md`](location-a-baseline-20260801.md)
@@ -139,3 +193,4 @@ intentionally omitted.
 - [`location-b-blackhatusa-downstairs-20260802.md`](location-b-blackhatusa-downstairs-20260802.md)
 - [`location-c-downstairs-strong-radio-retest-20260802.md`](location-c-downstairs-strong-radio-retest-20260802.md)
 - [`dual-uplink-client-probe-20260802.md`](dual-uplink-client-probe-20260802.md)
+- [`wired-control-20260802.md`](wired-control-20260802.md)

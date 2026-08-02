@@ -9,8 +9,12 @@ HTTP/3 download capacity collapsed during simultaneous upload across multiple
 Black Hat WLANs and distant radios. The strongest downstairs control fell from
 679 Mbps directional to 41 Mbps simultaneous while H2 remained healthy. The
 same test on MGM infrastructure preserved its full directional download rate.
-MSS behavior on Black Hat was destination-specific and did not support a
-blanket clamp.
+A matched Black Hat wired control retained 674 of 750 Mbps H3 download under
+simultaneous load and did not reproduce the generic UDP loss. The wired and
+Wi-Fi VLANs exposed distinct public egress identities, so the remaining fault
+domain is Wi-Fi/controller processing or VLAN-specific NAT/egress/circuit
+selection. MSS behavior on Black Hat was destination-specific and did not
+support a blanket clamp.
 
 ## Committed reports
 
@@ -21,6 +25,7 @@ blanket clamp.
 - `location-b-blackhatusa-downstairs-20260802.md` — downstairs cross-AP/weak-RF baseline
 - `location-c-downstairs-strong-radio-retest-20260802.md` — clean downstairs 6 GHz reproduction
 - `dual-uplink-client-probe-20260802.md` — fixed-port TCP/UDP and NAT-affinity probe
+- `wired-control-20260802.md` — matched wired H2/H3, UDP/TCP, and egress control
 - `wifi-diagnostics-20260801-235547.txt` — sanitized RF/platform snapshot
 - `tcp-traceroute-20260801-235547.txt` — TCP/443 path sample
 

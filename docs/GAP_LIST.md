@@ -47,6 +47,7 @@ feature has been scheduled or implemented.
 | GAP-028 | P1 | No multi-uplink ECMP/LAG hash and NAT-affinity diagnostic | Black Hat uses two 10 Gb provider links. A non-symmetric hash, per-packet spraying, unstable NAT ownership, one bad hash bucket, or unequal member policy could explain why bidirectional QUIC fails while directional QUIC and H2 remain healthy. | Sweep fixed UDP/TCP client ports and destinations, preserve each 5-tuple, record repeated STUN mappings/public egress identity, detect bimodal outcomes and mid-flow rebinding, compare forward/reverse/bidirectional performance, and report evidence for stable per-flow affinity versus path migration. |
 | GAP-029 | P1 | No controlled one-circuit-at-a-time comparison workflow | Client-only tests cannot prove which WAN member or shared edge owns a failure. The decisive test requires the same bundle with WAN A only, WAN B only, and both active while collecting member counters. | Export a signed/repeatable test manifest; coordinate pre/post snapshots; label circuit state; ingest per-member utilization, drops, policer, errors, NAT/firewall ownership, and route changes; compare A-only, B-only, and dual-active verdicts without FragglePacket changing production routing itself. |
 | GAP-030 | P1 | No matched wired-versus-Wi-Fi fault-domain control | Generic UDP was lossless at 250 Mbps each way and directionally at 350 Mbps, but lost 8-30% downstream at 350 Mbps bidirectional on strong Wi-Fi. Client-only evidence cannot distinguish WLAN airtime/queue policy from the dual WAN paths. | Run the same signed fixed-port matrix on wireless and wired clients in the same routed policy domain; record interface/radio state and edge counters; attribute a failure to WLAN, shared edge, or WAN only when the matched control supports it. |
+| GAP-031 | P1 | Load phases do not snapshot and normalize interface-counter deltas | The wired interface began with zero drops and ended the near-gigabit suite with 17,517 cumulative drops, while a separately bracketed 350 Mbps bidirectional UDP phase added zero. Without per-phase snapshots, drops cannot be assigned to a protocol, rate, driver ring, or path. | Capture interface counters immediately before and after every phase; report deltas normalized by packets/bytes; distinguish host/driver drops from remote loss; qualify results when counters wrap, reset, or include unrelated traffic. |
 
 ## Resolved during this investigation
 
@@ -211,3 +212,28 @@ feature has been scheduled or implemented.
   showed the same directional failure. One isolated bad ECMP/LAG member is less
   likely than shared queue/policer/WLAN behavior, but only member telemetry,
   wired comparison, and A-only/B-only circuit tests can localize it.
+
+### 2026-08-02 — Matched wired Black Hat control
+
+- The default route moved to a 1 Gbps full-duplex Ethernet interface on a
+  separate Black Hat VLAN, MTU 1500. Gateway latency averaged 1.20 ms and
+  Internet latency 15.98 ms with zero loss.
+- HTTP/3 delivered 749.97 Mbps down and 886.54 Mbps up directionally, then
+  674.18 Mbps down and 880.17 Mbps up simultaneously with high responsiveness
+  and no error. It retained 89.9% of directional download, eliminating the
+  Wi-Fi H3 collapse on the wired path.
+- HTTP/2 delivered 889.64 Mbps down and 902.40 Mbps up directionally, then
+  850.28 Mbps down and 852.74 Mbps up simultaneously.
+- Six wired 350 Mbps-each-way UDP source-port buckets had zero downstream loss;
+  five were fully lossless and one had 0.045% upload loss. An additional
+  bracketed run was fully lossless and added no interface drops. The matching
+  Wi-Fi runs lost 8.3-30.1% downstream on every bucket.
+- Six wired bidirectional TCP buckets sustained 940-947 Mbps upload and 809-837
+  Mbps download. Local upload retransmissions were 0-22; the remote sender
+  reported 6,290-7,563 download retransmissions without throughput collapse,
+  so retransmission counts require normalization and sender-context reporting.
+- Twenty wired STUN source ports consistently used one public IPv4 address,
+  but it differed from the single public address consistently used by twenty
+  Wi-Fi ports. The wired result therefore localizes the failure to either the
+  WLAN/controller path or VLAN-specific NAT/egress/circuit selection; it does
+  not alone prove the dual uplinks are shared identically.
