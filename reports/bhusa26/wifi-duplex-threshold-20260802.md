@@ -116,6 +116,33 @@ upload while discarding download.
   2.788/13.764% for EF. The variation is too large to claim a QoS-class cause
   without packet capture proving DSCP preservation and controller WMM counters.
 
+## Arista Wi-Fi 7 compatibility hypothesis
+
+The Mac negotiated 802.11ax on one 6 GHz / 80 MHz link. It was not using an
+802.11be PHY, 320 MHz channel, or client Multi-Link Operation. Those Wi-Fi 7
+features cannot directly explain the run.
+
+A Wi-Fi 7 AP still uses its radio firmware, scheduler, WMM queues, forwarding
+datapath, and controller integration to serve this non-MLO HE client. An Arista
+Wi-Fi 7 backward-compatibility or firmware defect is therefore credible and is
+more consistent with the evidence than MSS or raw WAN capacity.
+
+Request the AP model, AP firmware, CV-CUE release, radio protocol mode, AP power
+mode, MLO SSID state, client HE/EHT classification, and per-client WMM/OFDMA
+counters. Check the deployed release against current Arista field notices
+before changing traffic policy.
+
+### Decisive compatibility matrix
+
+| AP/radio condition | Client | Result meaning |
+| --- | --- | --- |
+| Wi-Fi 7 AP, 802.11be radio mode | Current Wi-Fi 6E/HE client | Current failure baseline |
+| Same Wi-Fi 7 AP/radio forced to non-BE/802.11ax on a test SSID | Same client | If healthy, suspect BE-mode compatibility, MLO-SSID handling, or firmware |
+| Wi-Fi 6E AP with equivalent SSID/VLAN policy | Same client | If healthy, suspect Wi-Fi 7 AP/platform; if failing, suspect shared WLAN policy/controller |
+| Wi-Fi 7 AP in BE mode | Native Wi-Fi 7/EHT client | If healthy while HE fails, isolate the backward-compatibility path |
+| Wi-Fi 7 AP in BE mode | Both HE and EHT clients fail | Suspect AP firmware, radio scheduler, queue policy, or controller datapath |
+| Same AP and client on 5 GHz versus 6 GHz | Same protocol/rate matrix | Failure only on 6 GHz isolates radio/band-specific behavior |
+
 ## Requested infrastructure evidence
 
 During a 10-second 350 Mbps-each-way reproduction, collect synchronized:
