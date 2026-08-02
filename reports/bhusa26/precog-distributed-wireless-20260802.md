@@ -86,6 +86,62 @@ Every valid VHT probe showed excess downstream loss while upstream loss stayed
 near zero. Most HE probes stayed at the old-client/public-endpoint reverse-loss
 floor despite identical offered rates.
 
+## Client generation and association correlation
+
+The C-460 access points are Wi-Fi 7 capable, but none of the reachable clients
+negotiated an EHT/Wi-Fi 7 association. The table classifies the active client
+link: VHT is Wi-Fi 5 and HE on 5 GHz is Wi-Fi 6. AX210 clients are Wi-Fi 6E
+capable, but their observed 5 GHz associations are Wi-Fi 6 rather than 6E.
+
+Radio values below are a live follow-up snapshot after the load tests. Rates
+adapt dynamically and were not captured at the exact loss interval, so they
+are correlation context rather than phase-bracketed causality evidence.
+
+| Device | Client adapter | Active Wi-Fi | Channel | Width | Signal | RX / TX rate | Downstream loss at 100+100 |
+| --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| PC1 | MediaTek MT7612U | Wi-Fi 5 | 153 | 40 MHz | -56 dBm | 300 / 360 Mbps | Not tested: broken iperf |
+| PC2 | MediaTek MT7612U | Wi-Fi 5 | 48 | 40 MHz | -65 dBm | 180 / 150 Mbps | 5.910% |
+| PC3 | MediaTek MT7612U | Wi-Fi 5 | 161 | 40 MHz | -50 dBm | 240 / 324 Mbps | 42.868% |
+| PC4 | MediaTek MT7612U | Wi-Fi 5 | 120 | 40 MHz | -55 dBm | 300 / 360 Mbps | 2.009% |
+| PC6 | MediaTek MT7612U | Wi-Fi 5 | 104 | 40 MHz | -50 dBm | 400 / 360 Mbps | 16.545% |
+| PC8 | MediaTek MT7612U | Wi-Fi 5 | 120 | 40 MHz | -59 dBm | 243 / 243 Mbps | 17.672% |
+| PC10 | MediaTek MT7612U | Wi-Fi 5 | 157 | 40 MHz | -52 dBm | 180 / 162 Mbps | 47.935% |
+| PC13 | MediaTek MT7612U | Wi-Fi 5 | 153 | 40 MHz | -59 dBm | 300 / 360 Mbps | 42.965% |
+| PC14 | MediaTek MT7612U | Wi-Fi 5 | 108 | 40 MHz | -55 dBm | 270 / 400 Mbps | 30.535% |
+| PC15 | MediaTek MT7612U | Wi-Fi 5 | 116 | 40 MHz | -60 dBm | 360 / 360 Mbps | 27.425% |
+| PC16 | MediaTek MT7612U | Wi-Fi 5 | 116 | 40 MHz | -47 dBm | 300 / 360 Mbps | 33.427% |
+| PC17 | MediaTek MT7612U | Wi-Fi 5 | 153 | 40 MHz | -57 dBm | 200 / 360 Mbps | 29.959% |
+| PV03 | Intel AX210 | Wi-Fi 6; 6E capable | 144 | 40 MHz | -56 dBm | 573.5 / 573.5 Mbps | 0.671% |
+| PV04 | Intel AX210 | Wi-Fi 6; 6E capable | 153 | 40 MHz | -59 dBm | 344.1 / 487.4 Mbps | 0.761% |
+| PV05 | Intel AX210 | Wi-Fi 6; 6E capable | 132 | 40 MHz | -65 dBm | 413 / 516 Mbps | 0.646% |
+| PV06 | Intel AX200 | Wi-Fi 6 | 157 | 40 MHz | -62 dBm | 309.7 / 458.8 Mbps | 1.002% |
+| PV07 | Intel AX200 | Wi-Fi 6 | 140 | 40 MHz | -68 dBm | 344.1 / 458.8 Mbps | 2.866% |
+| PV09 | Intel AX200 | Wi-Fi 6 | 108 | 40 MHz | -68 dBm | 344.1 / 413 Mbps | Excluded: load timeout |
+| PV10 | Intel AX200 | Wi-Fi 6 | 140 | 40 MHz | -58 dBm | 458.8 / 438.6 Mbps | 0.630% |
+| PV11 | Intel AX200 | Wi-Fi 6 | 116 | 40 MHz | -76 dBm | 206.4 / 292.5 Mbps | 0.619% |
+| PV12 | Intel AX200 | Wi-Fi 6 | 140 | 40 MHz | -56 dBm | 458.8 / 516 Mbps | 0.669% |
+| PV01, PV02, PV13 | Unknown | Unknown | Unknown | Unknown | Unknown | Unknown | Excluded: unverified host keys |
+
+Channel width cannot explain the cohort split because every observed client
+used 40 MHz. Channel alone also does not fit: PC13 lost 42.965% while PV04 lost
+0.761% on channel 153; PC10 lost 47.935% while PV06 lost 1.002% on channel 157;
+and PC15/PC16 lost 27.425/33.427% while PV11 lost 0.619% on channel 116.
+
+Signal and instantaneous rate are not monotonic explanations. Strong PC3 and
+PC16 links at -50 and -47 dBm still lost 42.868% and 33.427%, while PV11 stayed
+near the endpoint floor at -76 dBm and a 206.4 Mbps RX rate. Within the valid
+Wi-Fi 5 sample, the exploratory Pearson correlation between follow-up RX rate
+and loss was only -0.17; the small sample and unbracketed rate snapshot make
+that descriptive rather than inferential.
+
+The strongest observed grouping is client stack: all tested PC clients use the
+same MT7612U/mt76x2u Wi-Fi 5 family and kernel 5.10, while the tested PV clients
+use Intel AX200/AX210 with iwlwifi, Wi-Fi 6, and kernel 6.1. Generation, chipset,
+driver, kernel, and usable PHY capacity therefore move together and cannot yet
+be separated. A matched adapter/driver swap or the same client against an AX-
+only C-460 configuration is needed before attributing the result specifically
+to Wi-Fi 5 backward compatibility.
+
 ## Strong-RF directional versus simultaneous control
 
 | Node | PHY cohort | Directional upload | Directional download loss | Simultaneous upload loss | Simultaneous download loss | Interface error/drop delta |

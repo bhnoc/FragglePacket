@@ -233,6 +233,28 @@ but is not yet proof of an AP firmware defect: the VHT and HE clients also have
 different PHY capacity, drivers, kernels, and iperf versions. Repeat at equal
 fractions of measured directional capacity and map each probe to its AP/radio.
 
+### Client association correlation
+
+| Factor | Older PC cohort | Newer PV cohort | Correlation assessment |
+| --- | --- | --- | --- |
+| Active association | Wi-Fi 5 / VHT | Wi-Fi 6 / HE on 5 GHz | Strong cohort split; no client used Wi-Fi 7/EHT |
+| Adapter/driver | MediaTek MT7612U / mt76x2u | Intel AX200/AX210 / iwlwifi | Fully confounded with Wi-Fi generation |
+| Kernel | 5.10 | 6.1 | Fully confounded with adapter/generation |
+| Channel width | 40 MHz on every observed node | 40 MHz on every observed node | Does not explain split |
+| Signal | -47 to -65 dBm in valid sample | -56 to -76 dBm in valid sample | Weakest valid node, PV11, was clean |
+| Follow-up RX rate | 180-400 Mbps | 206.4-573.5 Mbps | Capacity differs, but rate alone does not fit loss |
+| Mean downstream loss at 100+100 | 27.02% | 0.98% | Large fixed-load cohort difference |
+
+Same-channel counterexamples weaken a channel-specific explanation: PC13 versus
+PV04 on channel 153 lost 42.965% versus 0.761%; PC10 versus PV06 on channel 157
+lost 47.935% versus 1.002%; and PC15/PC16 versus PV11 on channel 116 lost
+27.425/33.427% versus 0.619%. These are not confirmed same-AP comparisons.
+
+The association table supports a legacy-client-stack correlation, not a clean
+Wi-Fi-version causal claim. Wi-Fi generation, chipset, driver, kernel, and PHY
+capacity all change together. The per-device radio table is in
+[`precog-distributed-wireless-20260802.md`](precog-distributed-wireless-20260802.md).
+
 ### PHY-normalized follow-up
 
 | Control | VHT PC6 | HE PV03 |
