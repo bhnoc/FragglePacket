@@ -196,6 +196,21 @@ path is still logically possible because wired and Wi-Fi expose different
 egress identities, but raw 20 Gbps dual-uplink capacity is not a credible
 explanation for this approximately 600-650 Mbps aggregate threshold.
 
+### Same-location recurrence after reports of recovery
+
+| Test | Download | Upload | Downstream loss / responsiveness | Outcome |
+| --- | ---: | ---: | --- | --- |
+| UDP directional download | 350.01 Mbps | N/A | 0% loss | Clean |
+| UDP directional upload | N/A | 348.21 Mbps | 0% loss | Clean |
+| UDP simultaneous | 229.90 Mbps | 348.24 Mbps | 33.534% download loss | Failure reproduced |
+| H3 simultaneous, run 1 | 55.61 Mbps | 123.69 Mbps | 577 ms; latency-connection error | Failure reproduced |
+| H2 simultaneous control | 316.99 Mbps | 243.68 Mbps | 187 ms; completed | Materially healthier |
+| H3 simultaneous, run 2 | 28.09 Mbps | 129.54 Mbps | 383 ms; completed | Failure reproduced again |
+
+RF remained strong on the same 6 GHz / 80 MHz channel at -59 dBm with a 720
+Mbps transmit rate. Claims that the issue had stopped were not supported by the
+controlled recurrence test.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

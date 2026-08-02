@@ -193,3 +193,35 @@ If drops appear before controller egress, the WLAN path is confirmed. If the
 controller remains clean and drops follow one NAT/egress identity, the fault is
 VLAN/edge/uplink-specific. If both circuits work alone and fail only together,
 inspect ECMP symmetry and state ownership.
+
+## Later same-location recurrence check
+
+The baseline was repeated after reports that the user-visible problem was no
+longer occurring. Wi-Fi was the active default route. The pre-test state was
+802.11ax on the same 6 GHz channel 197 / 80 MHz, -59 dBm signal, -92 dBm
+noise, 720 Mbps transmit rate, and MCS 7.
+
+### Deterministic UDP trigger
+
+| Mode | Upload | Upload loss | Download | Download loss | Client counter delta |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Upload only | 348.21 Mbps | 0% | N/A | N/A | 0 errors, 0 drops |
+| Download only | N/A | N/A | 350.01 Mbps | 0% | 0 errors, 0 drops |
+| Simultaneous | 348.24 Mbps | 0% | 229.90 Mbps | 33.534% | 0 errors, 2 drops |
+
+Two client-interface drops cannot explain the tens of thousands of missing
+downstream datagrams. The simultaneous-only, downstream-loss fingerprint
+remains present under strong RF.
+
+### Application-level protocol control
+
+| Order | Protocol | Mode | Download | Upload | Loaded responsiveness | Result |
+| ---: | --- | --- | ---: | ---: | ---: | --- |
+| 1 | H3 | Simultaneous | 55.61 Mbps | 123.69 Mbps | 577 ms | Low; aborted after failed latency connections |
+| 2 | H2 | Simultaneous | 316.99 Mbps | 243.68 Mbps | 187 ms | Medium; completed |
+| 3 | H3 | Simultaneous | 28.09 Mbps | 129.54 Mbps | 383 ms | Low; completed |
+
+The matched H2 run delivered 5.7-11.3 times the H3 download capacity between
+two failing H3 reproductions. The incident was therefore still active at the
+time of this recurrence check; it was not cleared by the deployed
+`21.3.0M-13` firmware or by lower apparent user activity.

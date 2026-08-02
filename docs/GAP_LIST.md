@@ -284,3 +284,9 @@ feature has been scheduled or implemented.
   restart notice names `21.3.0M-8` and `21.3.0M-9`, so it does not directly
   cover this build or the observed duplex-loss symptom. Obtain the `M-13`
   known/resolved-issue notes and use only a TAC-approved firmware comparison.
+- A later recurrence check was run after reports that the issue had stopped.
+  On the same strong 6 GHz / 80 MHz association, directional UDP remained
+  lossless at about 350 Mbps each way, while simultaneous UDP lost 33.5% of
+  downstream traffic. Two surrounding H3 simultaneous runs delivered only
+  55.6 and 28.1 Mbps download with low responsiveness; the intervening H2 run
+  completed at 317.0 Mbps download. The incident remained active.
