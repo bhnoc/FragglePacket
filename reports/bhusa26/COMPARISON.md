@@ -325,6 +325,21 @@ preflight was insufficient to validate synchronized public-listener capacity.
 The successful upload rates cannot be compared directly with the earlier
 100+100 Mbps downstream-loss matrix.
 
+### 64 KiB fanout repeat and core ping
+
+| Metric | 128 KiB | 64 KiB |
+| --- | ---: | ---: |
+| Complete / timed out | 12 / 9 | 12 / 9; same devices |
+| Aggregate receiver rate | 2.371 Gbps | 2.155 Gbps |
+| Retransmissions | 101 | 154 |
+| Wi-Fi 5 valid average | 143.0 Mbps | 142.5 Mbps |
+| Wi-Fi 6 valid average | 306.8 Mbps | 253.8 Mbps |
+
+All 21 nodes started on the exact target second again. The repeated identical
+listener admission pattern strengthens an endpoint/concurrency limitation.
+Every node's core-gateway ping was fully suppressed both idle (0/25 replies)
+and during load (0/100), so no latency-under-load conclusion is possible.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

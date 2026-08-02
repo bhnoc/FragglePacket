@@ -301,6 +301,35 @@ controlled cohort verdict: completion was selective, endpoint pools differed,
 and the command measured unbounded TCP upload rather than the prior 100+100
 downstream-loss condition.
 
+## 64 KiB repeat and core-gateway latency attempt
+
+The same 21-node barrier test was repeated with a 64 KiB application block.
+Each probe sent 25 core-gateway ICMP requests at 0.2-second intervals before
+the barrier and 100 requests at the same cadence during the 20-second load.
+
+| Cohort/metric | 128 KiB run | 64 KiB run |
+| --- | ---: | ---: |
+| Completed nodes | 12 | 12; exact same devices |
+| Listener timeouts | 9 | 9; exact same devices |
+| Aggregate receiver rate | 2.371 Gbps | 2.155 Gbps |
+| Valid-result retransmissions | 101 | 154 |
+| PC cohort valid count | 8 | 8 |
+| PC cohort average receiver rate | 143.0 Mbps | 142.5 Mbps |
+| PV cohort valid count | 4 | 4 |
+| PV cohort average receiver rate | 306.8 Mbps | 253.8 Mbps |
+
+The PC cohort was effectively unchanged by block size. The PV valid-result
+average and total aggregate were lower with 64 KiB, while retransmissions were
+higher. One interleaved public-endpoint sample cannot distinguish a block-size
+effect from endpoint/load variability, especially with selective admission.
+
+Core-gateway ICMP did not provide a latency metric. Every node received zero of
+25 idle requests and zero of 100 loaded requests. The identical idle and load
+suppression indicates an ACL/control-plane policy rather than load-induced loss;
+no RTT samples existed from which to calculate a latency delta. A repeat must
+use each node's responsive local default gateway or another authorized
+near-side target, while retaining the same idle/load bracket.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

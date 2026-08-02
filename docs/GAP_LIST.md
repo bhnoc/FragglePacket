@@ -361,3 +361,11 @@ feature has been scheduled or implemented.
   0/3 Montana. Port-open checks had passed, demonstrating that reachability is
   not synchronized admission/capacity validation. Timeout results were excluded
   rather than recorded as zero throughput. This produced GAP-045.
+- The 64 KiB repeat produced the exact same 12 completed devices and nine
+  listener timeouts. Valid aggregate receiver throughput changed from 2.371 to
+  2.155 Gbps and retransmissions from 101 to 154, but selective public-endpoint
+  admission prevents a clean block-size conclusion.
+- All 21 probes received zero core-gateway ICMP replies both idle (25 requests
+  per node) and under load (100 requests per node) at 0.2-second cadence. This
+  is suppression, not measurable latency or proof of loaded loss. GAP-022's
+  responsive-target fallback is required before repeating the fanout.
