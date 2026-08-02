@@ -48,6 +48,11 @@ feature has been scheduled or implemented.
 | GAP-029 | P1 | No controlled one-circuit-at-a-time comparison workflow | Client-only tests cannot prove which WAN member or shared edge owns a failure. The decisive test requires the same bundle with WAN A only, WAN B only, and both active while collecting member counters. | Export a signed/repeatable test manifest; coordinate pre/post snapshots; label circuit state; ingest per-member utilization, drops, policer, errors, NAT/firewall ownership, and route changes; compare A-only, B-only, and dual-active verdicts without FragglePacket changing production routing itself. |
 | GAP-030 | P1 | No matched wired-versus-Wi-Fi fault-domain control | Generic UDP was lossless at 250 Mbps each way and directionally at 350 Mbps, but lost 8-30% downstream at 350 Mbps bidirectional on strong Wi-Fi. Client-only evidence cannot distinguish WLAN airtime/queue policy from the dual WAN paths. | Run the same signed fixed-port matrix on wireless and wired clients in the same routed policy domain; record interface/radio state and edge counters; attribute a failure to WLAN, shared edge, or WAN only when the matched control supports it. |
 | GAP-031 | P1 | Load phases do not snapshot and normalize interface-counter deltas | The wired interface began with zero drops and ended the near-gigabit suite with 17,517 cumulative drops, while a separately bracketed 350 Mbps bidirectional UDP phase added zero. Without per-phase snapshots, drops cannot be assigned to a protocol, rate, driver ring, or path. | Capture interface counters immediately before and after every phase; report deltas normalized by packets/bytes; distinguish host/driver drops from remote loss; qualify results when counters wrap, reset, or include unrelated traffic. |
+| GAP-032 | P1 | No independently rate-controlled simultaneous upload/download workflow | A single iperf3 `--bidir` session applies the same target in both directions. Independent listeners exposed a sharp Wi-Fi cliff between 250 and 300 Mbps while one direction stayed fixed at 350 Mbps. | Coordinate two time-aligned client sessions against separate server listeners; set independent rates, lengths, ports, durations, and source bindings; merge both JSON results onto one timeline and report the first lossy rate in each direction. |
+| GAP-033 | P1 | No datagram-size and packet-rate pressure matrix | At 350 Mbps each way, Wi-Fi downstream loss increased from 16.3% with 1,472-byte payloads to 65.1% with 200-byte payloads, while wired remained near-lossless. Byte rate alone hides packet-processing and airtime pressure. | Sweep safe non-fragmenting payload sizes, calculate offered/received packets per second, verify actual IP family and MTU, compare directional and bidirectional modes, and distinguish packet-rate ceilings from byte-rate policing. |
+| GAP-034 | P1 | No constant-aggregate flow-count and QoS classification matrix | Wi-Fi loss varied non-monotonically with 1/2/4/8 flows, and DSCP-marked runs were variable without capture proof that markings survived. Fixed hash buckets and WMM/QoS treatment cannot be inferred from one run. | Hold aggregate rate constant while varying flow count and source ports; interleave repeated controls; sweep DSCP classes; capture DSCP before and after the path; correlate results with WMM access category and infrastructure queue counters. |
+| GAP-035 | P1 | No radio-state guard around every load phase | A post-test check showed strong 6 GHz RF, but a roam, channel-width change, PHY-rate change, or power-save transition during an individual phase could invalidate attribution. | Snapshot allowlisted band/channel/width/RSSI/noise/PHY rate/MCS before and after every phase; detect changes; mark affected results invalid; never persist SSID, BSSID, MAC, Bluetooth, or unrelated platform data. |
+| GAP-036 | P2 | No test-endpoint capability discovery | The controlled server already exposed independent iperf3 listeners on 443-445, but the client workflow initially assumed only 443. That delayed port-specific and asymmetric tests. | Probe an explicit allowlist of authorized endpoint ports, validate iperf version/features, record listener purpose, and select independent listeners automatically without broad port scanning or server mutation. |
 
 ## Resolved during this investigation
 
@@ -237,3 +242,32 @@ feature has been scheduled or implemented.
   Wi-Fi ports. The wired result therefore localizes the failure to either the
   WLAN/controller path or VLAN-specific NAT/egress/circuit selection; it does
   not alone prove the dual uplinks are shared identically.
+
+### 2026-08-02 — Wi-Fi duplex-threshold characterization
+
+- With wired and Wi-Fi active simultaneously, identical interface-bound tests
+  were lossless on wired through 350 Mbps each way. Wi-Fi showed downstream
+  loss at four of five 250-350 Mbps rate points while upstream loss remained
+  zero.
+- At 350 Mbps each way, Wi-Fi downstream loss increased from 16.3% with
+  1,472-byte payloads to 65.1% with 200-byte payloads. Wired handled the same
+  packet-rate matrix with at most 0.483% downstream loss and was lossless at
+  1,200 bytes.
+- Full-size Wi-Fi upload-only and download-only controls each delivered about
+  348-350 Mbps with zero loss. Simultaneous traffic delivered 340 Mbps upload
+  with zero loss but only 273 Mbps download with 20.8% loss. Host-interface
+  error and drop counters did not increase during any of those three phases.
+- Independent server listeners permitted asymmetric testing. A fixed 350 Mbps
+  download stayed lossless through 200 Mbps simultaneous upload, was nearly
+  clean at 250 Mbps, then lost 5.6% at 300 Mbps and 13.6% at 350 Mbps. With
+  upload fixed at 350 Mbps, downstream loss similarly jumped from 0.076% at
+  250 Mbps to 19.3% at 300 Mbps and 29.7% at 350 Mbps.
+- UDP ports 443, 444, and 445 all reproduced downstream-only loss. This argues
+  against a UDP/443-only classifier. Flow-count and DSCP results were variable
+  and require repeated, infrastructure-correlated testing before attribution.
+- Sanitized post-test radio snapshots remained on 6 GHz channel 197 / 80 MHz.
+  They ranged from -60 to -63 dBm signal, -89 to -90 dBm noise, and 680-720
+  Mbps transmit rate. The privileged follow-up confirmed 11ax, two spatial
+  streams, and an 800 ns guard interval. The evidence now favors Wi-Fi
+  airtime/controller queue scheduling over MSS, MTU, client CPU, host drops,
+  one UDP port policy, or raw dual-uplink capacity.

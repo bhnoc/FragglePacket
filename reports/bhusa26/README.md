@@ -26,6 +26,7 @@ support a blanket clamp.
 - `location-c-downstairs-strong-radio-retest-20260802.md` — clean downstairs 6 GHz reproduction
 - `dual-uplink-client-probe-20260802.md` — fixed-port TCP/UDP and NAT-affinity probe
 - `wired-control-20260802.md` — matched wired H2/H3, UDP/TCP, and egress control
+- `wifi-duplex-threshold-20260802.md` — packet-size, rate-threshold, port, flow, and DSCP characterization
 - `wifi-diagnostics-20260801-235547.txt` — sanitized RF/platform snapshot
 - `tcp-traceroute-20260801-235547.txt` — TCP/443 path sample
 

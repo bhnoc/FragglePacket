@@ -171,6 +171,31 @@ VLAN-specific firewall, NAT, egress, or circuit policy. Because the two access
 paths exposed different public identities, it does not yet rule out the dual
 uplinks.
 
+## Wi-Fi duplex-threshold fingerprint
+
+| Controlled variable | Wi-Fi result | Wired control | Interpretation |
+| --- | --- | --- | --- |
+| 350 Mbps upload only, 1,472-byte payload | 348.06 Mbps, 0% loss | 348.35 Mbps, 0% loss | Upload direction is healthy |
+| 350 Mbps download only, 1,472-byte payload | 349.87 Mbps, 0% loss | 350.05 Mbps, 0% loss | Download direction is healthy |
+| 350 Mbps each way, 1,472-byte payload | 340.11 Mbps up/0%; 273.45 Mbps down/20.77% | 348.32 Mbps up/0%; 348.50 Mbps down/0% | Loss requires simultaneous Wi-Fi load |
+| 350 Mbps each way, 200-byte payload | 97.09 Mbps up/0%; 113.48 Mbps down/65.12% | 342.00 Mbps up/0%; 345.77 Mbps down/0.48% | Strong packet-rate sensitivity on Wi-Fi |
+| UDP server ports 443, 444, and 445 | All reproduced downstream-only loss | Not needed | Not specific to UDP/443 classification |
+| Host interface counters around directional/bidirectional phases | No new errors or drops | No new errors or drops | Loss is not reported at the client interface |
+
+### Independently controlled directional rates
+
+| Fixed direction | Variable direction | 25-200 Mbps | 250 Mbps | 300 Mbps | 350 Mbps |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Download fixed at 350 Mbps | Upload target | 0% downstream loss | 0.054% | 5.586% | 13.568% |
+| Upload fixed at 350 Mbps | Download target | 0% downstream loss | 0.076% | 19.300% | 29.734% |
+
+The cliff between 250 and 300 Mbps per direction, persistent preference for
+dropping downstream, packet-rate sensitivity, strong 6 GHz RF, and clean wired
+control favor Wi-Fi airtime/controller queue scheduling. A VLAN-specific edge
+path is still logically possible because wired and Wi-Fi expose different
+egress identities, but raw 20 Gbps dual-uplink capacity is not a credible
+explanation for this approximately 600-650 Mbps aggregate threshold.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path
@@ -194,3 +219,4 @@ the test with firewall/NAT and circuit telemetry.
 - [`location-c-downstairs-strong-radio-retest-20260802.md`](location-c-downstairs-strong-radio-retest-20260802.md)
 - [`dual-uplink-client-probe-20260802.md`](dual-uplink-client-probe-20260802.md)
 - [`wired-control-20260802.md`](wired-control-20260802.md)
+- [`wifi-duplex-threshold-20260802.md`](wifi-duplex-threshold-20260802.md)
