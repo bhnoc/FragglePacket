@@ -288,6 +288,21 @@ queueing signal on a path that already includes the WLAN downlink and makes the
 WAN/public endpoint unlikely to be the sole cause, while small-packet ICMP
 treatment prevents treating it as proof of the exact drop location.
 
+### Matched TCP 100+100 Mbps control
+
+| Device/run | Directional download baseline | Simultaneous upload | Simultaneous download | Downstream sender retransmissions |
+| --- | ---: | ---: | ---: | ---: |
+| Wi-Fi 5 PC6 run 1 | 99.9 Mbps | 100 Mbps | 69.8 Mbps | 76 |
+| Wi-Fi 6 PV03 run 1 | 100 Mbps | 100 Mbps | 101 Mbps | 0 |
+| Wi-Fi 5 PC6 run 2 | 99.9 Mbps | 100 Mbps | 61.0 Mbps | 56 |
+| Wi-Fi 6 PV03 run 2 | 100 Mbps | 100 Mbps | 100 Mbps | 0 |
+
+PC6 reproduced the downstream-only impairment with TCP while PV03 remained
+clean. This rules out a UDP-only or QUIC-only explanation for the matched pair.
+TCP expressed the impairment as retransmissions and a 30-39 Mbps delivered-rate
+reduction. XMission's Colorado TCP listeners failed capacity/timing preflight;
+only primary-host results after clean directional baselines were accepted.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

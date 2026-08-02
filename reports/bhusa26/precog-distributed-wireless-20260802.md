@@ -219,6 +219,37 @@ does not by itself identify the dropping component. The decisive follow-up is
 the same PC6/PV03 matrix against an authorized internal wired endpoint, paired
 with live AP/controller radio and WMM queue counters.
 
+## Matched TCP transport control
+
+TCP used independent upload and reverse-download sessions, each paced at 100
+Mbps on a separate listener. XMission's Colorado host failed prerequisite
+controls: one receiver summary stretched an eight-second run to 18.05 seconds,
+PV03 reverse throughput reached only 61.2 Mbps, and another listener reset.
+Those results were excluded.
+
+The primary XMission host then delivered clean directional download baselines
+of 99.9 Mbps to PC6 and 100 Mbps to PV03 with zero sender retransmissions. PC6
+also delivered a 100 Mbps upload-only baseline with zero retransmissions. Only
+after those controls passed was the simultaneous matrix accepted.
+
+| Device/run | Upload delivered | Upload retransmissions | Download delivered | Download sender retransmissions |
+| --- | ---: | ---: | ---: | ---: |
+| PC6 VHT run 1 | 100 Mbps | 3 | 69.8 Mbps | 76 |
+| PV03 HE run 1 | 100 Mbps | 0 | 101 Mbps | 0 |
+| PC6 VHT run 2 | 100 Mbps | 0 | 61.0 Mbps | 56 |
+| PV03 HE run 2 | 100 Mbps | 0 | 100 Mbps | 0 |
+
+PC6 retained only about 70% and 61% of its clean directional downstream rate
+while simultaneous upload remained at the target. PV03 retained full rate in
+both directions in both runs. TCP therefore reproduces the downstream-only
+contention signature observed with UDP: retransmission and congestion control
+present it as a roughly 30-39 Mbps download reduction instead of explicit UDP
+loss.
+
+This is a two-device matched control, not a fleet-wide TCP result. Public TCP
+listeners must pass directional capacity and duration-consistency preflight;
+an available control connection alone does not prove the requested capacity.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

@@ -341,3 +341,13 @@ feature has been scheduled or implemented.
   containing the WLAN downlink and argues against WAN/public service as the
   sole cause, but AP/controller counters or an internal wired endpoint remain
   necessary to identify the dropping queue.
+- A matched TCP control reproduced the UDP signature. PC6 delivered 100 Mbps
+  upload in two simultaneous runs but only 69.8 and 61.0 Mbps download, with 76
+  and 56 downstream-sender retransmissions. PV03 delivered 100-101 Mbps in both
+  directions with zero retransmissions in both matched runs.
+- Public TCP listener preflight was essential. XMission's Colorado endpoint
+  produced a duration-inconsistent 44.6 Mbps receiver summary, a 61.2 Mbps
+  reverse ceiling on the healthy control, and a reset. The primary endpoint
+  passed 99.9-100 Mbps directional controls before paired results were accepted.
+  GAP-040 must cover capacity and duration consistency by transport, not merely
+  listener reachability.
