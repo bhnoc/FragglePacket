@@ -21,6 +21,7 @@ pub mod tcp_options_echo;
 pub mod quic_pmtud;
 pub mod dns_secure;
 pub mod scenario;
+pub mod pcap_report;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

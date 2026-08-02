@@ -1,5 +1,6 @@
 pub mod dns;
 pub mod icmp;
+pub mod preflight;
 pub mod quic;
 pub mod resolve;
 pub mod tcp;
@@ -10,6 +11,10 @@ pub use dns::probe_dns_edns;
 pub use icmp::{
     binary_search_mtu_icmp, icmp_checksum, probe_icmp, send_icmp_probe, ICMP_ECHO_REQUEST,
     ICMP_HEADER_SIZE, IP_HEADER_SIZE,
+};
+pub use preflight::{
+    default_h3_endpoints, network_verdict, preflight_one, EndpointResult, EndpointVerdict,
+    NetworkVerdict, PreflightReport, Protocol, ProtocolReport,
 };
 pub use quic::{check_quic_support, probe_quic_mtu, quic_mtu_probe_async, SkipServerVerification};
 pub use resolve::resolve_hostname;

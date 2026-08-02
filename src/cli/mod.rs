@@ -84,6 +84,12 @@ pub enum Commands {
     Serve(commands::serve::ServeArgs),
     /// Print a hexdump of a packet described by our DSL (demo helper)
     DslDemo(commands::dsl_demo::DslDemoArgs),
+    /// Run a budget-guarded, radio-monitored load phase (GAP-027/GAP-047)
+    LoadGuard(commands::load_guard::LoadGuardArgs),
+    /// Preflight ALPN/Alt-Svc + real handshake capability across endpoints (GAP-025)
+    Preflight(commands::preflight::PreflightArgs),
+    /// Analyze a PCAP/pcapng capture: vantage point, capture health, qualified MTU/loss verdicts (GAP-019)
+    PcapReport(commands::pcap_report::PcapReportArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -119,6 +125,9 @@ pub fn dispatch(args: Args) {
         Some(Commands::Scenario(a)) => commands::scenario::run(&a),
         Some(Commands::Serve(a)) => commands::serve::run(&a),
         Some(Commands::DslDemo(a)) => commands::dsl_demo::run(&a),
+        Some(Commands::LoadGuard(a)) => commands::load_guard::run(&a),
+        Some(Commands::Preflight(a)) => commands::preflight::run(&a),
+        Some(Commands::PcapReport(a)) => commands::pcap_report::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

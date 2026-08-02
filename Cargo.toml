@@ -42,7 +42,7 @@ pcap-file = "3.0.0-rc1"     # PCAP file writing (pure Rust) - using 3.0 for bett
 thiserror = "1.0"           # Error handling
 
 # HTTPS testing
-native-tls = "0.2"          # TLS support for HTTPS testing
+native-tls = { version = "0.2", features = ["alpn"] } # TLS support for HTTPS testing; alpn needed for GAP-025 preflight
 
 # Dioxus Desktop GUI
 dioxus = { version = "0.6", features = ["desktop"] }
