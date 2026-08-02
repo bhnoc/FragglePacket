@@ -1,4 +1,4 @@
-# BHUSA26 Conference WLAN Impairment: Single-Sheet Evidence Report
+# BHUSA26 Network Performance Investigation: Single-Sheet Evidence Report
 
 We spent two days trying to reproduce this problem, move it, and make it fail under controlled conditions. That work covered more than 250 tests or individual node/listener sessions across several conference locations, two client generations, TCP, UDP, HTTP/2, HTTP/3, multiple packet sizes and rates, and both wired and off-site controls. The distributed work inventoried 24 probes, established 21 trusted nodes, exercised 21 listeners across three XMission services, and sent 4,875 synchronized ICMP requests during the 64 KiB, 512 KiB, and maximum bidirectional runs. This isn't a general speed problem. The affected clients can download quickly or upload quickly when each direction runs alone. The failure appears when upload and download overlap. On the best 6 GHz laptop link, HTTP/3 download fell from 679.3 Mbps to 41.4 Mbps, a loss of 637.9 Mbps, while HTTP/2 still delivered 333.8 Mbps down and 394.9 Mbps up. Generic UDP and TCP reproduced the same downstream bias.
 
