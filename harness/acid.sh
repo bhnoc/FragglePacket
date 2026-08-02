@@ -13,6 +13,20 @@ require_bin
 mkdir -p "$HARNESS_DIR/checks"
 
 filters=("$@")
+
+# Most check files open with `check_ok "... cargo test ..."`, so one broken unit
+# test makes every one of them fail and buries the real regressions. Build the
+# test binary once up front and say plainly what broke, rather than reporting
+# the same root cause fifty times.
+if [ "${FP_SKIP_TEST_PREFLIGHT:-0}" != "1" ]; then
+    if ! _test_out="$(cargo test --release --lib --manifest-path "$REPO_ROOT/Cargo.toml" 2>&1)"; then
+        printf '%stest preflight FAILED%s — the lib tests do not pass, so every check that\n' "$_c_red" "$_c_off"
+        printf 'invokes cargo test will fail for that one reason. Fix these first:\n\n'
+        printf '%s\n' "$_test_out" | grep -E '^\s+network_tests::|^\s+probe::|^\s+load_guard::|^\s+fuzzing::' | sort -u | sed 's/^/    /'
+        printf '\n%s\n' "$(printf '%s' "$_test_out" | grep -E '^test result:' | tail -1)"
+        exit 1
+    fi
+fi
 matches_filter() {
     [ ${#filters[@]} -eq 0 ] && return 0
     local base pat
