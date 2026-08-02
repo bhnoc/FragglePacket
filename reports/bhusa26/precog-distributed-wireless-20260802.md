@@ -330,6 +330,46 @@ no RTT samples existed from which to calculate a latency delta. A repeat must
 use each node's responsive local default gateway or another authorized
 near-side target, while retaining the same idle/load bracket.
 
+## 512 KiB pruned-listener repeat
+
+The nine listener assignments that timed out identically in the 128 and 64 KiB
+fanouts were removed. The remaining 12 node/listener pairs repeated the shared-
+epoch, four-stream, 20-second TCP upload with a 512 KiB application block.
+
+| Device | 128 KiB received | 64 KiB received | 512 KiB received | 512 KiB retransmissions |
+| --- | ---: | ---: | ---: | ---: |
+| PC2 | 121.5 Mbps | 122.9 Mbps | 118.0 Mbps | 3 |
+| PC3 | 154.3 Mbps | 168.2 Mbps | 161.1 Mbps | 3 |
+| PC4 | 133.5 Mbps | 139.7 Mbps | 138.0 Mbps | 1 |
+| PC8 | 133.5 Mbps | 132.9 Mbps | 127.9 Mbps | 5 |
+| PC10 | 122.1 Mbps | 122.4 Mbps | 115.5 Mbps | 7 |
+| PC15 | 173.4 Mbps | 145.6 Mbps | 164.4 Mbps | 13 |
+| PC16 | 171.9 Mbps | 174.5 Mbps | 107.0 Mbps | 9 |
+| PC17 | 133.9 Mbps | 133.8 Mbps | 142.7 Mbps | 7 |
+| PV03 | 361.3 Mbps | 264.3 Mbps | 348.4 Mbps | 18 |
+| PV05 | 261.0 Mbps | 201.7 Mbps | 341.1 Mbps | 24 |
+| PV06 | 310.2 Mbps | 320.2 Mbps | 162.4 Mbps | 10 |
+| PV09 | 294.7 Mbps | 229.2 Mbps | 276.8 Mbps | 18 |
+
+| Cohort/metric | 512 KiB result |
+| --- | ---: |
+| Completion | 12 of 12 |
+| Aggregate sender / receiver | 2.292 / 2.203 Gbps |
+| Total retransmissions | 118 |
+| PC valid count / average receiver | 8 / 134.3 Mbps |
+| PV valid count / average receiver | 4 / 282.1 Mbps |
+
+Removing the known-bad public assignments eliminated admission timeouts, which
+supports the earlier endpoint/listener interpretation. Throughput did not vary
+monotonically with application block size: PC16 and PV06 fell sharply at 512
+KiB while PV05 improved sharply, and several PC nodes remained stable. These
+single public-endpoint samples show time/path variability and do not establish
+a 64, 128, or 512 KiB optimum.
+
+The retained core-gateway control was again fully suppressed: every selected
+node received zero of 25 idle replies and zero of 100 loaded replies. It still
+provides no latency-under-load measurement.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

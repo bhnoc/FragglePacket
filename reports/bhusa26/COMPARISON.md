@@ -340,6 +340,21 @@ listener admission pattern strengthens an endpoint/concurrency limitation.
 Every node's core-gateway ping was fully suppressed both idle (0/25 replies)
 and during load (0/100), so no latency-under-load conclusion is possible.
 
+### 512 KiB pruned-listener repeat
+
+| Metric | 128 KiB | 64 KiB | 512 KiB pruned |
+| --- | ---: | ---: | ---: |
+| Attempted / completed | 21 / 12 | 21 / 12 | 12 / 12 |
+| Aggregate receiver rate | 2.371 Gbps | 2.155 Gbps | 2.203 Gbps |
+| Retransmissions | 101 | 154 | 118 |
+| Wi-Fi 5 valid average | 143.0 Mbps | 142.5 Mbps | 134.3 Mbps |
+| Wi-Fi 6 valid average | 306.8 Mbps | 253.8 Mbps | 282.1 Mbps |
+
+Pruning the nine listener assignments that failed both earlier barriers removed
+all admission timeouts. Per-node changes were non-monotonic, so these runs do
+not identify a preferred block size. Core ICMP remained fully suppressed in
+both idle and loaded phases.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

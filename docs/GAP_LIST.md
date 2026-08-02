@@ -369,3 +369,11 @@ feature has been scheduled or implemented.
   per node) and under load (100 requests per node) at 0.2-second cadence. This
   is suppression, not measurable latency or proof of loaded loss. GAP-022's
   responsive-target fallback is required before repeating the fanout.
+- A 512 KiB repeat removed the nine listener assignments that failed both prior
+  barriers. All 12 retained assignments then completed, delivering 2.203 Gbps
+  aggregate receiver throughput with 118 retransmissions. This supports fixed
+  endpoint/listener admission limitations rather than nine client failures.
+- Per-node throughput was not monotonic across 64, 128, and 512 KiB blocks;
+  individual PV/PC nodes moved sharply in both directions while others stayed
+  stable. Public-endpoint samples cannot select an optimal application block
+  size without interleaved repetition and controlled endpoint telemetry.
