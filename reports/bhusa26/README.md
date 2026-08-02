@@ -14,6 +14,7 @@ blanket clamp.
 
 ## Committed reports
 
+- `COMPARISON.md` — living non-2.4 GHz result and hypothesis matrix
 - `location-a-baseline-20260801.md` — room WLAN baseline
 - `location-a-blackhatusa-control-20260802.md` — same-room general Black Hat WLAN control
 - `location-a-mgm-external-control-20260802.md` — external-infrastructure control
