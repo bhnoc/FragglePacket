@@ -250,6 +250,57 @@ This is a two-device matched control, not a fleet-wide TCP result. Public TCP
 listeners must pass directional capacity and duration-consistency preflight;
 an available control connection alone does not prove the requested capacity.
 
+## Twenty-one-listener overlapping TCP fanout
+
+All 21 trusted probes were assigned one unique XMission listener and scheduled
+for the same start epoch. Each invoked the requested 20-second TCP upload with
+four parallel streams and a 128 KiB application block (`-t 20 -P 4 -l 128K`).
+PC1's missing `libiperf0` and `libsctp1` packages were installed and verified
+before the run; its later timeout was not a loader failure.
+
+| Device | XMission pool | Port | Status | Sender rate | Receiver rate | Retransmissions |
+| --- | --- | ---: | --- | ---: | ---: | ---: |
+| PC1 | Primary | 5201 | Timed out; no test connection | N/A | N/A | N/A |
+| PC2 | Primary | 5202 | Complete | 127.3 Mbps | 121.5 Mbps | 2 |
+| PC3 | Primary | 5203 | Complete | 159.9 Mbps | 154.3 Mbps | 5 |
+| PC4 | Primary | 5204 | Complete | 137.5 Mbps | 133.5 Mbps | 3 |
+| PC6 | Primary | 5205 | Timed out; no test connection | N/A | N/A | N/A |
+| PC8 | Primary | 5206 | Complete | 139.0 Mbps | 133.5 Mbps | 3 |
+| PC10 | Primary | 5207 | Complete | 128.0 Mbps | 122.1 Mbps | 2 |
+| PC13 | Primary | 5208 | Timed out; no test connection | N/A | N/A | N/A |
+| PC14 | Primary | 5209 | Timed out; no test connection | N/A | N/A | N/A |
+| PC15 | Colorado | 5201 | Complete | 179.1 Mbps | 173.4 Mbps | 7 |
+| PC16 | Colorado | 5202 | Complete | 179.0 Mbps | 171.9 Mbps | 9 |
+| PC17 | Colorado | 5203 | Complete | 143.2 Mbps | 133.9 Mbps | 10 |
+| PV03 | Colorado | 5204 | Complete | 372.0 Mbps | 361.3 Mbps | 23 |
+| PV04 | Colorado | 5205 | Timed out after partial admission | N/A | N/A | N/A |
+| PV05 | Colorado | 5206 | Complete | 268.9 Mbps | 261.0 Mbps | 9 |
+| PV06 | Colorado | 5207 | Complete | 319.3 Mbps | 310.2 Mbps | 13 |
+| PV07 | Colorado | 5208 | Timed out; no test connection | N/A | N/A | N/A |
+| PV09 | Colorado | 5209 | Complete | 305.0 Mbps | 294.7 Mbps | 15 |
+| PV10 | Montana | 5201 | Timed out; no test connection | N/A | N/A | N/A |
+| PV11 | Montana | 5205 | Timed out; no test connection | N/A | N/A | N/A |
+| PV12 | Montana | 5209 | Timed out; no test connection | N/A | N/A | N/A |
+
+All 21 probes recorded the exact target start epoch. Twelve completed valid
+20-second intervals, delivering 2.458 Gbps aggregate sender rate and 2.371 Gbps
+aggregate receiver rate with 101 total retransmissions. Nine were terminated
+by the 50-second safety timeout. Eight never established an iperf test
+connection; PV04 admitted three streams and one interval but did not complete.
+
+Completion by public pool was 5/9 primary, 7/9 Colorado, and 0/3 Montana. The
+ports had accepted TCP reachability checks before the run, so simple port-open
+preflight did not predict simultaneous listener admission. These timeouts must
+not be recorded as zero throughput or attributed to WLAN performance. They
+show that the public services cannot currently support a valid 21-listener
+synchronized comparison under this command without endpoint coordination.
+
+Among completed results, eight PC-series probes averaged 143.0 Mbps received
+and four PV-series probes averaged 306.8 Mbps. That descriptive split is not a
+controlled cohort verdict: completion was selective, endpoint pools differed,
+and the command measured unbounded TCP upload rather than the prior 100+100
+downstream-loss condition.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

@@ -303,6 +303,28 @@ TCP expressed the impairment as retransmissions and a 30-39 Mbps delivered-rate
 reduction. XMission's Colorado TCP listeners failed capacity/timing preflight;
 only primary-host results after clean directional baselines were accepted.
 
+### Twenty-one-listener overlapping TCP upload
+
+| Metric | Result |
+| --- | ---: |
+| Scheduled probes/listeners | 21 / 21 |
+| Exact same-second starts | 21 |
+| Complete 20-second results | 12 |
+| Safety timeouts | 9 |
+| Valid aggregate sender rate | 2.458 Gbps |
+| Valid aggregate receiver rate | 2.371 Gbps |
+| Retransmissions across valid results | 101 |
+| Primary pool completion | 5 of 9 |
+| Colorado pool completion | 7 of 9 |
+| Montana pool completion | 0 of 3 |
+
+Each node used four TCP streams and a 128 KiB block. Eight timeouts established
+no test connection; one admitted only three streams and one interval. They are
+endpoint/admission failures, not zero-throughput client results. Port-open
+preflight was insufficient to validate synchronized public-listener capacity.
+The successful upload rates cannot be compared directly with the earlier
+100+100 Mbps downstream-loss matrix.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

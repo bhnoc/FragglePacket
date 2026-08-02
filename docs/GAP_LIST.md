@@ -61,6 +61,7 @@ feature has been scheduled or implemented.
 | GAP-042 | P1 | No PHY-normalized fleet comparison | Fixed 100+100 Mbps load produced a sharp VHT-versus-HE split, but client PHY rates and generations differ. Fixed rates can conflate normal airtime saturation with compatibility defects. | Calculate offered airtime/PHY fractions per phase, enforce comparable normalized targets, stratify by PHY generation/driver/kernel, and require strong-RF directional controls before attributing a cohort difference to AP backward compatibility. |
 | GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on PC6/PV03 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
 | GAP-044 | P1 | No local-gateway latency-under-load bracket | Concurrent gateway ping localized PC6 queueing to a path already containing the WLAN downlink: average RTT rose from 1.646 ms idle to 7.146 ms during a 23.550% downstream-loss phase, while PV03 remained near idle. FragglePacket cannot coordinate or interpret this near-side control. | Pair idle, upload, download, and simultaneous load phases with interface-bound first-hop probes; report loss and RTT deltas; correlate their timeline with throughput loss; fall back when ICMP is suppressed; warn that small ICMP packets may receive different queue treatment. |
+| GAP-045 | P1 | No synchronized public-listener admission validation | Twenty-one probes started four-stream TCP tests on 21 ports in the same second after port-open checks, but only 12 completed. Eight never established a test connection and one partially admitted streams before timeout. Treating these as zero throughput would falsely implicate clients. | Implement a barrier-synchronized fanout with per-listener protocol admission, server-wide concurrency/capacity metadata, start/end skew validation, partial-stream detection, safety timeouts, minimum valid-cohort rules, and explicit endpoint/admission verdicts that never become zero-throughput measurements. |
 
 ## Resolved during this investigation
 
@@ -351,3 +352,12 @@ feature has been scheduled or implemented.
   passed 99.9-100 Mbps directional controls before paired results were accepted.
   GAP-040 must cover capacity and duration consistency by transport, not merely
   listener reachability.
+- A 21-node/21-listener overlapping TCP fanout started every probe at the exact
+  same epoch with four streams for 20 seconds. Twelve completed and delivered
+  2.371 Gbps aggregate receiver throughput; nine reached the 50-second safety
+  timeout. Eight timed-out clients never established a test connection and one
+  admitted only three streams and one interval.
+- Completion clustered by public endpoint pool: 5/9 primary, 7/9 Colorado, and
+  0/3 Montana. Port-open checks had passed, demonstrating that reachability is
+  not synchronized admission/capacity validation. Timeout results were excluded
+  rather than recorded as zero throughput. This produced GAP-045.
