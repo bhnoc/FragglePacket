@@ -22,3 +22,9 @@ Thumbs.db
 
 # Scratch / temp
 /temp/
+/tmp/
+/output/
+
+# Harness fixtures are committed on purpose: parsers are tested against real
+# captured tool output, not assumed formats. Overrides the *.json rule above.
+!/harness/fixtures/**
