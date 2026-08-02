@@ -132,6 +132,37 @@ breaks legacy clients" claim. It leaves a narrower and still actionable issue:
 strong-RF legacy VHT clients have far poorer C-460 downstream efficiency than
 HE clients and are therefore driven into airtime/queue loss much sooner.
 
+## Gateway-under-load localization
+
+Local-gateway ICMP was measured concurrently with directional and simultaneous
+public UDP load. The gateway address is omitted from this report. These probes
+include the WLAN downlink and provide a useful near-side control while an
+authorized internal throughput endpoint is being prepared.
+
+| Node/phase | Public UDP result | Gateway loss | Gateway RTT min/avg/max |
+| --- | --- | ---: | --- |
+| P05 VHT idle | No load | 0% | 1.410 / 1.646 / 3.356 ms |
+| P05 upload 150 | 0.002% loss | 0% | 1.424 / 2.605 / 10.984 ms |
+| P05 download 150 | 5.518% loss; est. 141.7 Mbps received | 0% | 1.258 / 4.116 / 13.816 ms |
+| P05 simultaneous 100+100 | Upload 0.001% loss; download 23.550% loss | 0% | 1.454 / 7.146 / 22.738 ms |
+| P15 HE idle | No load | 0% | 1.993 / 2.340 / 3.223 ms |
+| P15 upload 150 | 0% loss; sender reached 148.2 Mbps | 0% | 1.816 / 2.854 / 5.511 ms |
+| P15 download 150 | 0.444% loss; est. 149.4 Mbps received | 0% | 1.703 / 2.460 / 3.503 ms |
+| P15 simultaneous 100+100 | Upload 0% loss; download 0.400% loss | 0% | 1.766 / 2.975 / 7.003 ms |
+
+P05 gateway latency inflated in the same phases as downstream UDP loss and was
+largest during the reproduced simultaneous failure. P15 stayed close to its
+idle gateway baseline under the same phases. Because gateway replies traverse
+the client-facing wireless leg, this co-movement is strong evidence that the
+P05 impairment is already present on the WLAN side; it argues against the WAN,
+dual uplinks, or public server being the sole cause.
+
+There was no gateway ICMP loss, and small ICMP packets can be queued or treated
+differently from bulk UDP. This test therefore localizes queueing latency but
+does not by itself identify the dropping component. The decisive follow-up is
+the same P05/P15 matrix against an authorized internal wired endpoint, paired
+with live AP/controller radio and WMM queue counters.
+
 ## Counter-liveness limitation
 
 Ordinary interface error/drop counters advanced normally as a telemetry source

@@ -250,6 +250,22 @@ strong RF and clean upload beyond 200 Mbps. Ask Arista to investigate legacy
 VHT downstream scheduling/efficiency, but do not present this as a proven
 generic C-460 bidirectional defect.
 
+### Gateway-under-load localization
+
+| Control | VHT P05 | HE P15 |
+| --- | --- | --- |
+| Idle gateway RTT avg/max | 1.646 / 3.356 ms | 2.340 / 3.223 ms |
+| Download 150: loss; gateway avg/max | 5.518%; 4.116 / 13.816 ms | 0.444%; 2.460 / 3.503 ms |
+| Upload 150: loss; gateway avg/max | 0.002%; 2.605 / 10.984 ms | 0%; 2.854 / 5.511 ms |
+| Simultaneous 100+100: downstream loss | 23.550% | 0.400% |
+| Simultaneous 100+100: gateway avg/max | 7.146 / 22.738 ms | 2.975 / 7.003 ms |
+
+P05's local-gateway latency increased with the exact downstream-loss condition;
+P15 remained close to idle. No gateway ICMP packets were lost. This places the
+queueing signal on a path that already includes the WLAN downlink and makes the
+WAN/public endpoint unlikely to be the sole cause, while small-packet ICMP
+treatment prevents treating it as proof of the exact drop location.
+
 ## Wi-Fi/VLAN versus egress swap matrix
 
 The highest-value infrastructure test is to preserve the client access path

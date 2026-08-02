@@ -60,6 +60,7 @@ feature has been scheduled or implemented.
 | GAP-041 | P1 | No remote probe health and dependency preflight | One trusted node had a broken iperf binary due to missing `libiperf.so.0`, one repeatedly timed out, and three presented changed SSH host keys. Treating those as network failures would corrupt fleet conclusions. | Preflight executable/library health, clock, route, radio association, disk/CPU, and endpoint reachability; quarantine unhealthy nodes; require independently verified host-key rotation; report excluded nodes and reasons. |
 | GAP-042 | P1 | No PHY-normalized fleet comparison | Fixed 100+100 Mbps load produced a sharp VHT-versus-HE split, but client PHY rates and generations differ. Fixed rates can conflate normal airtime saturation with compatibility defects. | Calculate offered airtime/PHY fractions per phase, enforce comparable normalized targets, stratify by PHY generation/driver/kernel, and require strong-RF directional controls before attributing a cohort difference to AP backward compatibility. |
 | GAP-043 | P1 | No telemetry-counter liveness validation | Privileged wireless station counters were readable on P05/P15 but did not advance during known 100+100 Mbps traffic. A zero delta from a frozen driver counter can be falsely reported as proof of zero retries or drops. | Bracket a known packet stimulus, verify expected packet counters advance, detect frozen/reset/wrapped counters, qualify unusable sources, and require an alternate source such as AP/controller telemetry or capture before issuing a zero-drop verdict. |
+| GAP-044 | P1 | No local-gateway latency-under-load bracket | Concurrent gateway ping localized P05 queueing to a path already containing the WLAN downlink: average RTT rose from 1.646 ms idle to 7.146 ms during a 23.550% downstream-loss phase, while P15 remained near idle. FragglePacket cannot coordinate or interpret this near-side control. | Pair idle, upload, download, and simultaneous load phases with interface-bound first-hop probes; report loss and RTT deltas; correlate their timeline with throughput loss; fall back when ICMP is suppressed; warn that small ICMP packets may receive different queue treatment. |
 
 ## Resolved during this investigation
 
@@ -330,3 +331,13 @@ feature has been scheduled or implemented.
   100+100 Mbps traffic. They cannot localize loss or support a zero-retry/drop
   conclusion. Ordinary interface counters showed no host errors/drops, but AP
   or over-the-air evidence is still required.
+- Concurrent local-gateway probes added a near-side discriminator. P05 gateway
+  RTT rose from 1.646 ms idle to 4.116 ms during a 150 Mbps download with
+  5.518% downstream loss, then to 7.146 ms average and 22.738 ms maximum during
+  a 100+100 phase with 23.550% downstream loss. P15 stayed near its 2.340 ms
+  idle average and near the public-listener loss floor under matching phases.
+- Gateway ICMP had zero loss on both nodes and may receive favorable small-
+  packet treatment. Its latency co-movement places queueing on a path already
+  containing the WLAN downlink and argues against WAN/public service as the
+  sole cause, but AP/controller counters or an internal wired endpoint remain
+  necessary to identify the dropping queue.
