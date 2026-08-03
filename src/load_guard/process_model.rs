@@ -56,6 +56,113 @@ pub struct ReceivePathCounters {
     pub qdisc_drops: Metric<u64>,
 }
 
+/// Host resources that can limit a receive path independently of the network.
+///
+/// GAP-069's acceptance criteria name socket memory and per-core CPU/softirq
+/// alongside the receive-path counters, because a paired-process run competing
+/// for socket buffers or pinned to a saturated core produces asymmetry the
+/// network never caused. Socket memory is readable on macOS via sysctl, so it
+/// is genuinely measured here rather than platform-limited; softirq accounting
+/// has no macOS equivalent and stays ingest-only.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostResourceCounters {
+    /// `net.inet.tcp.recvspace` on Darwin, `net.ipv4.tcp_rmem` default on Linux.
+    pub socket_recv_buffer_bytes: Metric<u64>,
+    pub socket_send_buffer_bytes: Metric<u64>,
+    /// `kern.ipc.maxsockbuf`. A paired run needing more than this across two
+    /// processes will be buffer-limited rather than path-limited.
+    pub max_socket_buffer_bytes: Metric<u64>,
+    pub cpu_core_count: Metric<u64>,
+    /// Per-core softirq time. Linux `/proc/softirqs` only; no Darwin analogue.
+    pub softirq_net_rx_events: Metric<u64>,
+}
+
+impl HostResourceCounters {
+    fn sysctl_u64(key: &str) -> Option<u64> {
+        let out = Command::new("sysctl").args(["-n", key]).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+    }
+
+    /// Reads what this platform actually exposes. A key that cannot be read is
+    /// platform-limited, never zero: a socket buffer of 0 bytes would read as a
+    /// misconfigured host rather than an unread counter.
+    pub fn sample_live() -> Self {
+        let recv = Self::sysctl_u64(if cfg!(target_os = "linux") {
+            "net.core.rmem_default"
+        } else {
+            "net.inet.tcp.recvspace"
+        });
+        let send = Self::sysctl_u64(if cfg!(target_os = "linux") {
+            "net.core.wmem_default"
+        } else {
+            "net.inet.tcp.sendspace"
+        });
+        let maxbuf = Self::sysctl_u64(if cfg!(target_os = "linux") {
+            "net.core.rmem_max"
+        } else {
+            "kern.ipc.maxsockbuf"
+        });
+        let cores = Self::sysctl_u64(if cfg!(target_os = "linux") {
+            "kernel.sched_domain.cpu0.name"
+        } else {
+            "hw.ncpu"
+        });
+
+        let m = |v: Option<u64>| match v {
+            Some(x) => Metric::measured(x),
+            None => Metric::platform_limited(),
+        };
+
+        Self {
+            socket_recv_buffer_bytes: m(recv),
+            socket_send_buffer_bytes: m(send),
+            max_socket_buffer_bytes: m(maxbuf),
+            cpu_core_count: m(cores),
+            // No macOS equivalent of /proc/softirqs.
+            softirq_net_rx_events: Metric::platform_limited(),
+        }
+    }
+
+    pub fn platform_limited() -> Self {
+        Self {
+            socket_recv_buffer_bytes: Metric::platform_limited(),
+            socket_send_buffer_bytes: Metric::platform_limited(),
+            max_socket_buffer_bytes: Metric::platform_limited(),
+            cpu_core_count: Metric::platform_limited(),
+            softirq_net_rx_events: Metric::platform_limited(),
+        }
+    }
+
+    /// Ingests an operator-supplied export. An absent field stays
+    /// platform-limited rather than becoming an invented zero.
+    pub fn from_external(e: &ExternalHostResources) -> Self {
+        let m = |v: Option<u64>| match v {
+            Some(x) => Metric::operator_supplied(x),
+            None => Metric::platform_limited(),
+        };
+        Self {
+            socket_recv_buffer_bytes: m(e.socket_recv_buffer_bytes),
+            socket_send_buffer_bytes: m(e.socket_send_buffer_bytes),
+            max_socket_buffer_bytes: m(e.max_socket_buffer_bytes),
+            cpu_core_count: m(e.cpu_core_count),
+            softirq_net_rx_events: m(e.softirq_net_rx_events),
+        }
+    }
+}
+
+/// Operator-supplied host-resource export, typically from a Linux probe.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ExternalHostResources {
+    pub socket_recv_buffer_bytes: Option<u64>,
+    pub socket_send_buffer_bytes: Option<u64>,
+    pub max_socket_buffer_bytes: Option<u64>,
+    pub cpu_core_count: Option<u64>,
+    pub softirq_net_rx_events: Option<u64>,
+}
+
 impl ReceivePathCounters {
     /// The macOS/non-Linux constructor. Every field is explicitly
     /// `platform_limited` -- never a bare `0` standing in for "unmeasurable
@@ -169,6 +276,8 @@ pub struct ProcessModelTrial {
     pub upload_mbps: Option<f64>,
     pub download_mbps: Option<f64>,
     pub receive_path: ReceivePathCounters,
+    /// Host resources that could limit this trial independently of the network.
+    pub host_resources: HostResourceCounters,
 }
 
 impl ProcessModelTrial {
@@ -317,6 +426,7 @@ mod tests {
             upload_mbps: up,
             download_mbps: down,
             receive_path: ReceivePathCounters::platform_limited(),
+            host_resources: HostResourceCounters::platform_limited(),
         }
     }
 

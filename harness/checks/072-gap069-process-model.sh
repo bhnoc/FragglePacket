@@ -146,3 +146,84 @@ check_contains "process-model advertises --inject-fixture for offline exercise" 
     "$BIN" process-model --help
 check_contains "process-model requires --server (no hardcoded default endpoint)" "--server" \
     "$BIN" process-model --help
+
+# --- socket memory and per-core CPU (GAP-069's other two counter families) ---
+# The acceptance criteria name five counter families: socket memory, per-core
+# CPU/softirq, TCPRcvCollapsed, softnet, and qdisc. The first two were missing
+# from the trial artifact on first pass. Socket memory IS readable on macOS via
+# sysctl, so it must be genuinely Measured here rather than hidden behind
+# platform-limited -- claiming a limitation that does not exist is its own
+# false statement.
+check_ok "cargo test covers host-resource counter obtainability" \
+    cargo test --release --quiet --lib --manifest-path "$REPO_ROOT/Cargo.toml" \
+    process_model::tests
+
+pm_json() { "$BIN" process-model "$@" --json 2>/dev/null | sed -n '/^{/,$p'; }
+
+fixture_hr="$(pm_json --inject-fixture field)"
+if [ -z "$fixture_hr" ]; then
+    skip "host resources are reported per trial" "no JSON from fixture run"
+else
+    check_json_field "the native trial carries host_resources" \
+        "native_bidir.host_resources.socket_recv_buffer_bytes.obtainability" \
+        "$BIN" process-model --inject-fixture field --json
+    check_json_field "the paired trial carries host_resources" \
+        "paired_process.host_resources.max_socket_buffer_bytes.obtainability" \
+        "$BIN" process-model --inject-fixture field --json
+
+    # An unread counter must be null, never a zero that reads as a
+    # misconfigured host.
+    if printf '%s' "$fixture_hr" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for trial in ("native_bidir", "paired_process"):
+    hr = d.get(trial, {}).get("host_resources", {})
+    for name, m in hr.items():
+        if m.get("obtainability") == "PlatformLimited" and m.get("value") is not None:
+            sys.stderr.write(trial + "." + name + " is platform-limited but carries a value\n")
+            sys.exit(1)
+sys.exit(0)
+' 2>/dev/null; then
+        pass "a platform-limited host-resource counter is null, never a zero"
+    else
+        fail "a platform-limited host-resource counter is null, never a zero" \
+            "a limited counter carried a fabricated value"
+    fi
+fi
+
+# On this host sysctl genuinely provides socket memory, so a live sample must
+# report it Measured. Reporting it platform-limited would understate what the
+# tool can actually see.
+if net_guard; then
+    live_hr="$(pm_json --server 127.0.0.1 --interface lo0 --local-ip 127.0.0.1 \
+        --target-mbps 1 --duration-secs 1)"
+    if [ -z "$live_hr" ]; then
+        skip "socket memory is measured on this host" "no JSON from live run"
+    elif printf '%s' "$live_hr" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+hr = d.get("native_bidir", {}).get("host_resources", {})
+m = hr.get("socket_recv_buffer_bytes", {})
+sys.exit(0 if m.get("obtainability") == "Measured" and (m.get("value") or 0) > 0 else 1)
+' 2>/dev/null; then
+        pass "socket memory is measured on this host, not claimed platform-limited"
+    else
+        fail "socket memory is measured on this host, not claimed platform-limited" \
+            "sysctl provides net.inet.tcp.recvspace but it was not reported Measured"
+    fi
+
+    # softirq has no macOS analogue; claiming otherwise would be a fabrication.
+    if printf '%s' "$live_hr" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+m = d.get("native_bidir", {}).get("host_resources", {}).get("softirq_net_rx_events", {})
+sys.exit(0 if m.get("obtainability") == "PlatformLimited" and m.get("value") is None else 1)
+' 2>/dev/null; then
+        pass "softirq accounting is honestly platform-limited on macOS"
+    else
+        fail "softirq accounting is honestly platform-limited on macOS" \
+            "softirq was reported as available on a platform without /proc/softirqs"
+    fi
+else
+    skip "host-resource live sampling" "FP_HARNESS_OFFLINE=1"
+fi

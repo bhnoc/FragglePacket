@@ -44,7 +44,7 @@ pub use multiclient_fairness::{
     CrossClientVerdict, PhaseMark, RoleDescriptor,
 };
 pub use wired_control::{attribute as attribute_wired_vs_wifi, FaultAttribution, PathResult};
-pub use process_model::{
+pub use process_model::{HostResourceCounters, ExternalHostResources,
     from_external as receive_path_from_external, judge_collapse, parse_linux_tcp_rcv_collapsed,
     sample_live as sample_receive_path_live, CollapseVerdict, ExternalReceivePathTelemetry, ProcessModel,
     ProcessModelTrial, ReceivePathCounters,

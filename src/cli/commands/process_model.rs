@@ -15,6 +15,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use fraggle_packet::load_guard::{
+    HostResourceCounters,
     judge_collapse, receive_path_from_external, sample_receive_path_live, CollapseVerdict,
     ExternalReceivePathTelemetry, ProcessModel, ProcessModelTrial,
 };
@@ -99,6 +100,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(target_mbps * 1.2),
                 download_mbps: Some(target_mbps * 0.08),
                 receive_path: platform_limited.clone(),
+                host_resources: HostResourceCounters::platform_limited(),
             },
             ProcessModelTrial {
                 model: ProcessModel::PairedProcess,
@@ -106,6 +108,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(target_mbps * 1.18),
                 download_mbps: Some(target_mbps * 0.10),
                 receive_path: platform_limited,
+                host_resources: HostResourceCounters::platform_limited(),
             },
         ),
         "balanced" => (
@@ -115,6 +118,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(target_mbps * 0.64),
                 download_mbps: Some(target_mbps * 0.62),
                 receive_path: platform_limited.clone(),
+                host_resources: HostResourceCounters::platform_limited(),
             },
             ProcessModelTrial {
                 model: ProcessModel::PairedProcess,
@@ -122,6 +126,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(target_mbps * 0.63),
                 download_mbps: Some(target_mbps * 0.61),
                 receive_path: platform_limited,
+                host_resources: HostResourceCounters::platform_limited(),
             },
         ),
         // "pv10-collapse" and any other value: the field-evidence shape.
@@ -132,6 +137,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(161.0),
                 download_mbps: Some(145.0),
                 receive_path: platform_limited,
+                host_resources: HostResourceCounters::platform_limited(),
             },
             ProcessModelTrial {
                 model: ProcessModel::PairedProcess,
@@ -143,6 +149,7 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                     softnet_drops: fraggle_packet::network_tests::rf_survey::Metric::platform_limited(),
                     qdisc_drops: fraggle_packet::network_tests::rf_survey::Metric::platform_limited(),
                 },
+                host_resources: HostResourceCounters::platform_limited(),
             },
         ),
     }
@@ -241,6 +248,7 @@ fn native_trial_from_result(target_mbps: f64, result: &Result<IperfResult, Strin
         upload_mbps: upload,
         download_mbps: download,
         receive_path: sample_receive_path_live(),
+        host_resources: HostResourceCounters::sample_live(),
     }
 }
 
@@ -257,6 +265,7 @@ fn paired_trial_from_results(
         upload_mbps,
         download_mbps,
         receive_path: sample_receive_path_live(),
+        host_resources: HostResourceCounters::sample_live(),
     }
 }
 
