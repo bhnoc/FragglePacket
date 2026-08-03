@@ -192,6 +192,8 @@ pub enum Commands {
     MulticlientFairness(commands::multiclient_fairness::MulticlientFairnessArgs),
     /// Matched wired-versus-Wi-Fi fault-domain control: withholds WLAN attribution when the two paths' public egress identities differ (GAP-030)
     WiredControl(commands::wired_control::WiredControlArgs),
+    /// Process-model equivalence and receive-path artifact guard: withholds a directional-collapse verdict unless it reproduces across native-bidir and paired-process methods (GAP-069)
+    ProcessModel(commands::process_model::ProcessModelArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -281,6 +283,7 @@ pub fn dispatch(args: Args) {
         Some(Commands::Roaming(a)) => commands::roaming::run(&a),
         Some(Commands::MulticlientFairness(a)) => commands::multiclient_fairness::run(&a),
         Some(Commands::WiredControl(a)) => commands::wired_control::run(&a),
+        Some(Commands::ProcessModel(a)) => commands::process_model::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

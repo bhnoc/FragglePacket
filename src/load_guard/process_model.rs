@@ -91,7 +91,7 @@ pub fn parse_linux_tcp_rcv_collapsed(netstat_s_output: &str) -> Option<u64> {
         // low socket buffer") and `nstat`-style ("TcpExtTCPRcvCollapsed N")
         // forms are supported since Precog probes may export either.
         if let Some(rest) = trimmed.strip_prefix("TcpExtTCPRcvCollapsed") {
-            return rest.trim().parse::<u64>().ok();
+            return rest.split_whitespace().next()?.parse::<u64>().ok();
         }
         if trimmed.to_ascii_lowercase().contains("collapsed in receive queue") {
             let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
