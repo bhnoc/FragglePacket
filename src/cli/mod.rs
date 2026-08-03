@@ -164,6 +164,14 @@ pub enum Commands {
     DependencyHealth(commands::dependency_health::DependencyHealthArgs),
     /// Discovery/multicast/peer-isolation policy diagnostic: declared expected-reachable/expected-blocked verdicts, name-free responder tallies (GAP-057)
     MulticastIsolation(commands::multicast_isolation::MulticastIsolationArgs),
+    /// Distributed wireless-probe fleet orchestrator: management/test-node separation, redacted labels, bounded fanout (GAP-038)
+    FleetOrchestrator(commands::fleet_orchestrator::FleetOrchestratorArgs),
+    /// Remote probe health/dependency preflight: quarantines broken binaries, timeouts, and changed SSH host keys with no auto-accept path (GAP-041)
+    ProbePreflight(commands::probe_preflight::ProbePreflightArgs),
+    /// Synchronized clock verification: NTP offset with uncertainty, gated against a configured skew threshold, before permitting a one-way delay claim (GAP-064)
+    ClockGuard(commands::clock_guard::ClockGuardArgs),
+    /// Expected-policy and service-reachability manifest: probes only allowlisted targets and flags drift from declared allow/deny policy (GAP-065)
+    PolicyManifest(commands::policy_manifest::PolicyManifestArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -239,6 +247,10 @@ pub fn dispatch(args: Args) {
         Some(Commands::AuthPortal(a)) => commands::auth_portal::run(&a),
         Some(Commands::DependencyHealth(a)) => commands::dependency_health::run(&a),
         Some(Commands::MulticastIsolation(a)) => commands::multicast_isolation::run(&a),
+        Some(Commands::FleetOrchestrator(a)) => commands::fleet_orchestrator::run(&a),
+        Some(Commands::ProbePreflight(a)) => commands::probe_preflight::run(&a),
+        Some(Commands::ClockGuard(a)) => commands::clock_guard::run(&a),
+        Some(Commands::PolicyManifest(a)) => commands::policy_manifest::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

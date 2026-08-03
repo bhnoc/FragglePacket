@@ -56,6 +56,10 @@ pub mod dependency_health;
 pub mod dns_steering;
 pub mod provider_path;
 pub mod multicast_isolation;
+pub mod fleet_orchestrator;
+pub mod probe_preflight;
+pub mod clock_guard;
+pub mod policy_manifest;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

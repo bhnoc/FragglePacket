@@ -59,3 +59,7 @@ pub mod dhcp_lifecycle;
 pub mod ipv6_validate;
 pub mod auth_portal;
 pub mod dependency_health;
+pub mod fleet_orchestrator;
+pub mod probe_preflight;
+pub mod clock_guard;
+pub mod policy_manifest;
