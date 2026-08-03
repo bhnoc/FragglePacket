@@ -124,18 +124,21 @@ Arista's [radio settings guide](https://www.arista.com/en/ug-cv-cue/cv-cue-radio
 
 Exact-window `Client Events` and `Related AP Events` queries returned zero records for all four probes. No client changed AP or channel, no connection-failure counter changed, and every AP remained active. Current and historical inference and snapshot routes were also reachable, but did not expose a named cause for these short phases. This is a visibility limitation, not proof that no radio/queue event occurred: Arista's [client monitoring guide](https://www.arista.com/en/ug-cv-cue/cv-cue-monitor-wi-fi) describes the event surfaces, while system audit-log access requires a higher role. The present read key receives `403 ERROR_CODE_OP_NOT_PERMITTED` for audit-log and audit-filter endpoints, so a CV-CUE Superuser must export Device and Location Based Settings changes for the window.
 
+A subsequent live association inventory found 19 active trusted probes on 19 different AP hashes; PV05 and PV06 were absent from the client API at that moment. Consequently, no stationary same-AP Precog pair was available for a valid aggressor/victim experiment. This does not imply the APs have only one client or that peer impact is absent—it only means the controlled probes could not test it without moving a probe or adding another authorized client.
+
 ## Current interpretation
 
 The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The evidence supports a client-facing WLAN duplex-capacity mechanism whose trigger scales with effective PHY/client efficiency. Likely components remain per-client scheduling, aggregation efficiency, WMM/queue behavior, airtime allocation, driver behavior, or an interaction among them. The common Wi-Fi 7 radio configuration is now the highest-yield controlled A/B surface, not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
 
 The best next tests are:
 
-1. On one controlled AP, repeat the same client and script with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
-2. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
-3. Repeat on one full-power/5 Gbps AP and one low-power/1 Gbps AP. Separately correct the 25.5 W AP power negotiation and compare before/after; do not conflate that remediation with the radio-feature A/B.
-4. Put a passive monitor and an unaffected victim on the aggressor's exact channel/AP. Run victim gateway latency and a low-rate TCP control while the aggressor crosses its threshold to distinguish 1:1 from 1:many impact.
-5. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
-6. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
+1. Without any network-team change, use full-power/5 Gbps PV10 for a two-run TCP matrix at a fixed 250 Mbps aggregate per direction: one versus four parallel flows, then DSCP 0 versus EF. Keep aggregate rate constant and collect gateway ping, `ss -ti`, `nstat`, qdisc/link counters, `iw` station deltas, and synchronized Arista samples. This separates a per-flow/TCP-ACK effect from a per-client aggregate/WMM queue effect.
+2. Repeat only the discriminating case on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
+3. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
+4. On one controlled AP, repeat the same client and script with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
+5. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
+6. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
+7. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
 
 ## Evidence and limitations
 
