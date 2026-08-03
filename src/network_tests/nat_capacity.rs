@@ -36,20 +36,32 @@ use serde::{Deserialize, Serialize};
 use crate::load_guard::guard::{LoadGuard, LoadPhase, PhaseTick};
 use crate::load_guard::LoadBudget;
 
-/// The sole gate on any capacity-probing (disruptive) mode. `statement`
-/// must be a non-empty, operator-supplied description of the authorization
-/// (e.g. "approved by NOC lead for the 02:00-02:30 maintenance window") --
-/// not a boolean, so a caller cannot satisfy this by merely flipping a flag
-/// without saying anything.
-pub fn require_authorization(statement: Option<&str>) -> Result<String, String> {
+/// The sole gate on any disruptive mode. `statement` must be a non-empty,
+/// operator-supplied description of the authorization (e.g. "approved by NOC
+/// lead for the 02:00-02:30 maintenance window") -- not a boolean, so a caller
+/// cannot satisfy this by merely flipping a flag without saying anything.
+///
+/// `consequence` names what this specific mode would do to shared
+/// infrastructure. Callers must supply their own: an operator reading a refusal
+/// needs to know whether they were about to exhaust a firewall state table or
+/// consume a DHCP pool address, and those warrant different judgement.
+pub fn require_authorization_for(
+    statement: Option<&str>,
+    consequence: &str,
+) -> Result<String, String> {
     match statement.map(str::trim) {
         Some(s) if !s.is_empty() => Ok(s.to_string()),
-        _ => Err(
-            "capacity-probing mode requires --authorized \"<description of the approved window>\"; \
-             refusing to create session-table load without an explicit authorization statement"
-                .to_string(),
-        ),
+        _ => Err(format!(
+            "this mode requires --authorized \"<description of the approved window>\"; \
+             refusing to {} without an explicit authorization statement",
+            consequence
+        )),
     }
+}
+
+/// Session-table capacity probing. See [`require_authorization_for`].
+pub fn require_authorization(statement: Option<&str>) -> Result<String, String> {
+    require_authorization_for(statement, "create firewall/NAT session-table load")
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

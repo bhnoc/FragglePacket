@@ -42,9 +42,17 @@ sourced, not executed, so it inherits the helpers in `harness/lib.sh`:
 `$WORK_DIR`, and `net_guard`. One file per gap so parallel agents never collide.
 
 Every locking check must be proven to fail against the broken state before it is
-trusted. Restore with `git checkout -- <file>`, never from a `cp` backup: a
-backup taken after sabotage preserves the sabotage. For a new untracked file,
-`git add -N <file>` first so `git checkout --` works on it.
+trusted. Restoring afterwards has two traps, both of which cost real time here:
+
+- **Never restore from a `cp` backup.** A backup taken after the sabotage
+  preserves the sabotage. Use `git checkout -- <file>` for a tracked file.
+- **Never `git add -N` a brand-new file and then `git checkout --` it.**
+  Intent-to-add stages an *empty* blob, so the checkout restores emptiness and
+  silently deletes the whole file. The build then fails on unresolved imports
+  rather than on anything to do with the sabotage, which makes it look unrelated.
+  For a new file, either `git add` it properly (staging the real content) before
+  sabotaging, or keep the sabotage to a one-line edit you undo by hand and verify
+  with `git diff`.
 
 `acid.sh` preflights `cargo test --release --lib` and fails fast, naming the
 broken tests. Most check files open with a cargo-test assertion, so without that

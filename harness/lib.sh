@@ -69,10 +69,12 @@ check_lacks() {
 
 # check_json_field <name> <jq-ish python path> <cmd...>
 # Validates stdout parses as JSON and the dotted field path exists and is non-null.
+# The CLI prints a fixed banner before every command's output, so strip anything
+# ahead of the first '{' or '[' rather than making each caller do it.
 check_json_field() {
     local name="$1" path="$2"; shift 2
     local out
-    out="$("$@" 2>/dev/null || true)"
+    out="$("$@" 2>/dev/null | sed -n '/^[[{]/,$p' || true)"
     if printf '%s' "$out" | python3 -c '
 import sys, json
 path = sys.argv[1]

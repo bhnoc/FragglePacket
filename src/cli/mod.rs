@@ -150,6 +150,20 @@ pub enum Commands {
     StunTurn(commands::stun::StunTurnArgs),
     /// Multi-uplink ECMP/LAG hash and NAT-affinity diagnostic via fixed-5-tuple port sweeps (GAP-028)
     EcmpNat(commands::ecmp_nat::EcmpNatArgs),
+    /// Compare A/AAAA/HTTPS/SVCB answers across resolvers to detect steering divergence (GAP-014)
+    DnsSteering(commands::dns_steering::DnsSteeringArgs),
+    /// Provider/geography/path-stability comparison with non-response distinguished from loss (GAP-061)
+    ProviderPath(commands::provider_path::ProviderPathArgs),
+    /// DHCP address-lifecycle and pool-capacity test: safe existing-lease read by default, authorization-gated fresh-lease test (GAP-048)
+    DhcpLifecycle(commands::dhcp_lifecycle::DhcpLifecycleArgs),
+    /// Decomposed IPv6/NAT64/DNS64 validation with separate IPv4 and IPv6 verdicts, plus Happy Eyeballs timing (GAP-056/GAP-015)
+    Ipv6Validate(commands::ipv6_validate::Ipv6ValidateArgs),
+    /// Authentication/captive-portal/policy-assignment workflow: separately timed phases, portal detection without login automation (GAP-049)
+    AuthPortal(commands::auth_portal::AuthPortalArgs),
+    /// Infrastructure dependency health bundle: DNS/NTP/cert/OCSP/controller checks distinguishing blocked-by-policy from unhealthy (GAP-059)
+    DependencyHealth(commands::dependency_health::DependencyHealthArgs),
+    /// Discovery/multicast/peer-isolation policy diagnostic: declared expected-reachable/expected-blocked verdicts, name-free responder tallies (GAP-057)
+    MulticastIsolation(commands::multicast_isolation::MulticastIsolationArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -218,6 +232,13 @@ pub fn dispatch(args: Args) {
         Some(Commands::EcnAqm(a)) => commands::ecn_aqm::run(&a),
         Some(Commands::StunTurn(a)) => commands::stun::run(&a),
         Some(Commands::EcmpNat(a)) => commands::ecmp_nat::run(&a),
+        Some(Commands::DnsSteering(a)) => commands::dns_steering::run(&a),
+        Some(Commands::ProviderPath(a)) => commands::provider_path::run(&a),
+        Some(Commands::DhcpLifecycle(a)) => commands::dhcp_lifecycle::run(&a),
+        Some(Commands::Ipv6Validate(a)) => commands::ipv6_validate::run(&a),
+        Some(Commands::AuthPortal(a)) => commands::auth_portal::run(&a),
+        Some(Commands::DependencyHealth(a)) => commands::dependency_health::run(&a),
+        Some(Commands::MulticastIsolation(a)) => commands::multicast_isolation::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }
