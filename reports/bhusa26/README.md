@@ -10,14 +10,18 @@ Black Hat WLANs and distant radios. The strongest downstairs control fell from
 679 Mbps directional to 41 Mbps simultaneous while H2 remained healthy. The
 same test on MGM infrastructure preserved its full directional download rate.
 A matched Black Hat wired control retained 674 of 750 Mbps H3 download under
-simultaneous load and did not reproduce the generic UDP loss. The wired and
-Wi-Fi VLANs exposed distinct public egress identities, so the remaining fault
-domain is Wi-Fi/controller processing or VLAN-specific NAT/egress/circuit
-selection. MSS behavior on Black Hat was destination-specific and did not
-support a blanket clamp.
+simultaneous load and did not reproduce the generic UDP loss. Corrected
+internal-server testing then reproduced the distributed impairment without
+Internet transit, NAT, firewall egress, or dual-WAN selection. The trigger
+scales with client efficiency: many VHT probes fail around 50–100 Mbps, HE
+probes show duplex-capacity pressure around 200–250 Mbps, and the newer laptop
+reproduces around 350 Mbps. The remaining fault domain is the client-facing
+WLAN datapath, scheduling, airtime, aggregation, or queue behavior. MSS
+behavior did not support a blanket clamp.
 
 ## Committed reports
 
+- `internal-wlan-threshold-correlation-20260802.md` — corrected internal 100 Mbps fleet baseline, 250 Mbps HE threshold test, and Arista correlation
 - `network-performance-investigation-report-20260802.md` — executive evidence, exclusions, root-cause assessment, and decisive next test
 - `COMPARISON.md` — living non-2.4 GHz result and hypothesis matrix
 - `location-a-baseline-20260801.md` — room WLAN baseline
