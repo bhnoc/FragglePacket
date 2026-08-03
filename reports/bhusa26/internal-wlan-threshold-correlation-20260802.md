@@ -141,6 +141,25 @@ No phase recorded a softnet or client qdisc drop. The busiest observed core did 
 
 PV10 remained associated to the same full-power, 5 Gbps-uplink AP on channel 140 at 40 MHz. Controller signal was -52 to -50 dBm, the radio reported one associated client, failure count remained zero, and exact-window Client Events and Related AP Events returned zero records. Retry and contention values changed only in delayed, coarse steps and then remained unchanged through recovery, confirming that these controller snapshots cannot identify which individual test phase caused a change.
 
+## PC13 VHT receiver-path and process-model A/B
+
+Run window: 2026-08-03 03:15:36Z–03:22:44Z. PC13 was selected as the strongest repeatable Wi-Fi 5 case: its earlier fixed-rate tests lost 42.965 Mbps of each 100 Mbps downstream, and a separate repeat lost 36.771 Mbps. The client was still associated as VHT at 40 MHz with -61 to -58 dBm client-reported signal. The PV10 matrix was repeated at the VHT cohort's established 100 Mbps-per-direction trigger. Because PC13 uses iperf3 3.9, native bidirectional results were decoded from per-stream sender/receiver direction flags rather than the newer aggregate keys.
+
+| Method / block | Trial 1 upload / download | Trial 2 upload / download | Mean directional difference | Mean combined throughput | TCP retransmissions |
+|---|---:|---:|---:|---:|---:|
+| Paired processes, 16 KiB | 56.4 / 71.2 Mbps | 37.5 / 103.5 Mbps | 40.4 Mbps | 134.3 Mbps | 28 |
+| Native `--bidir`, 16 KiB | 68.2 / 70.1 Mbps | 35.5 / 38.7 Mbps | 2.5 Mbps | 106.3 Mbps | 0 |
+| Paired processes, 64 KiB | 25.8 / 100.9 Mbps | 47.2 / 94.3 Mbps | 61.1 Mbps | 134.1 Mbps | 5 |
+| Native `--bidir`, 64 KiB | 69.2 / 70.1 Mbps | 64.4 / 65.8 Mbps | 1.2 Mbps | 134.7 Mbps | 0 |
+| Paired processes, 128 KiB | 53.9 / 84.2 Mbps | 28.2 / 46.3 Mbps | 24.2 Mbps | 106.3 Mbps | 55 |
+| Native `--bidir`, 128 KiB | invalid duration / near-zero payload | invalid duration / near-zero payload | excluded | excluded | excluded |
+
+Across the four valid, directly comparable 16/64 KiB trials, paired processes averaged 41.7 Mbps upload, 92.5 Mbps download, a 50.7 Mbps directional difference, 134.2 Mbps combined throughput, and 53.2 ms loaded gateway latency. Three of four exceeded the working 40 Mbps asymmetry threshold. Native bidirectional mode averaged 59.3 Mbps upload, 61.2 Mbps download, only a 1.9 Mbps difference, 120.5 Mbps combined, and 22.7 ms gateway latency; none exceeded the threshold. The aggregate reduction includes one balanced but lower-capacity native trial at 35.5/38.7 Mbps. Directional controls delivered 95.5–97.5 Mbps upload and 56.3–100.0 Mbps download, showing some contemporaneous capacity variation.
+
+One original paired 64 KiB trial was excluded after its reverse process returned a connection-reset error; a successful replacement trial is shown. Both native 128 KiB runs transferred near-zero payload over invalid 3.9 durations, so they are a repeatable client/tool compatibility failure rather than measured WLAN throughput. PC13 recorded no `TCPRcvCollapsed`, softnet drops, or qdisc drops. One paired 128 KiB phase saturated one core, but the valid 16/64 KiB paired phases peaked at 48.5–56.9% on their busiest core. The Wi-Fi 5 result therefore reproduces the process-model sensitivity without reproducing PV10's receive-collapse counter: native mode removes the severe directional unfairness at valid block sizes, while iperf3 version and block-size validation remain mandatory.
+
+The controller supplied 130 observations through 03:26:21Z. PC13 remained on one AP, channel 153 at 40 MHz, with -46 to -44 dBm controller-reported signal, 2% client retry, 1% contention/interference, one associated client, and zero connection failures. The AP remained active on firmware 21.3.0M-13 at fixed 18 dBm; its wired link was 1 Gbps and its 40 W request was negotiated down to 25.5 W PoE+. Exact-window Client Events and Related AP Events both returned zero records. Reduced AP power remains a fleet concern, but it cannot explain the method-dependent difference on this unchanged AP, and the observed 134.7 Mbps maximum combined delivery was far below its 1 Gbps wired link.
+
 ## Effective Arista configuration and event evidence
 
 The read-only integration was extended using Arista's published [CV-CUE OpenAPI index](https://apihelp.wifi.arista.com/data/wm/wm-openapi-root.json), then used only with documented GET routes. Each probe's current client record was joined to its location policy, actual AP template, active AP radio, and matching SSID profile. The four locations use different profile identifiers but returned the same relevant settings. The active association on every AP was radio 2—not one of the AX-only template radios—and radio 2 is configured for Wi-Fi 7 (`BE`) operation while serving these HE/Wi-Fi 6 clients.
@@ -164,7 +183,7 @@ A subsequent live association inventory found 19 active trusted probes on 19 dif
 
 ## Current interpretation
 
-The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The receiver-path A/B materially narrows the earlier interpretation: the dramatic synthetic one-direction collapse is not clean evidence of an AP defect because it largely disappears when the same client, AP, target, and block sizes use native bidirectional iperf. The strongest current explanation is PHY-scaled half-duplex WLAN saturation near 300 Mbps combined TCP, amplified into directional unfairness and receive-queue collapse by the two-process/two-listener harness. Real loaded latency and shared-capacity limits remain. The common Wi-Fi 7 radio configuration is still a useful controlled A/B surface, but it is no longer the first test and is not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
+The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. Receiver-path A/Bs on both HE PV10 and VHT PC13 materially narrow the earlier interpretation: the dramatic synthetic one-direction collapse is not clean evidence of an AP defect because it largely disappears when the same client, AP, target, and valid block sizes use native bidirectional iperf. The strongest current explanation is PHY-scaled half-duplex WLAN saturation, amplified into directional unfairness by the two-process/two-listener harness and expressed differently by the two client stacks. PV10 raised receive-collapse counters; PC13 did not. Real loaded latency and shared-capacity limits remain. The common Wi-Fi 7 radio configuration is still a useful controlled A/B surface, but it is no longer the first test and is not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
 
 The best next tests are:
 
@@ -183,6 +202,7 @@ The best next tests are:
 - Adaptive-knee probe evidence remains temporarily on the management node under `he-knee-internal-20260803T010336Z`; its synchronized local Arista sample contains 188 sanitized observations. Raw credentials, SSIDs, client/AP identifiers, and controller responses were not added to the repository.
 - PV10 flow/QoS evidence remains temporarily on the management node under `tcp-flow-qos-20260803T022516Z`; the synchronized Arista sample contains 86 sanitized observations.
 - PV10 receiver-path evidence remains temporarily on the management node under `receiver-path-20260803T024209Z`; the synchronized Arista sample contains 130 sanitized observations.
+- PC13 receiver-path evidence remains temporarily on the management node under `receiver-path-pc13-20260803T031527Z`; its synchronized Arista sample contains 130 sanitized observations. One failed paired listener result and both invalid native 128 KiB results were excluded rather than converted to zero throughput.
 - Three HE 250 Mbps directional TCP objects hit bounded timeouts; they are not represented as zero.
 - Several iperf3 3.9 TCP controls exceeded the JSON safety bound during the 100 Mbps fleet run; UDP and simultaneous results remain independently valid.
 - Controller performance fields are not phase-resolution logs. Causal claims require time-aligned AP/client events or an authorized over-the-air capture.
