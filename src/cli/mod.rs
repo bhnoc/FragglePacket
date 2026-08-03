@@ -1,0 +1,297 @@
+use clap::{Parser, Subcommand};
+use colored::*;
+
+pub mod commands;
+pub mod common;
+
+#[derive(Parser, Debug)]
+#[command(name = "fraggle-packet")]
+#[command(author, version, about = "FragglePacket - Comprehensive MTU and Path Discovery Tool")]
+pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    #[command(flatten)]
+    pub global: GlobalArgs,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct GlobalArgs {
+    /// Target IP address (for quick ICMP test)
+    #[arg(short, long)]
+    pub target: Option<String>,
+
+    /// Starting minimum MTU (default: 576 - minimum IPv4)
+    #[arg(long, default_value_t = 576)]
+    pub min: usize,
+
+    /// Starting maximum MTU (default: 1500, use 9000 for jumbo frames)
+    #[arg(long, default_value_t = 1500)]
+    pub max: usize,
+
+    /// Timeout in milliseconds
+    #[arg(short = 'T', long, default_value_t = 2000)]
+    pub timeout_ms: u64,
+
+    /// Retries per probe
+    #[arg(short, long, default_value_t = 2)]
+    pub retries: usize,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Launch interactive TUI
+    Tui,
+    /// Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison)
+    Diagnose(commands::diagnose::DiagnoseArgs),
+    /// Test HTTPS connectivity with stage-by-stage analysis (MTU blackhole detection)
+    Https(commands::https::HttpsArgs),
+    /// Test multiple targets and compare path MTUs
+    Multi(commands::multi::MultiArgs),
+    /// Calculate safe MTU for VPN/SASE/Zero-Trust usage
+    Vpn(commands::vpn::VpnArgs),
+    /// Quick ICMP-only MTU test
+    Quick(commands::quick::QuickArgs),
+    /// Packet fuzzing for security testing
+    Fuzz(commands::fuzz::FuzzArgs),
+    /// Run test framework tests (DNS, HTTPS, TCP, RTT, Loss)
+    Test(commands::test::TestArgs),
+    /// TCP-based MTU discovery (no ICMP required)
+    Tcp(commands::tcp::TcpArgs),
+    /// Run all tests against common targets and give final verdict
+    KitchenSink(commands::kitchen_sink::KitchenSinkArgs),
+    /// HTTP(S) upload size sweep (detects data-stall blackholes)
+    UploadSweep(commands::upload_sweep::UploadSweepArgs),
+    /// SSH banner + optional authenticated echo data-path test
+    SshPath(commands::ssh_path::SshPathArgs),
+    /// Raw JetDirect port 9100 PJL + bulk size sweep
+    PrinterRaw(commands::printer_raw::PrinterRawArgs),
+    /// Query actual negotiated TCP MSS and detect middlebox rewriting
+    TcpOptions(commands::tcp_options::TcpOptionsArgs),
+    /// QUIC/UDP PMTUD probe
+    Quic(commands::quic::QuicArgs),
+    /// DoH/DoT vs plain DNS comparison
+    DnsSecure(commands::dns_secure::DnsSecureArgs),
+    /// Render a unified README_FIRST-style diagnosis of a target
+    Report(commands::report::ReportArgs),
+    /// Replay a PCAP file onto the wire (requires root)
+    Replay(commands::replay::ReplayArgs),
+    /// Active MTU probe using the native DSL + send-and-capture engine
+    Probe(commands::probe::ProbeArgs),
+    /// Run a declarative scenario from a file or stdin
+    Scenario(commands::scenario::ScenarioArgs),
+    /// Expose a Prometheus metrics scrape endpoint
+    Serve(commands::serve::ServeArgs),
+    /// Print a hexdump of a packet described by our DSL (demo helper)
+    DslDemo(commands::dsl_demo::DslDemoArgs),
+    /// Run a budget-guarded, radio-monitored load phase (GAP-027/GAP-047)
+    LoadGuard(commands::load_guard::LoadGuardArgs),
+    /// Preflight ALPN/Alt-Svc + real handshake capability across endpoints (GAP-025)
+    Preflight(commands::preflight::PreflightArgs),
+    /// Analyze a PCAP/pcapng capture: vantage point, capture health, qualified MTU/loss verdicts (GAP-019)
+    PcapReport(commands::pcap_report::PcapReportArgs),
+    /// Detect ICMP rate-limiting/batching artifacts by comparing normal vs elevated probe cadence (GAP-021)
+    ProbeRate(commands::probe_rate::ProbeRateArgs),
+    /// First-hop gateway isolation with non-ICMP fallback when echo is suppressed (GAP-022)
+    FirstHop(commands::firsthop::FirstHopArgs),
+    /// Bounded packet capture with duration/size caps and safe privilege handoff (GAP-007)
+    Capture(commands::capture::CaptureArgs),
+    /// Pair idle/upload/download/simultaneous load phases with a first-hop gateway RTT/loss bracket (GAP-044)
+    GatewayBracket(commands::gateway_bracket::GatewayBracketArgs),
+    /// Bounded burst-loss/reordering/duplication/jitter probe with queue-delay correlation (GAP-066)
+    BurstAnalysis(commands::burst_analysis::BurstAnalysisArgs),
+    /// SYN/SYN-ACK MSS evidence (local/peer/middlebox) and multi-destination MSS clustering vs route MTU (GAP-010/GAP-026)
+    MssEvidence(commands::mss_evidence::MssEvidenceArgs),
+    /// Idle/upload-loaded/download-loaded/simultaneous latency via networkQuality (GAP-002)
+    Bufferbloat(commands::bufferbloat::BufferbloatArgs),
+    /// Controlled H1/H2/H3 comparison with directional vs simultaneous isolation (GAP-003/GAP-004)
+    ProtocolCompare(commands::protocol_compare::ProtocolCompareArgs),
+    /// Datagram-size/packet-rate pressure matrix distinguishing packet-rate ceilings from byte-rate policing (GAP-033)
+    SizeRateMatrix(commands::size_rate_matrix::SizeRateMatrixArgs),
+    /// Constant-aggregate flow-count sweep with DSCP marking-survival qualification (GAP-034)
+    FlowDscpMatrix(commands::flow_dscp_matrix::FlowDscpMatrixArgs),
+    /// Normalized, qualified per-phase interface-counter deltas (GAP-031)
+    CounterDeltas(commands::counter_deltas::CounterDeltasArgs),
+    /// Independently rate-controlled, time-aligned simultaneous upload/download sweep (GAP-032)
+    IndependentRates(commands::independent_rates::IndependentRatesArgs),
+    /// Controlled TCP-versus-UDP throughput/loss comparison against a user-supplied endpoint (GAP-006)
+    TcpVsUdp(commands::tcp_vs_udp::TcpVsUdpArgs),
+    /// Barrier-synchronized public-listener admission fanout: never reports a listener that never admitted as zero throughput (GAP-045)
+    AdmissionFanout(commands::admission_fanout::AdmissionFanoutArgs),
+    /// Authorized-only listener leasing with per-transport capacity/duration qualification and endpoint loss-floor declaration (GAP-040)
+    ListenerLease(commands::listener_lease::ListenerLeaseArgs),
+    /// Version-aware maximum-throughput tuner: randomized trials, duration validation, synthetic-max vs representative-application split (GAP-046)
+    ThroughputTuner(commands::throughput_tuner::ThroughputTunerArgs),
+    /// Version/direction-aware iperf3 JSON parsing and explicit-allowlist endpoint capability discovery (GAP-039/GAP-036)
+    IperfAnalyze(commands::iperf_analyze::IperfAnalyzeArgs),
+    /// Bounded time-series RF survey with platform-limited metric qualification and change-point correlation (GAP-055)
+    RfSurvey(commands::rf_survey::RfSurveyArgs),
+    /// Privacy-safe cross-platform/power-save capability matrix with confound-aware attribution (GAP-063)
+    PlatformMatrix(commands::platform_matrix::PlatformMatrixArgs),
+    /// Bracket a known packet stimulus to prove a counter is live, and refuse a zero-drop verdict without corroboration (GAP-043)
+    CounterLiveness(commands::counter_liveness::CounterLivenessArgs),
+    /// PHY-normalized fleet comparison: offered load as a fraction of each client's own PHY capacity (GAP-042)
+    PhyNormalized(commands::phy_normalized::PhyNormalizedArgs),
+    /// AP-generation/radio-mode/client-capability compatibility matrix; refuses a verdict until required comparison cells are present (GAP-037)
+    ApCompatMatrix(commands::ap_compat_matrix::ApCompatMatrixArgs),
+    /// Wi-Fi radio/retry diagnostic with safe elevation and explicit platform-limitation reporting (GAP-011)
+    RadioDiagnostic(commands::radio_diagnostic::RadioDiagnosticArgs),
+    /// Stable, privacy-safe salted AP/radio identity derived from BSSID without storing or displaying it (GAP-024)
+    ApIdentity(commands::ap_identity::ApIdentityArgs),
+    /// Firewall/NAT/session-state capacity matrix: authorization-gated disruptive probing, safe-by-default idle-mapping observation (GAP-054)
+    NatCapacity(commands::nat_capacity::NatCapacityArgs),
+    /// VPN/encapsulation compatibility matrix: credential-free protocol reachability and real effective MTU/MSS measurement (GAP-060)
+    VpnMatrix(commands::vpn_matrix::VpnMatrixArgs),
+    /// Synthetic RTP/WebRTC media-quality probe: setup/ICE, burst-derived concealment/freeze risk, MOS-style estimate (GAP-052)
+    MediaQuality(commands::media_quality::MediaQualityArgs),
+    /// ECN/AQM capability and CE-mark counting with classic-ECN-vs-L4S distinction (GAP-023)
+    EcnAqm(commands::ecn_aqm::EcnAqmArgs),
+    /// Repeated STUN binding requests with validation/RTT, mapped-address change detection, and TURN allocation checks (GAP-005)
+    StunTurn(commands::stun::StunTurnArgs),
+    /// Multi-uplink ECMP/LAG hash and NAT-affinity diagnostic via fixed-5-tuple port sweeps (GAP-028)
+    EcmpNat(commands::ecmp_nat::EcmpNatArgs),
+    /// Compare A/AAAA/HTTPS/SVCB answers across resolvers to detect steering divergence (GAP-014)
+    DnsSteering(commands::dns_steering::DnsSteeringArgs),
+    /// Provider/geography/path-stability comparison with non-response distinguished from loss (GAP-061)
+    ProviderPath(commands::provider_path::ProviderPathArgs),
+    /// DHCP address-lifecycle and pool-capacity test: safe existing-lease read by default, authorization-gated fresh-lease test (GAP-048)
+    DhcpLifecycle(commands::dhcp_lifecycle::DhcpLifecycleArgs),
+    /// Decomposed IPv6/NAT64/DNS64 validation with separate IPv4 and IPv6 verdicts, plus Happy Eyeballs timing (GAP-056/GAP-015)
+    Ipv6Validate(commands::ipv6_validate::Ipv6ValidateArgs),
+    /// Compare WAN A-only, B-only, and dual-active phases from an operator manifest; never changes routing (GAP-029)
+    CircuitCompare(commands::circuit_compare::CircuitCompareArgs),
+    /// Reference-endpoint calibration and client-result acceptance: the endpoint can invalidate a client's measurement (GAP-053)
+    ReferenceEndpoint(commands::reference_endpoint::ReferenceEndpointArgs),
+    /// Capacity/latency-knee discovery: distinguishes a capacity plateau from directional unfairness and withholds an established claim without cross-method reproduction (GAP-070)
+    CapacityKnee(commands::capacity_knee::CapacityKneeArgs),
+    /// Known iperf3 endpoints and the ports recorded as failing, so a known-bad endpoint is never retried or scored as zero throughput
+    Endpoints(commands::endpoints::EndpointsArgs),
+    /// Privileged-operation inventory and failure classification: preserve the error, name the exact command, offer an unprivileged path (GAP-016)
+    PrivilegeStatus(commands::privilege_status::PrivilegeStatusArgs),
+    /// Affected-site vs known-good-control A/B workflow: forced protocol, IP pinning, repeated samples, redirect-aware verdict (GAP-012)
+    SiteAb(commands::site_ab::SiteAbArgs),
+    /// Second-network control workflow: save/compare a connection fingerprint and test bundle across a network switch (GAP-013)
+    SecondNetwork(commands::second_network::SecondNetworkArgs),
+    /// Wired edge/AP-uplink/LLDP/PoE health bundle: read-only ingest, refuses a conclusion without telemetry (GAP-058)
+    WiredEdge(commands::wired_edge::WiredEdgeArgs),
+    /// Controlled resilience/failover validation: observes and labels an operator-performed component change, never initiates one (GAP-062)
+    Resilience(commands::resilience::ResilienceArgs),
+    /// Authentication/captive-portal/policy-assignment workflow: separately timed phases, portal detection without login automation (GAP-049)
+    AuthPortal(commands::auth_portal::AuthPortalArgs),
+    /// Infrastructure dependency health bundle: DNS/NTP/cert/OCSP/controller checks distinguishing blocked-by-policy from unhealthy (GAP-059)
+    DependencyHealth(commands::dependency_health::DependencyHealthArgs),
+    /// Discovery/multicast/peer-isolation policy diagnostic: declared expected-reachable/expected-blocked verdicts, name-free responder tallies (GAP-057)
+    MulticastIsolation(commands::multicast_isolation::MulticastIsolationArgs),
+    /// Distributed wireless-probe fleet orchestrator: management/test-node separation, redacted labels, bounded fanout (GAP-038)
+    FleetOrchestrator(commands::fleet_orchestrator::FleetOrchestratorArgs),
+    /// Remote probe health/dependency preflight: quarantines broken binaries, timeouts, and changed SSH host keys with no auto-accept path (GAP-041)
+    ProbePreflight(commands::probe_preflight::ProbePreflightArgs),
+    /// Synchronized clock verification: NTP offset with uncertainty, gated against a configured skew threshold, before permitting a one-way delay claim (GAP-064)
+    ClockGuard(commands::clock_guard::ClockGuardArgs),
+    /// Expected-policy and service-reachability manifest: probes only allowlisted targets and flags drift from declared allow/deny policy (GAP-065)
+    PolicyManifest(commands::policy_manifest::PolicyManifestArgs),
+    /// Controlled roaming/session-continuity test: privacy-safe AP transitions, handoff duration, and VLAN/public-identity continuity (GAP-050)
+    Roaming(commands::roaming::RoamingArgs),
+    /// Coordinated multi-client capacity/fairness: refuses a cross-client verdict until both role descriptors exist and their phase windows overlap (GAP-051/GAP-072)
+    MulticlientFairness(commands::multiclient_fairness::MulticlientFairnessArgs),
+    /// Matched wired-versus-Wi-Fi fault-domain control: withholds WLAN attribution when the two paths' public egress identities differ (GAP-030)
+    WiredControl(commands::wired_control::WiredControlArgs),
+    /// Process-model equivalence and receive-path artifact guard: withholds a directional-collapse verdict unless it reproduces across native-bidir and paired-process methods (GAP-069)
+    ProcessModel(commands::process_model::ProcessModelArgs),
+}
+
+pub fn dispatch(args: Args) {
+    println!("{}", "=".repeat(60).blue());
+    println!("{}", " FragglePacket v0.2 ".white().on_blue().bold());
+    println!("{}", "=".repeat(60).blue());
+    println!();
+
+    let global = &args.global;
+
+    match args.command {
+        Some(Commands::Tui) => {
+            let _ = crate::tui_app::run_tui();
+        }
+        Some(Commands::Diagnose(a)) => commands::diagnose::run(&a, global),
+        Some(Commands::Https(a)) => commands::https::run(&a),
+        Some(Commands::Multi(a)) => commands::multi::run(&a, global),
+        Some(Commands::Vpn(a)) => commands::vpn::run(&a, global),
+        Some(Commands::Quick(a)) => commands::quick::run(&a, global),
+        Some(Commands::Fuzz(a)) => commands::fuzz::run(&a),
+        Some(Commands::Test(a)) => commands::test::run(&a),
+        Some(Commands::Tcp(a)) => commands::tcp::run(&a, global),
+        Some(Commands::KitchenSink(a)) => commands::kitchen_sink::run(&a, global),
+        Some(Commands::UploadSweep(a)) => commands::upload_sweep::run(&a),
+        Some(Commands::SshPath(a)) => commands::ssh_path::run(&a),
+        Some(Commands::PrinterRaw(a)) => commands::printer_raw::run(&a),
+        Some(Commands::TcpOptions(a)) => commands::tcp_options::run(&a),
+        Some(Commands::Quic(a)) => commands::quic::run(&a),
+        Some(Commands::DnsSecure(a)) => commands::dns_secure::run(&a),
+        Some(Commands::Report(a)) => commands::report::run(&a),
+        Some(Commands::Replay(a)) => commands::replay::run(&a),
+        Some(Commands::Probe(a)) => commands::probe::run(&a),
+        Some(Commands::Scenario(a)) => commands::scenario::run(&a),
+        Some(Commands::Serve(a)) => commands::serve::run(&a),
+        Some(Commands::DslDemo(a)) => commands::dsl_demo::run(&a),
+        Some(Commands::LoadGuard(a)) => commands::load_guard::run(&a),
+        Some(Commands::Preflight(a)) => commands::preflight::run(&a),
+        Some(Commands::PcapReport(a)) => commands::pcap_report::run(&a),
+        Some(Commands::ProbeRate(a)) => commands::probe_rate::run(&a),
+        Some(Commands::FirstHop(a)) => commands::firsthop::run(&a),
+        Some(Commands::Capture(a)) => commands::capture::run(&a),
+        Some(Commands::GatewayBracket(a)) => commands::gateway_bracket::run(&a),
+        Some(Commands::BurstAnalysis(a)) => commands::burst_analysis::run(&a),
+        Some(Commands::MssEvidence(a)) => commands::mss_evidence::run(&a),
+        Some(Commands::Bufferbloat(a)) => commands::bufferbloat::run(&a),
+        Some(Commands::ProtocolCompare(a)) => commands::protocol_compare::run(&a),
+        Some(Commands::SizeRateMatrix(a)) => commands::size_rate_matrix::run(&a),
+        Some(Commands::FlowDscpMatrix(a)) => commands::flow_dscp_matrix::run(&a),
+        Some(Commands::CounterDeltas(a)) => commands::counter_deltas::run(&a),
+        Some(Commands::IndependentRates(a)) => commands::independent_rates::run(&a),
+        Some(Commands::TcpVsUdp(a)) => commands::tcp_vs_udp::run(&a),
+        Some(Commands::AdmissionFanout(a)) => commands::admission_fanout::run(&a),
+        Some(Commands::ListenerLease(a)) => commands::listener_lease::run(&a),
+        Some(Commands::ThroughputTuner(a)) => commands::throughput_tuner::run(&a),
+        Some(Commands::IperfAnalyze(a)) => commands::iperf_analyze::run(&a),
+        Some(Commands::RfSurvey(a)) => commands::rf_survey::run(&a),
+        Some(Commands::PlatformMatrix(a)) => commands::platform_matrix::run(&a),
+        Some(Commands::CounterLiveness(a)) => commands::counter_liveness::run(&a),
+        Some(Commands::PhyNormalized(a)) => commands::phy_normalized::run(&a),
+        Some(Commands::ApCompatMatrix(a)) => commands::ap_compat_matrix::run(&a),
+        Some(Commands::RadioDiagnostic(a)) => commands::radio_diagnostic::run(&a),
+        Some(Commands::ApIdentity(a)) => commands::ap_identity::run(&a),
+        Some(Commands::NatCapacity(a)) => commands::nat_capacity::run(&a),
+        Some(Commands::VpnMatrix(a)) => commands::vpn_matrix::run(&a),
+        Some(Commands::MediaQuality(a)) => commands::media_quality::run(&a),
+        Some(Commands::EcnAqm(a)) => commands::ecn_aqm::run(&a),
+        Some(Commands::StunTurn(a)) => commands::stun::run(&a),
+        Some(Commands::EcmpNat(a)) => commands::ecmp_nat::run(&a),
+        Some(Commands::DnsSteering(a)) => commands::dns_steering::run(&a),
+        Some(Commands::ProviderPath(a)) => commands::provider_path::run(&a),
+        Some(Commands::DhcpLifecycle(a)) => commands::dhcp_lifecycle::run(&a),
+        Some(Commands::Ipv6Validate(a)) => commands::ipv6_validate::run(&a),
+        Some(Commands::CircuitCompare(a)) => commands::circuit_compare::run(&a),
+        Some(Commands::ReferenceEndpoint(a)) => commands::reference_endpoint::run(&a),
+        Some(Commands::CapacityKnee(a)) => commands::capacity_knee::run(&a),
+        Some(Commands::Endpoints(a)) => commands::endpoints::run(&a),
+        Some(Commands::PrivilegeStatus(a)) => commands::privilege_status::run(&a),
+        Some(Commands::SiteAb(a)) => commands::site_ab::run(&a),
+        Some(Commands::SecondNetwork(a)) => commands::second_network::run(&a),
+        Some(Commands::WiredEdge(a)) => commands::wired_edge::run(&a),
+        Some(Commands::Resilience(a)) => commands::resilience::run(&a),
+        Some(Commands::AuthPortal(a)) => commands::auth_portal::run(&a),
+        Some(Commands::DependencyHealth(a)) => commands::dependency_health::run(&a),
+        Some(Commands::MulticastIsolation(a)) => commands::multicast_isolation::run(&a),
+        Some(Commands::FleetOrchestrator(a)) => commands::fleet_orchestrator::run(&a),
+        Some(Commands::ProbePreflight(a)) => commands::probe_preflight::run(&a),
+        Some(Commands::ClockGuard(a)) => commands::clock_guard::run(&a),
+        Some(Commands::PolicyManifest(a)) => commands::policy_manifest::run(&a),
+        Some(Commands::Roaming(a)) => commands::roaming::run(&a),
+        Some(Commands::MulticlientFairness(a)) => commands::multiclient_fairness::run(&a),
+        Some(Commands::WiredControl(a)) => commands::wired_control::run(&a),
+        Some(Commands::ProcessModel(a)) => commands::process_model::run(&a),
+        None => {
+            let _ = crate::tui_app::run_tui();
+        }
+    }
+}

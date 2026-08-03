@@ -1,0 +1,10 @@
+QUIC/UDP PMTUD probe
+
+Usage: fraggle-packet quic [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -p, --port <PORT>  Target port (default 443) [default: 443]
+  -h, --help         Print help

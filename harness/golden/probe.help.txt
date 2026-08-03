@@ -1,0 +1,12 @@
+Active MTU probe using the native DSL + send-and-capture engine
+
+Usage: fraggle-packet probe [OPTIONS] --iface <IFACE> <TARGET>
+
+Arguments:
+  <TARGET>  Target IPv4 address
+
+Options:
+  -i, --iface <IFACE>  Interface
+      --min <MIN>      Minimum probe size [default: 576]
+      --max <MAX>      Maximum probe size [default: 1500]
+  -h, --help           Print help

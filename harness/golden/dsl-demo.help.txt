@@ -1,0 +1,9 @@
+Print a hexdump of a packet described by our DSL (demo helper)
+
+Usage: fraggle-packet dsl-demo [OPTIONS]
+
+Options:
+  -d, --dst <DST>    Destination IPv4 [default: 1.1.1.1]
+  -p, --port <PORT>  Destination port [default: 443]
+      --size <SIZE>  Payload size in bytes [default: 32]
+  -h, --help         Print help

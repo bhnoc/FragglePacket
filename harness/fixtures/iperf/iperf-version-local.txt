@@ -1,0 +1,2 @@
+iperf 3.21 (cJSON 1.7.15)
+Darwin landbeforetimes-MacBook-Pro.local 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:29 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6030 arm64

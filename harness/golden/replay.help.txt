@@ -1,0 +1,14 @@
+Replay a PCAP file onto the wire (requires root)
+
+Usage: fraggle-packet replay [OPTIONS] <PCAP>
+
+Arguments:
+  <PCAP>  PCAP path
+
+Options:
+  -i, --iface <IFACE>                    Interface to send on (required on Linux)
+      --pps <PPS>                        Packets-per-second rate
+      --loop-count <LOOP_COUNT>          Number of loops [default: 1]
+      --rewrite-dst-ip <REWRITE_DST_IP>  Rewrite destination IP before sending
+      --rewrite-src-ip <REWRITE_SRC_IP>  Rewrite source IP before sending
+  -h, --help                             Print help

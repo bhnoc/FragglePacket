@@ -1,0 +1,8 @@
+Expose a Prometheus metrics scrape endpoint
+
+Usage: fraggle-packet serve [OPTIONS]
+
+Options:
+  -b, --bind <BIND>      Bind address [default: 127.0.0.1:9464]
+  -t, --target <TARGET>  Optional target to seed metrics from a single run
+  -h, --help             Print help

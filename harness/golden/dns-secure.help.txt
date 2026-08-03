@@ -1,0 +1,9 @@
+DoH/DoT vs plain DNS comparison
+
+Usage: fraggle-packet dns-secure <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname to resolve
+
+Options:
+  -h, --help  Print help

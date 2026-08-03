@@ -1,0 +1,9 @@
+Test multiple targets and compare path MTUs
+
+Usage: fraggle-packet multi <TARGETS>
+
+Arguments:
+  <TARGETS>  Comma-separated list of targets
+
+Options:
+  -h, --help  Print help

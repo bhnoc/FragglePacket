@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "note": "Vendor-neutral registry of PUBLIC iperf3 endpoints, published so other users have known-good external test destinations rather than having to rediscover them. Every entry records what was ACTUALLY verified, including the ports that failed admission -- GAP-045's whole point is that a port-open check is not admission validation, and recording only the working ports would hide that. These are public services documented by their operators; no site-specific or client-side detail is retained here.",
+  "providers": [
+    {
+      "provider": "xmission",
+      "documentation": "https://speedtest.xmission.com/",
+      "authorization": "public service documented by the operator; no private agreement. Treat every result as a public-endpoint measurement subject to GAP-040's loss-floor and capacity qualification.",
+      "listeners": [
+        {
+          "host": "speedtest.xmission.com",
+          "port": 5201,
+          "region_label": "salt-lake",
+          "transport": ["tcp", "udp"],
+          "verified": "admitted upload tests",
+          "verified_on": "2026-08-02",
+          "purpose": "upload / forward direction",
+          "observed": "iperf3 3.16 client, Ubuntu 24.04, Ethernet MTU 1500, explicit source and interface binding. A separate 2026-08-03 run measured 55 Mbps forward and 9.4 Mbps reverse from a macOS 3.21 client."
+        },
+        {
+          "host": "iperf.soute.xmission.com",
+          "port": 5201,
+          "region_label": "soute",
+          "transport": ["tcp", "udp"],
+          "verified": "admitted reverse download tests",
+          "verified_on": "2026-08-02",
+          "purpose": "reverse / download direction",
+          "observed": "used as the download half of an independently rate-controlled matrix, because the Salt Lake host's additional ports would not admit a second concurrent session."
+        }
+      ],
+      "known_bad_ports": [
+        {
+          "host": "speedtest.xmission.com",
+          "port": 5200,
+          "outcome": "connection refused",
+          "verified_on": "2026-08-02",
+          "must_not_be_recorded_as": "zero throughput"
+        },
+        {
+          "host": "speedtest.xmission.com",
+          "ports": [5202, 5203, 5204, 5205, 5206],
+          "outcome": "failed admission or stayed at zero intervals until the safety timeout",
+          "verified_on": "2026-08-02",
+          "must_not_be_recorded_as": "zero throughput",
+          "why_it_matters": "This is the exact GAP-045 shape. In an earlier fanout a substantial minority of probes never established a test connection even though their port-open checks passed; scoring those as 0 Mbps would have implicated healthy clients as failing."
+        }
+      ],
+      "caveats": [
+        "The upload and download halves use DIFFERENT public paths, so a simultaneous result mixes two provider routes. Each directional control must bracket its own simultaneous result; GAP-017's endpoint-mismatch warning applies.",
+        "Each listener accepts one test at a time. Concurrency requires distinct listeners, which is why GAP-040 leases one per active session.",
+        "Old-client reverse UDP showed a 0.6-1.0% loss floor that belongs to the endpoint, not the network. GAP-040 declares that floor alongside any loss figure.",
+        "An XMission Colorado endpoint produced a duration-inconsistent 44.6 Mbps receiver summary and a 61.2 Mbps reverse ceiling on a known-healthy client. Duration validity must be checked per transport, not just reachability.",
+        "Baseline drift between opening and closing controls was severe enough that tuner profiles derived from these endpoints are provisional."
+      ]
+    }
+  ],
+  "not_listeners": {
+    "client_source_ports": {
+      "range": "40010-40019",
+      "what_they_are": "Fixed CLIENT source ports used to hold a 5-tuple stable across ECMP/LAG hash buckets (GAP-028). They are not server listeners and must never be probed as such.",
+      "finding": "All ten buckets failed the same way at 350 Mbps bidirectional, forming no healthy/bad split. That argued against a single bad hash member and toward shared queue or WLAN behavior."
+    }
+  }
+}

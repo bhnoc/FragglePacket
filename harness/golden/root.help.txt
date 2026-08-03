@@ -1,0 +1,37 @@
+FragglePacket - Comprehensive MTU and Path Discovery Tool
+
+Usage: fraggle-packet [OPTIONS] [COMMAND]
+
+Commands:
+  tui           Launch interactive TUI
+  diagnose      Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison)
+  https         Test HTTPS connectivity with stage-by-stage analysis (MTU blackhole detection)
+  multi         Test multiple targets and compare path MTUs
+  vpn           Calculate safe MTU for VPN/SASE/Zero-Trust usage
+  quick         Quick ICMP-only MTU test
+  fuzz          Packet fuzzing for security testing
+  test          Run test framework tests (DNS, HTTPS, TCP, RTT, Loss)
+  tcp           TCP-based MTU discovery (no ICMP required)
+  kitchen-sink  Run all tests against common targets and give final verdict
+  upload-sweep  HTTP(S) upload size sweep (detects data-stall blackholes)
+  ssh-path      SSH banner + optional authenticated echo data-path test
+  printer-raw   Raw JetDirect port 9100 PJL + bulk size sweep
+  tcp-options   Query actual negotiated TCP MSS and detect middlebox rewriting
+  quic          QUIC/UDP PMTUD probe
+  dns-secure    DoH/DoT vs plain DNS comparison
+  report        Render a unified README_FIRST-style diagnosis of a target
+  replay        Replay a PCAP file onto the wire (requires root)
+  probe         Active MTU probe using the native DSL + send-and-capture engine
+  scenario      Run a declarative scenario from a file or stdin
+  serve         Expose a Prometheus metrics scrape endpoint
+  dsl-demo      Print a hexdump of a packet described by our DSL (demo helper)
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -t, --target <TARGET>          Target IP address (for quick ICMP test)
+      --min <MIN>                Starting minimum MTU (default: 576 - minimum IPv4) [default: 576]
+      --max <MAX>                Starting maximum MTU (default: 1500, use 9000 for jumbo frames) [default: 1500]
+  -T, --timeout-ms <TIMEOUT_MS>  Timeout in milliseconds [default: 2000]
+  -r, --retries <RETRIES>        Retries per probe [default: 2]
+  -h, --help                     Print help
+  -V, --version                  Print version

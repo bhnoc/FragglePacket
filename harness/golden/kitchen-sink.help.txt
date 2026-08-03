@@ -1,0 +1,9 @@
+Run all tests against common targets and give final verdict
+
+Usage: fraggle-packet kitchen-sink [OPTIONS]
+
+Options:
+      --max <MAX>        Max MTU to test (default 1500, use 9000 for jumbo) [default: 1500]
+      --json             Output results as JSON
+      --output <OUTPUT>  Save JSON report to file
+  -h, --help             Print help

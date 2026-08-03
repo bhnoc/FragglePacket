@@ -1,0 +1,37 @@
+# todo
+- each test ability to see the commands and edit them and even save the edit for future use before running them 
+- testing
+- possible to keep in tui? or need api and app?
+
+## randodamn ideas
+- Continuous monitoring mode
+- auto scan network attempting to discover mtu paths
+- Historical trend tracking
+- Prometheus metrics export
+- Alert system
+- Copy-to-clipboard for commands
+- Live packet injection mode
+- Parser stress testing (Suricata/Snort validation)
+- Firewall parser testing
+- IDS/IPS bypass detection
+- Regression test suite generation
+- Interactive fuzzing with feedback
+- Integration with tcpdump for response analysis
+- Scheduled testing
+- AS path lookup - requires external API
+- API for integration
+- BGP path analysis
+- Recommendation generation
+- Geolocation of hops
+- Cross-test correlation logic
+- Issue severity ranking
+- Performance baselines
+- Anomaly detection
+- web front end
+- HTML reports with graphs
+- AI/ML-driven mutation strategies
+- Grammar-based protocol fuzzing
+- State machine fuzzing for TCP handshakes
+- Multi-protocol fuzzing (UDP, ICMP, QUIC)
+- Distributed fuzzing campaigns
+- Automatic crash analysis & triage

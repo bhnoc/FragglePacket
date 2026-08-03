@@ -1,0 +1,9 @@
+Render a unified README_FIRST-style diagnosis of a target
+
+Usage: fraggle-packet report <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname
+
+Options:
+  -h, --help  Print help

@@ -1,0 +1,15 @@
+{
+  "bundle_name": "wan-ab-comparison",
+  "phases": [
+    {
+      "circuit_state": "AOnly",
+      "client_summary": "350 Mbps bidirectional UDP, 6 buckets",
+      "achieved_mbps": 902.0,
+      "loss_pct": 0.04,
+      "members": [
+        {"member": "wan-a", "utilization_pct": 41.0, "drops": 0, "policer_drops": 0,
+         "errors": 0, "nat_owner": "fw-node-1", "route_changes": 0}
+      ]
+    }
+  ]
+}

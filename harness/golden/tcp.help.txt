@@ -1,0 +1,9 @@
+TCP-based MTU discovery (no ICMP required)
+
+Usage: fraggle-packet tcp <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname:port
+
+Options:
+  -h, --help  Print help

@@ -1,0 +1,10 @@
+[
+  {"offered_mbps": 40.0, "up_mbps": 40.0, "down_mbps": 40.0, "loaded_latency_ms": 8.0,
+   "listener_label": "listener-0", "execution_index": 0, "rejected": null},
+  {"offered_mbps": 60.0, "up_mbps": 59.0, "down_mbps": 59.0, "loaded_latency_ms": 9.0,
+   "listener_label": "listener-1", "execution_index": 1, "rejected": null},
+  {"offered_mbps": 70.0, "up_mbps": 69.0, "down_mbps": 68.0, "loaded_latency_ms": 17.0,
+   "listener_label": "listener-2", "execution_index": 2, "rejected": null},
+  {"offered_mbps": 100.0, "up_mbps": 71.0, "down_mbps": 68.0, "loaded_latency_ms": 28.0,
+   "listener_label": "listener-3", "execution_index": 3, "rejected": null}
+]

@@ -1,0 +1,11 @@
+Packet fuzzing for security testing
+
+Usage: fraggle-packet fuzz [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -o, --output <OUTPUT>  Output PCAP file path [default: reports/fuzz.pcap]
+  -m, --mode <MODE>      Fuzzing mode (segment-size, length-mismatch, tcp-options, fragmentation, checksum) [default: segment-size]
+  -h, --help             Print help

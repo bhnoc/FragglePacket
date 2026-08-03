@@ -1,0 +1,12 @@
+Run test framework tests (DNS, HTTPS, TCP, RTT, Loss)
+
+Usage: fraggle-packet test [OPTIONS] <TARGET>
+
+Arguments:
+  <TARGET>  Target hostname or IP
+
+Options:
+  -c, --categories <CATEGORIES>  Test categories (dns,https,tcp,rtt,loss,all) [default: all]
+  -n, --count <COUNT>            Packet count for RTT/loss tests [default: 20]
+  -v, --verbose                  Verbose output
+  -h, --help                     Print help
