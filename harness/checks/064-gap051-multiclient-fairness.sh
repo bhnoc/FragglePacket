@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GAP-051/GAP-067: coordinated multi-client capacity/fairness. Field
+# GAP-051/GAP-072: coordinated multi-client capacity/fairness. Field
 # evidence: a coordinated run measured severe degradation but could not
 # reach a verdict because the peer's mode/listener/association/timestamps
 # were never captured, and the two candidate explanations (shared-listener
@@ -68,7 +68,7 @@ check_contains "human output states REFUSED for a missing descriptor" "REFUSED" 
 no_overlap_out="$("$BIN" multiclient-fairness --inject-fixture no-overlap --json 2>/dev/null | sed -n '/^{/,$p')"
 no_overlap_verdict="$(printf '%s' "$no_overlap_out" | json_get verdict.Refused.reason)"
 if printf '%s' "$no_overlap_verdict" | grep -q "do not overlap"; then
-    pass "two descriptors with non-overlapping phase windows are refused (GAP-067's core requirement)"
+    pass "two descriptors with non-overlapping phase windows are refused (GAP-072's core requirement)"
 else
     fail "non-overlapping phase windows are refused" "got: $no_overlap_verdict"
 fi

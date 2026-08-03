@@ -188,7 +188,7 @@ pub enum Commands {
     PolicyManifest(commands::policy_manifest::PolicyManifestArgs),
     /// Controlled roaming/session-continuity test: privacy-safe AP transitions, handoff duration, and VLAN/public-identity continuity (GAP-050)
     Roaming(commands::roaming::RoamingArgs),
-    /// Coordinated multi-client capacity/fairness: refuses a cross-client verdict until both role descriptors exist and their phase windows overlap (GAP-051/GAP-067)
+    /// Coordinated multi-client capacity/fairness: refuses a cross-client verdict until both role descriptors exist and their phase windows overlap (GAP-051/GAP-072)
     MulticlientFairness(commands::multiclient_fairness::MulticlientFairnessArgs),
     /// Matched wired-versus-Wi-Fi fault-domain control: withholds WLAN attribution when the two paths' public egress identities differ (GAP-030)
     WiredControl(commands::wired_control::WiredControlArgs),

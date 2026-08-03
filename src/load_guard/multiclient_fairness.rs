@@ -1,6 +1,6 @@
 //! GAP-051: coordinated multi-client capacity and fairness.
 //!
-//! GAP-067's field evidence is the reason this module refuses so much: a
+//! GAP-072's field evidence is the reason this module refuses so much: a
 //! coordinated run measured severe degradation on one client, but the
 //! written assessment could not reach a verdict because the peer's mode,
 //! listener ports, association, and timestamps were never captured -- and
@@ -22,7 +22,7 @@
 use serde::{Deserialize, Serialize};
 
 /// What a single client was doing during the coordinated window. The
-/// GAP-067 fix: every role must state its own listener endpoints so shared
+/// GAP-072 fix: every role must state its own listener endpoints so shared
 /// public listener contention -- a confound, not a network fault -- is
 /// detectable rather than assumed away.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,7 +64,7 @@ impl RoleDescriptor {
 }
 
 /// Whether two roles' phase windows actually overlap in wall-clock time.
-/// This is the load-bearing check GAP-067 demands: two descriptors existing
+/// This is the load-bearing check GAP-072 demands: two descriptors existing
 /// is not enough if one ran an hour before the other.
 pub fn windows_overlap(a: &RoleDescriptor, b: &RoleDescriptor) -> Option<bool> {
     let (a_start, a_end) = a.phase_window()?;

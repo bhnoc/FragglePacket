@@ -1,6 +1,6 @@
 # FragglePacket gap-closure handoff
 
-Building out all 67 open capabilities in `docs/GAP_LIST.md` as CLI features. No
+Building out the open capabilities in `docs/GAP_LIST.md` as CLI features. No
 UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 
 ## Current state (2026-08-02)
@@ -16,7 +16,31 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 | 6 | STUN/NAT/ECN/media 005, 023, 028, 052, 054, 060 | **done, pushed** (267e0ee) |
 | 7 | DNS/IPv6/DHCP/auth 014, 015, 048, 049, 056, 057, 059, 061 | **done, pushed** (d50fe8b) |
 | 8 | fleet orchestration 029, 038, 041, 053, 064, 065 | **done, pushed** (a16114f) |
-| 9 | workflows/redaction/reporting 012, 013, 016-018, 020, 030, 050, 051, 058, 062 | in progress (final sprint) |
+| 9 | workflows/redaction/reporting 012, 013, 016-018, 020, 030, 050, 051, 058, 062 | **done** |
+
+## Where this stands
+
+67 gaps closed and locked: GAP-001 through GAP-066, plus GAP-072. The acid suite
+is at 998 checks over 535 unit tests, and every check was proven to fail against
+the broken state before being trusted.
+
+**Five gaps remain open**, added to `docs/GAP_LIST.md` after this build began:
+
+| Gap | Priority | Why it is not covered |
+| --- | --- | --- |
+| GAP-067 | P1 | Secure CV-CUE/Arista telemetry connector. Needs 1Password retrieval, tenant discovery, session cookies. The `arista-ops` skill covers read-only access; nothing was built. |
+| GAP-068 | P1 | CV-CUE historical performance and event import. Depends on GAP-067's connector. |
+| GAP-069 | **P0** | Process-model equivalence and receive-path artifact guard. PV10 evidence at 250 Mbps per direction. |
+| GAP-070 | **P0** | Native capacity/latency-knee discovery with application cross-validation. PC13 evidence. |
+| GAP-071 | P1 | Effective WLAN configuration snapshot, cross-AP diff, and visibility-gap report. |
+
+GAP-069 and GAP-070 are P0, meaning current output can still produce a
+materially false diagnosis in those two areas. They should be the next work.
+
+Note on numbering: I filed a gap as GAP-067 mid-session and the user
+independently added GAP-067 through GAP-071. Mine was renumbered to **GAP-072**
+and the references in `multiclient_fairness.rs`, `src/cli/mod.rs`, and gate 064
+were updated. Check for ID collisions before filing a new gap.
 
 ## Contract
 

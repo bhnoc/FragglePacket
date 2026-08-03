@@ -5,7 +5,7 @@
 //! the same idea) so a second invocation on another machine can be
 //! combined offline. This command never coordinates the actual load itself
 //! across a network -- that stays out of scope; it only ingests and
-//! evaluates descriptors, matching GAP-067's requirement that both roles
+//! evaluates descriptors, matching GAP-072's requirement that both roles
 //! must exist and overlap before any cross-client number is trusted.
 
 use colored::*;
