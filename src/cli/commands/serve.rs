@@ -28,7 +28,12 @@ fn run_serve(bind: &str, target: Option<String>) {
             }
         }
     }
-    println!("{}", format!("Serving metrics on http://{}/metrics", bind).green().bold());
+    println!(
+        "{}",
+        format!("Serving metrics on http://{}/metrics", bind)
+            .green()
+            .bold()
+    );
     if let Err(e) = serve_metrics(reg, bind) {
         eprintln!("{} serve error: {}", "✗".red(), e);
     }

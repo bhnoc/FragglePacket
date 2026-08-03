@@ -64,7 +64,9 @@ pub fn classify_bimodality(results: &[BucketResult]) -> BimodalityVerdict {
     if results.len() < 2 {
         return BimodalityVerdict::InsufficientBuckets;
     }
-    let succeeded = results.iter().any(|r| r.outcome == BucketOutcome::Succeeded);
+    let succeeded = results
+        .iter()
+        .any(|r| r.outcome == BucketOutcome::Succeeded);
     let failed = results.iter().any(|r| r.outcome == BucketOutcome::Failed);
     if succeeded && failed {
         BimodalityVerdict::BimodalSplitDetected
@@ -78,7 +80,12 @@ pub fn classify_bimodality(results: &[BucketResult]) -> BimodalityVerdict {
 /// reply expected) within `timeout` as success. Deliberately does not
 /// generate sustained load -- one small datagram round-trip is enough to
 /// prove the 5-tuple/hash-bucket mechanism.
-pub fn run_udp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, timeout: Duration) -> BucketResult {
+pub fn run_udp_bucket(
+    local_port: u16,
+    target: SocketAddr,
+    payload_len: usize,
+    timeout: Duration,
+) -> BucketResult {
     let bind_addr = if target.is_ipv4() {
         format!("0.0.0.0:{local_port}")
     } else {
@@ -104,7 +111,11 @@ pub fn run_udp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, t
     let mut buf = [0u8; 1500];
     let (outcome, echoed, rtt_ms) = match &sent {
         Ok(_) => match socket.recv_from(&mut buf) {
-            Ok((r, _)) => (BucketOutcome::Succeeded, r as u64, Some(start.elapsed().as_secs_f64() * 1000.0)),
+            Ok((r, _)) => (
+                BucketOutcome::Succeeded,
+                r as u64,
+                Some(start.elapsed().as_secs_f64() * 1000.0),
+            ),
             // No reply is expected from a bare UDP echo-less target; a
             // successful send is still evidence the bucket's path/NAT
             // mapping admitted the flow, so it counts as success with
@@ -133,7 +144,12 @@ pub fn run_udp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, t
 /// failed connect is `Failed`; a completed connect+send is `Succeeded`
 /// regardless of how many bytes came back, since TCP admission (not
 /// application-level echo) is what a hash-bucket/NAT problem would break.
-pub fn run_tcp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, timeout: Duration) -> BucketResult {
+pub fn run_tcp_bucket(
+    local_port: u16,
+    target: SocketAddr,
+    payload_len: usize,
+    timeout: Duration,
+) -> BucketResult {
     let local: SocketAddr = if target.is_ipv4() {
         format!("0.0.0.0:{local_port}").parse().unwrap()
     } else {
@@ -147,7 +163,11 @@ pub fn run_tcp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, t
         rtt_ms: None,
         mid_flow_rebind_detected: None,
     };
-    let domain = if target.is_ipv4() { socket2::Domain::IPV4 } else { socket2::Domain::IPV6 };
+    let domain = if target.is_ipv4() {
+        socket2::Domain::IPV4
+    } else {
+        socket2::Domain::IPV6
+    };
     let sock2 = match socket2::Socket::new(domain, socket2::Type::STREAM, None) {
         Ok(s) => s,
         Err(_) => return failed(),
@@ -165,7 +185,12 @@ pub fn run_tcp_bucket(local_port: u16, target: SocketAddr, payload_len: usize, t
     tcp_bucket_from_stream(local_port, stream, payload_len, timeout)
 }
 
-fn tcp_bucket_from_stream(local_port: u16, mut stream: TcpStream, payload_len: usize, timeout: Duration) -> BucketResult {
+fn tcp_bucket_from_stream(
+    local_port: u16,
+    mut stream: TcpStream,
+    payload_len: usize,
+    timeout: Duration,
+) -> BucketResult {
     use std::io::{Read, Write};
     stream.set_read_timeout(Some(timeout)).ok();
     let payload = vec![0xCDu8; payload_len.max(1)];
@@ -233,7 +258,11 @@ pub fn run_udp_bucket_with_stun_bracket(
     let mut buf = [0u8; 1500];
     let (outcome, echoed, rtt_ms) = match sent {
         Ok(_) => match socket.recv_from(&mut buf) {
-            Ok((r, _)) => (BucketOutcome::Succeeded, r as u64, Some(start.elapsed().as_secs_f64() * 1000.0)),
+            Ok((r, _)) => (
+                BucketOutcome::Succeeded,
+                r as u64,
+                Some(start.elapsed().as_secs_f64() * 1000.0),
+            ),
             Err(_) => (BucketOutcome::Succeeded, 0u64, None),
         },
         Err(_) => (BucketOutcome::Failed, 0u64, None),
@@ -267,13 +296,27 @@ mod tests {
     use super::*;
 
     fn bucket(port: u16, outcome: BucketOutcome) -> BucketResult {
-        BucketResult { local_port: port, outcome, bytes_sent: 1, bytes_acked_or_echoed: 0, rtt_ms: None, mid_flow_rebind_detected: None }
+        BucketResult {
+            local_port: port,
+            outcome,
+            bytes_sent: 1,
+            bytes_acked_or_echoed: 0,
+            rtt_ms: None,
+            mid_flow_rebind_detected: None,
+        }
     }
 
     #[test]
     fn all_buckets_succeeding_reports_no_split_not_inconclusive() {
-        let results = vec![bucket(1, BucketOutcome::Succeeded), bucket(2, BucketOutcome::Succeeded), bucket(3, BucketOutcome::Succeeded)];
-        assert_eq!(classify_bimodality(&results), BimodalityVerdict::NoSplitDetected);
+        let results = vec![
+            bucket(1, BucketOutcome::Succeeded),
+            bucket(2, BucketOutcome::Succeeded),
+            bucket(3, BucketOutcome::Succeeded),
+        ];
+        assert_eq!(
+            classify_bimodality(&results),
+            BimodalityVerdict::NoSplitDetected
+        );
     }
 
     #[test]
@@ -281,21 +324,41 @@ mod tests {
         // This is the exact field-evidence shape: every 350 Mbps bucket
         // failed the same way, and that absence of a split was itself the
         // finding (argues against one bad ECMP member).
-        let results = vec![bucket(1, BucketOutcome::Failed), bucket(2, BucketOutcome::Failed), bucket(3, BucketOutcome::Failed)];
-        assert_eq!(classify_bimodality(&results), BimodalityVerdict::NoSplitDetected);
+        let results = vec![
+            bucket(1, BucketOutcome::Failed),
+            bucket(2, BucketOutcome::Failed),
+            bucket(3, BucketOutcome::Failed),
+        ];
+        assert_eq!(
+            classify_bimodality(&results),
+            BimodalityVerdict::NoSplitDetected
+        );
     }
 
     #[test]
     fn one_failing_bucket_among_successes_is_a_bimodal_split() {
-        let results = vec![bucket(1, BucketOutcome::Succeeded), bucket(2, BucketOutcome::Failed), bucket(3, BucketOutcome::Succeeded)];
-        assert_eq!(classify_bimodality(&results), BimodalityVerdict::BimodalSplitDetected);
+        let results = vec![
+            bucket(1, BucketOutcome::Succeeded),
+            bucket(2, BucketOutcome::Failed),
+            bucket(3, BucketOutcome::Succeeded),
+        ];
+        assert_eq!(
+            classify_bimodality(&results),
+            BimodalityVerdict::BimodalSplitDetected
+        );
     }
 
     #[test]
     fn fewer_than_two_buckets_refuses_a_split_judgement() {
         let results = vec![bucket(1, BucketOutcome::Succeeded)];
-        assert_eq!(classify_bimodality(&results), BimodalityVerdict::InsufficientBuckets);
-        assert_eq!(classify_bimodality(&[]), BimodalityVerdict::InsufficientBuckets);
+        assert_eq!(
+            classify_bimodality(&results),
+            BimodalityVerdict::InsufficientBuckets
+        );
+        assert_eq!(
+            classify_bimodality(&[]),
+            BimodalityVerdict::InsufficientBuckets
+        );
     }
 
     #[test]

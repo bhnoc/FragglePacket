@@ -5,8 +5,8 @@ use colored::*;
 use std::fs;
 
 use fraggle_packet::network_tests::iperf::{
-    detect_local_version, discover_listeners, parse_iperf_json, run_iperf_client, select_independent_listener,
-    EndpointAllowlist, IperfParseError, TestDirection,
+    detect_local_version, discover_listeners, parse_iperf_json, run_iperf_client,
+    select_independent_listener, EndpointAllowlist, IperfParseError, TestDirection,
 };
 
 #[derive(clap::Args, Debug)]
@@ -101,7 +101,11 @@ pub fn run(args: &IperfAnalyzeArgs) {
             }
         }
         Err(IperfParseError::ServerError(detail)) => {
-            eprintln!("{} iperf3 reported an error before any measurement: {}", "✗".red().bold(), detail);
+            eprintln!(
+                "{} iperf3 reported an error before any measurement: {}",
+                "✗".red().bold(),
+                detail
+            );
             std::process::exit(1);
         }
         Err(e) => {
@@ -137,19 +141,35 @@ fn run_discovery(args: &IperfAnalyzeArgs) {
         return;
     }
 
-    println!("{}", format!("== Endpoint capability discovery: {} ==", target).cyan().bold());
+    println!(
+        "{}",
+        format!("== Endpoint capability discovery: {} ==", target)
+            .cyan()
+            .bold()
+    );
     println!(
         "  local iperf3 version: {}",
-        local_version.map(|v| format!("{}.{}", v.major, v.minor)).unwrap_or_else(|| "unknown".to_string())
+        local_version
+            .map(|v| format!("{}.{}", v.major, v.minor))
+            .unwrap_or_else(|| "unknown".to_string())
     );
-    println!("  allowlisted ports (probed, and only these): {:?}", allowlist.ports);
+    println!(
+        "  allowlisted ports (probed, and only these): {:?}",
+        allowlist.ports
+    );
     for cap in &capabilities {
-        let status = if cap.reachable { "reachable".green() } else { "unreachable".red() };
+        let status = if cap.reachable {
+            "reachable".green()
+        } else {
+            "unreachable".red()
+        };
         println!(
             "  port {}: {} version={} bidir_reliable={:?} -- {}",
             cap.port,
             status,
-            cap.version.map(|v| format!("{}.{}", v.major, v.minor)).unwrap_or_else(|| "unknown".to_string()),
+            cap.version
+                .map(|v| format!("{}.{}", v.major, v.minor))
+                .unwrap_or_else(|| "unknown".to_string()),
             cap.supports_bidir,
             cap.detail.dimmed()
         );
@@ -164,7 +184,9 @@ fn print_result(r: &fraggle_packet::network_tests::iperf::IperfResult) {
     println!("{}", "== iperf3 result ==".cyan().bold());
     println!(
         "  version: {}",
-        r.version.map(|v| format!("{}.{}", v.major, v.minor)).unwrap_or_else(|| "unknown".to_string())
+        r.version
+            .map(|v| format!("{}.{}", v.major, v.minor))
+            .unwrap_or_else(|| "unknown".to_string())
     );
     println!("  protocol: {}  direction: {:?}", r.protocol, r.direction);
     print_rate_evidence("forward", &r.forward);
@@ -174,8 +196,11 @@ fn print_result(r: &fraggle_packet::network_tests::iperf::IperfResult) {
     if !r.required_fields_missing.is_empty() {
         println!(
             "  {}",
-            format!("missing fields (reported unavailable, not zero): {}", r.required_fields_missing.join(", "))
-                .yellow()
+            format!(
+                "missing fields (reported unavailable, not zero): {}",
+                r.required_fields_missing.join(", ")
+            )
+            .yellow()
         );
     }
     if matches!(r.direction, TestDirection::Bidirectional) && r.bidir_reverse.is_none() {
@@ -189,11 +214,19 @@ fn print_result(r: &fraggle_packet::network_tests::iperf::IperfResult) {
 
 fn print_rate_evidence(label: &str, e: &fraggle_packet::network_tests::iperf::RateEvidence) {
     println!("  [{}]", label);
-    println!("    offered:  {}", e.offered_bps.map(|b| format!("{:.1} bps", b)).unwrap_or_else(|| "unavailable".to_string()));
+    println!(
+        "    offered:  {}",
+        e.offered_bps
+            .map(|b| format!("{:.1} bps", b))
+            .unwrap_or_else(|| "unavailable".to_string())
+    );
     println!("    sent:     {}", fmt_sample(e.sent.as_ref()));
     println!("    received: {}", fmt_sample(e.received.as_ref()));
     if let Some(est) = &e.estimated_received {
-        println!("    estimated_received (legacy sum): {}", fmt_sample(Some(est)));
+        println!(
+            "    estimated_received (legacy sum): {}",
+            fmt_sample(Some(est))
+        );
     }
 }
 
@@ -206,7 +239,9 @@ fn fmt_sample(s: Option<&fraggle_packet::network_tests::iperf::RateSample>) -> S
                 s.bits_per_second,
                 s.bytes,
                 p,
-                s.lost_percent.map(|l| format!("{:.2}%", l)).unwrap_or_else(|| "unavailable".to_string())
+                s.lost_percent
+                    .map(|l| format!("{:.2}%", l))
+                    .unwrap_or_else(|| "unavailable".to_string())
             ),
             None => format!("{:.1} bps, {} bytes", s.bits_per_second, s.bytes),
         },

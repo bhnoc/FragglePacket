@@ -38,28 +38,54 @@ pub const MAINTENANCE_MAX_CONCURRENCY: u32 = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BudgetError {
-    RateExceedsCap { requested: String, cap: String, mode: RunMode },
-    DurationExceedsCap { requested: u64, cap: u64, mode: RunMode },
-    ConcurrencyExceedsCap { requested: u32, cap: u32, mode: RunMode },
+    RateExceedsCap {
+        requested: String,
+        cap: String,
+        mode: RunMode,
+    },
+    DurationExceedsCap {
+        requested: u64,
+        cap: u64,
+        mode: RunMode,
+    },
+    ConcurrencyExceedsCap {
+        requested: u32,
+        cap: u32,
+        mode: RunMode,
+    },
     ZeroRamp,
 }
 
 impl std::fmt::Display for BudgetError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BudgetError::RateExceedsCap { requested, cap, mode } => write!(
+            BudgetError::RateExceedsCap {
+                requested,
+                cap,
+                mode,
+            } => write!(
                 f,
                 "target rate {requested} Mbps exceeds {mode:?} cap of {cap} Mbps"
             ),
-            BudgetError::DurationExceedsCap { requested, cap, mode } => write!(
+            BudgetError::DurationExceedsCap {
+                requested,
+                cap,
+                mode,
+            } => write!(
                 f,
                 "max duration {requested}s exceeds {mode:?} cap of {cap}s"
             ),
-            BudgetError::ConcurrencyExceedsCap { requested, cap, mode } => write!(
+            BudgetError::ConcurrencyExceedsCap {
+                requested,
+                cap,
+                mode,
+            } => write!(
                 f,
                 "max concurrency {requested} exceeds {mode:?} cap of {cap}"
             ),
-            BudgetError::ZeroRamp => write!(f, "ramp_steps must be >= 1 (no starting at full rate)"),
+            BudgetError::ZeroRamp => {
+                write!(f, "ramp_steps must be >= 1 (no starting at full rate)")
+            }
         }
     }
 }
@@ -79,7 +105,11 @@ impl LoadBudget {
         }
     }
 
-    pub fn maintenance(target_rate_mbps: f64, max_duration_secs: u64, max_concurrency: u32) -> Self {
+    pub fn maintenance(
+        target_rate_mbps: f64,
+        max_duration_secs: u64,
+        max_concurrency: u32,
+    ) -> Self {
         Self {
             mode: RunMode::Maintenance,
             target_rate_mbps,
@@ -164,7 +194,10 @@ mod tests {
     #[test]
     fn live_event_rejects_maintenance_scale_rate() {
         let b = LoadBudget::live_event(500.0, 10, 1);
-        assert!(matches!(b.validate(), Err(BudgetError::RateExceedsCap { .. })));
+        assert!(matches!(
+            b.validate(),
+            Err(BudgetError::RateExceedsCap { .. })
+        ));
     }
 
     #[test]

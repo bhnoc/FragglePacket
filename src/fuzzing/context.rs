@@ -1,7 +1,7 @@
 //! Packet context for building base packet layers
 
-use std::net::{Ipv4Addr, ToSocketAddrs};
 use rand::Rng;
+use std::net::{Ipv4Addr, ToSocketAddrs};
 
 /// Context for packet generation containing source/destination information
 #[derive(Debug, Clone)]
@@ -30,14 +30,7 @@ impl PacketContext {
             rng.gen(),
             rng.gen(),
         ];
-        let dst_mac = [
-            0x02,
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-        ];
+        let dst_mac = [0x02, rng.gen(), rng.gen(), rng.gen(), rng.gen(), rng.gen()];
 
         Ok(Self {
             src_ip: src,
@@ -45,7 +38,7 @@ impl PacketContext {
             src_mac,
             dst_mac,
             src_port: rng.gen_range(49152..65535), // Ephemeral port range
-            dst_port: 443, // Default to HTTPS
+            dst_port: 443,                         // Default to HTTPS
         })
     }
 
@@ -125,13 +118,13 @@ impl PacketContext {
     /// Build complete packet as single byte vector
     pub fn build_packet(&self, payload_len: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let (eth, ipv4, tcp, payload) = self.build_base_layers(payload_len)?;
-        
+
         let mut packet = Vec::new();
         packet.extend_from_slice(&eth);
         packet.extend_from_slice(&ipv4);
         packet.extend_from_slice(&tcp);
         packet.extend_from_slice(&payload);
-        
+
         Ok(packet)
     }
 }
@@ -153,9 +146,8 @@ mod tests {
     fn test_build_packet() {
         let ctx = PacketContext::new("192.168.1.1", "8.8.8.8").unwrap();
         let packet = ctx.build_packet(100).unwrap();
-        
+
         // Ethernet (14) + IPv4 (20) + TCP (20) + Payload (100) = 154 bytes
         assert_eq!(packet.len(), 154);
     }
 }
-

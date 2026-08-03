@@ -3,13 +3,13 @@
 //! Uses VirtualDom::new_with_props to pass panel ID directly.
 //! Uses a channel to communicate window close events back to Dioxus safely.
 
-use std::collections::HashSet;
-use std::sync::mpsc::{self, Sender, Receiver};
-use std::sync::OnceLock;
-use dioxus::prelude::*;
-use dioxus::desktop::{use_window, Config, WindowBuilder, LogicalSize, tao};
-use tao::event::{Event, WindowEvent};
 use crate::state::PanelId;
+use dioxus::desktop::{tao, use_window, Config, LogicalSize, WindowBuilder};
+use dioxus::prelude::*;
+use std::collections::HashSet;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::OnceLock;
+use tao::event::{Event, WindowEvent};
 
 // ============================================================================
 // Global State
@@ -19,7 +19,8 @@ use crate::state::PanelId;
 pub static DETACHED_PANELS: GlobalSignal<HashSet<PanelId>> = Signal::global(|| HashSet::new());
 
 /// Channel for window close events - initialized once
-static REATTACH_CHANNEL: OnceLock<(Sender<PanelId>, std::sync::Mutex<Option<Receiver<PanelId>>>)> = OnceLock::new();
+static REATTACH_CHANNEL: OnceLock<(Sender<PanelId>, std::sync::Mutex<Option<Receiver<PanelId>>>)> =
+    OnceLock::new();
 
 fn get_reattach_sender() -> Sender<PanelId> {
     let (tx, _) = REATTACH_CHANNEL.get_or_init(|| {
@@ -30,9 +31,9 @@ fn get_reattach_sender() -> Sender<PanelId> {
 }
 
 fn take_reattach_receiver() -> Option<Receiver<PanelId>> {
-    REATTACH_CHANNEL.get().and_then(|(_, rx_mutex)| {
-        rx_mutex.lock().ok().and_then(|mut guard| guard.take())
-    })
+    REATTACH_CHANNEL
+        .get()
+        .and_then(|(_, rx_mutex)| rx_mutex.lock().ok().and_then(|mut guard| guard.take()))
 }
 
 /// Context for child components to know they're in a detached window
@@ -157,7 +158,7 @@ fn spawn_detached_window(window: dioxus::desktop::DesktopContext, panel: PanelId
             WindowBuilder::new()
                 .with_title(format!("FragglePacket - {}", panel.label()))
                 .with_inner_size(LogicalSize::new(900.0, 700.0))
-                .with_min_inner_size(LogicalSize::new(600.0, 400.0))
+                .with_min_inner_size(LogicalSize::new(600.0, 400.0)),
         )
         .with_custom_head(format!(r#"<style>{}</style>"#, theme::get_css()));
 
@@ -180,7 +181,12 @@ fn DetachedWindowComponent(panel: PanelId) -> Element {
         let tx = get_reattach_sender();
 
         window.create_wry_event_handler(move |event, _target| {
-            if let Event::WindowEvent { window_id: evt_window_id, event: WindowEvent::CloseRequested, .. } = event {
+            if let Event::WindowEvent {
+                window_id: evt_window_id,
+                event: WindowEvent::CloseRequested,
+                ..
+            } = event
+            {
                 if *evt_window_id == window_id {
                     // Send reattach request through channel (safe from any thread)
                     let _ = tx.send(panel);
@@ -205,9 +211,11 @@ fn DetachedWindowComponent(panel: PanelId) -> Element {
 /// Renders panel content
 #[component]
 fn PanelContent(panel: PanelId) -> Element {
-    use crate::components::{Dashboard, TestPanel, FuzzingPanel, Simulator, LogsPanel, HistoryPanel};
-    use crate::state::AppState;
+    use crate::components::{
+        Dashboard, FuzzingPanel, HistoryPanel, LogsPanel, Simulator, TestPanel,
+    };
     use crate::state::test_runner::TestUpdate;
+    use crate::state::AppState;
     use futures_util::StreamExt;
 
     let state = use_signal(AppState::new);
@@ -235,11 +243,17 @@ fn PanelContent(panel: PanelId) -> Element {
                     }
                     TestUpdate::Completed { target } => {
                         state.write().testing.set(false);
-                        state.write().status_message.set(format!("Completed: {}", target));
+                        state
+                            .write()
+                            .status_message
+                            .set(format!("Completed: {}", target));
                     }
                     TestUpdate::Failed { error, .. } => {
                         state.write().testing.set(false);
-                        state.write().status_message.set(format!("Failed: {}", error));
+                        state
+                            .write()
+                            .status_message
+                            .set(format!("Failed: {}", error));
                     }
                 }
             }

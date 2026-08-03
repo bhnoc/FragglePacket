@@ -16,9 +16,7 @@ pub fn probe_quic_mtu(target: &str, port: u16, timeout_ms: u64) -> Option<usize>
         Err(_) => return None,
     };
 
-    rt.block_on(async {
-        quic_mtu_probe_async(target, port, timeout_ms).await
-    })
+    rt.block_on(async { quic_mtu_probe_async(target, port, timeout_ms).await })
 }
 
 pub async fn quic_mtu_probe_async(target: &str, port: u16, timeout_ms: u64) -> Option<usize> {
@@ -35,7 +33,7 @@ pub async fn quic_mtu_probe_async(target: &str, port: u16, timeout_ms: u64) -> O
     transport.max_idle_timeout(Some(Duration::from_millis(timeout_ms).try_into().ok()?));
 
     let mut client_config = ClientConfig::new(Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(crypto).ok()?
+        quinn::crypto::rustls::QuicClientConfig::try_from(crypto).ok()?,
     ));
     client_config.transport_config(Arc::new(transport));
 
@@ -52,8 +50,10 @@ pub async fn quic_mtu_probe_async(target: &str, port: u16, timeout_ms: u64) -> O
     // Try to connect
     let conn = match tokio::time::timeout(
         Duration::from_millis(timeout_ms),
-        endpoint.connect(addr, target).ok()?.into_future()
-    ).await {
+        endpoint.connect(addr, target).ok()?.into_future(),
+    )
+    .await
+    {
         Ok(Ok(conn)) => conn,
         _ => return None,
     };
@@ -124,8 +124,11 @@ pub fn check_quic_support(target: &str) -> bool {
     // Use curl to check for Alt-Svc header indicating QUIC/HTTP3 support
     let output = Command::new("curl")
         .args([
-            "-s", "-I", "--max-time", "3",
-            &format!("https://{}", target)
+            "-s",
+            "-I",
+            "--max-time",
+            "3",
+            &format!("https://{}", target),
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -134,8 +137,7 @@ pub fn check_quic_support(target: &str) -> bool {
     match output {
         Ok(out) => {
             let headers = String::from_utf8_lossy(&out.stdout).to_lowercase();
-            headers.contains("alt-svc") &&
-                (headers.contains("h3") || headers.contains("quic"))
+            headers.contains("alt-svc") && (headers.contains("h3") || headers.contains("quic"))
         }
         Err(_) => false,
     }

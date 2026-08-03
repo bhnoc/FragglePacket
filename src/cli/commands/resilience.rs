@@ -8,7 +8,9 @@
 
 use colored::*;
 
-use fraggle_packet::network_tests::resilience::{judge_resilience, require_authorization, ResilienceRun};
+use fraggle_packet::network_tests::resilience::{
+    judge_resilience, require_authorization, ResilienceRun,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct ResilienceArgs {
@@ -69,14 +71,23 @@ pub fn run(args: &ResilienceArgs) {
     println!();
     match verdict.outage_duration_secs {
         Some(d) => println!("  outage duration: {:.2}s", d),
-        None => println!("  outage duration: {} (no bracketed outage observed)", "not measured".yellow()),
+        None => println!(
+            "  outage duration: {} (no bracketed outage observed)",
+            "not measured".yellow()
+        ),
     }
     println!("  sessions survived:      {}", verdict.sessions_survived);
     println!("  sessions lost:          {}", verdict.sessions_lost);
-    println!("  sessions never sampled: {}", verdict.sessions_never_sampled);
+    println!(
+        "  sessions never sampled: {}",
+        verdict.sessions_never_sampled
+    );
     println!("  route identity:  {:?}", verdict.route_identity);
     println!("  nat identity:    {:?}", verdict.nat_identity);
-    println!("  state resync observed: {:?}", verdict.state_resync_observed);
+    println!(
+        "  state resync observed: {:?}",
+        verdict.state_resync_observed
+    );
     println!();
     println!(
         "  note: component state is operator-supplied. This command never initiates a failover \

@@ -68,11 +68,8 @@ impl NetworkTest for Raw9100BulkTest {
     }
 
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
         result.add_metadata(
             "cli_pjl",
             format!(
@@ -82,10 +79,7 @@ impl NetworkTest for Raw9100BulkTest {
         );
         result.add_metadata(
             "cli_bulk",
-            format!(
-                "head -c 65536 /dev/zero | nc -w 5 {} {}",
-                target, self.port
-            ),
+            format!("head -c 65536 /dev/zero | nc -w 5 {} {}", target, self.port),
         );
 
         let pjl_ok = probe_pjl(target, self.port, self.timeout_secs);
@@ -117,9 +111,7 @@ impl NetworkTest for Raw9100BulkTest {
 
         if fail_sizes.is_empty() && pjl_ok {
             result.set_status(TestStatus::Success);
-        } else if fail_sizes.iter().any(|s| *s >= 16384)
-            && !fail_sizes.iter().any(|s| *s <= 1024)
-        {
+        } else if fail_sizes.iter().any(|s| *s >= 16384) && !fail_sizes.iter().any(|s| *s <= 1024) {
             result.set_status(TestStatus::Warning);
             let diag = Diagnosis::new(
                 DiagnosisSeverity::Critical,
@@ -174,8 +166,7 @@ fn probe_pjl(target: &str, port: u16, timeout_secs: u64) -> bool {
     };
     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));
-    let probe: &[u8] =
-        b"\x1b%-12345X@PJL INFO STATUS\r\n@PJL INFO ID\r\n\x1b%-12345X";
+    let probe: &[u8] = b"\x1b%-12345X@PJL INFO STATUS\r\n@PJL INFO ID\r\n\x1b%-12345X";
     if stream.write_all(probe).is_err() {
         return false;
     }

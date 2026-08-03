@@ -173,11 +173,10 @@ mod tests {
     fn test_tcp_options_fuzzer() {
         let ctx = PacketContext::new("192.168.1.1", "8.8.8.8").unwrap();
         let output = "/tmp/test_tcp_options.pcap";
-        
+
         let packets = fuzz(&ctx, output).unwrap();
         assert_eq!(packets, 10); // 5 main scenarios + 5 invalid kinds
-        
+
         std::fs::remove_file(output).ok();
     }
 }
-

@@ -5,8 +5,8 @@ use colored::*;
 use fraggle_packet::load_guard::radio::snapshot_live;
 use fraggle_packet::load_guard::{ap_identity, wdutil};
 use fraggle_packet::network_tests::ap_compat_matrix::{
-    client_association_from_snapshot, run_descriptor_digest, verdict, ApContext, ClientHardwareGeneration,
-    CompatibilityMatrix, CompatibilityVerdict, MatrixCell,
+    client_association_from_snapshot, run_descriptor_digest, verdict, ApContext,
+    ClientHardwareGeneration, CompatibilityMatrix, CompatibilityVerdict, MatrixCell,
 };
 
 #[derive(clap::Args, Debug)]
@@ -77,11 +77,13 @@ pub fn run(args: &ApCompatMatrixArgs) {
 
         let ap_identity = if args.with_ap_identity {
             match (wdutil::snapshot_live(), ap_identity::load_or_create_salt()) {
-                (Ok(fields), Ok(salt)) => fields.bssid.as_deref().map(|b| ap_identity::ApIdentity {
-                    label: ap_identity::label_for_bssid(b, &salt),
-                    band: snap.band.clone(),
-                    channel: snap.channel,
-                }),
+                (Ok(fields), Ok(salt)) => {
+                    fields.bssid.as_deref().map(|b| ap_identity::ApIdentity {
+                        label: ap_identity::label_for_bssid(b, &salt),
+                        band: snap.band.clone(),
+                        channel: snap.channel,
+                    })
+                }
                 (Err(e), _) => {
                     eprintln!(
                         "{} ap identity unavailable: {} (proceeding without it)",
@@ -91,7 +93,11 @@ pub fn run(args: &ApCompatMatrixArgs) {
                     None
                 }
                 (_, Err(e)) => {
-                    eprintln!("{} ap identity salt unavailable: {} (proceeding without it)", "note:".yellow(), e);
+                    eprintln!(
+                        "{} ap identity salt unavailable: {} (proceeding without it)",
+                        "note:".yellow(),
+                        e
+                    );
                     None
                 }
             }
@@ -164,8 +170,14 @@ pub fn run(args: &ApCompatMatrixArgs) {
         println!(
             "    client band/channel/width: {}/{}/{}",
             cell.client.band.as_deref().unwrap_or("?"),
-            cell.client.channel.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string()),
-            cell.client.width_mhz.map(|w| w.to_string()).unwrap_or_else(|| "?".to_string()),
+            cell.client
+                .channel
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "?".to_string()),
+            cell.client
+                .width_mhz
+                .map(|w| w.to_string())
+                .unwrap_or_else(|| "?".to_string()),
         );
         if !cell.client.platform_limitations.is_empty() {
             for l in &cell.client.platform_limitations {
@@ -190,7 +202,10 @@ pub fn run(args: &ApCompatMatrixArgs) {
             }
         }
         CompatibilityVerdict::InsufficientCells { missing } => {
-            println!("{}", "verdict: INSUFFICIENT CELLS FOR A VERDICT".yellow().bold());
+            println!(
+                "{}",
+                "verdict: INSUFFICIENT CELLS FOR A VERDICT".yellow().bold()
+            );
             for m in missing {
                 println!("  missing: {}", m);
             }

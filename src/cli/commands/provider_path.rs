@@ -4,8 +4,8 @@ use colored::*;
 use std::time::Duration;
 
 use fraggle_packet::network_tests::provider_path::{
-    assess_path_stability, operator_geo_override, probe_connect, reverse_dns_region_hint, run_traceroute,
-    HopOutcome, HopStabilityVerdict,
+    assess_path_stability, operator_geo_override, probe_connect, reverse_dns_region_hint,
+    run_traceroute, HopOutcome, HopStabilityVerdict,
 };
 use fraggle_packet::network_tests::run_confidence::{confidence_from_stats, RunStats, WarmUpState};
 use fraggle_packet::redact::RedactionPolicy;
@@ -55,7 +55,8 @@ pub struct ProviderPathArgs {
 }
 
 pub fn run(args: &ProviderPathArgs) {
-    let policy = RedactionPolicy::from_retain_flag(args.retain_identifiers).with_literal(args.target.clone());
+    let policy = RedactionPolicy::from_retain_flag(args.retain_identifiers)
+        .with_literal(args.target.clone());
     if args.interface.is_none() {
         eprintln!(
             "{} --interface not specified; the default route on this class of machine is frequently a VPN tunnel, so the path measured below may not be the one intended",
@@ -65,7 +66,12 @@ pub fn run(args: &ProviderPathArgs) {
 
     let mut runs = Vec::new();
     for _ in 0..args.trace_samples.max(1) {
-        match run_traceroute(&args.target, args.max_hops, args.wait_secs, args.interface.as_deref()) {
+        match run_traceroute(
+            &args.target,
+            args.max_hops,
+            args.wait_secs,
+            args.interface.as_deref(),
+        ) {
             Ok(run) => runs.push(run),
             Err(e) => {
                 eprintln!("{} traceroute failed: {}", "✗".red(), e);
@@ -82,13 +88,25 @@ pub fn run(args: &ProviderPathArgs) {
     // trace-sample run structurally cannot exceed Low confidence.
     let responded_per_run: Vec<f64> = runs
         .iter()
-        .map(|r| r.hops.iter().filter(|h| h.outcome == HopOutcome::Responded).count() as f64)
+        .map(|r| {
+            r.hops
+                .iter()
+                .filter(|h| h.outcome == HopOutcome::Responded)
+                .count() as f64
+        })
         .collect();
-    let run_stats: RunStats =
-        fraggle_packet::network_tests::run_confidence::stats_from_samples(&responded_per_run, WarmUpState::NotApplicable);
+    let run_stats: RunStats = fraggle_packet::network_tests::run_confidence::stats_from_samples(
+        &responded_per_run,
+        WarmUpState::NotApplicable,
+    );
     let (run_confidence, run_confidence_reasons) = confidence_from_stats(&run_stats);
 
-    let connect = probe_connect(&args.target, args.port, Duration::from_secs(3), args.local_ip.as_deref());
+    let connect = probe_connect(
+        &args.target,
+        args.port,
+        Duration::from_secs(3),
+        args.local_ip.as_deref(),
+    );
 
     let geo = match (&args.operator_asn, &args.operator_region) {
         (None, None) => {
@@ -121,8 +139,14 @@ pub fn run(args: &ProviderPathArgs) {
     }
 
     let mut buf = String::new();
-    buf.push_str(&format!("== Provider/path comparison: {} ==\n", args.target));
-    buf.push_str(&format!("  interface: {}\n", args.interface.as_deref().unwrap_or("(unspecified)")));
+    buf.push_str(&format!(
+        "== Provider/path comparison: {} ==\n",
+        args.target
+    ));
+    buf.push_str(&format!(
+        "  interface: {}\n",
+        args.interface.as_deref().unwrap_or("(unspecified)")
+    ));
     buf.push_str(&format!(
         "  geo: asn={} region={} source={:?}\n",
         geo.asn.as_deref().unwrap_or("unavailable"),
@@ -133,33 +157,55 @@ pub fn run(args: &ProviderPathArgs) {
         "  connect {}:{} -> {}\n",
         args.target,
         args.port,
-        if connect.connect_ok { format!("ok ({}ms)", connect.connect_ms.unwrap_or(0)) } else { "failed".to_string() }
+        if connect.connect_ok {
+            format!("ok ({}ms)", connect.connect_ms.unwrap_or(0))
+        } else {
+            "failed".to_string()
+        }
     ));
 
     buf.push_str(&format!(
         "  run confidence: {:?} (sample_count={} variance={})\n",
         run_confidence,
         run_stats.sample_count,
-        run_stats.variance.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "unavailable".to_string())
+        run_stats
+            .variance
+            .map(|v| format!("{:.2}", v))
+            .unwrap_or_else(|| "unavailable".to_string())
     ));
     for reason in &run_confidence_reasons {
         buf.push_str(&format!("    - {}\n", reason));
     }
-    buf.push_str(&format!("-- Path stability ({} samples) --\n", stability.sample_count));
+    buf.push_str(&format!(
+        "-- Path stability ({} samples) --\n",
+        stability.sample_count
+    ));
     for hop in &stability.per_hop {
         let verdict_str = match hop.verdict {
             HopStabilityVerdict::Stable => "Stable".to_string(),
             HopStabilityVerdict::Changed => "Changed".to_string(),
-            HopStabilityVerdict::ConsistentlyNonResponsive => "ConsistentlyNonResponsive (not loss)".to_string(),
+            HopStabilityVerdict::ConsistentlyNonResponsive => {
+                "ConsistentlyNonResponsive (not loss)".to_string()
+            }
             HopStabilityVerdict::IntermittentResponse { responded, total } => {
-                format!("IntermittentResponse {}/{} responded (not a loss percentage)", responded, total)
+                format!(
+                    "IntermittentResponse {}/{} responded (not a loss percentage)",
+                    responded, total
+                )
             }
         };
-        buf.push_str(&format!("  hop {}: {} addrs={:?}\n", hop.hop_number, verdict_str, hop.addresses_seen));
+        buf.push_str(&format!(
+            "  hop {}: {} addrs={:?}\n",
+            hop.hop_number, verdict_str, hop.addresses_seen
+        ));
     }
 
     if let Some(last_run) = runs.last() {
-        let non_responsive = last_run.hops.iter().filter(|h| h.outcome == HopOutcome::NoResponse).count();
+        let non_responsive = last_run
+            .hops
+            .iter()
+            .filter(|h| h.outcome == HopOutcome::NoResponse)
+            .count();
         if non_responsive > 0 {
             buf.push_str(&format!(
                 "  {} hop(s) in the last trace had no response -- non-response, not loss; routers/endpoints may decline TTL-expiry probes\n",

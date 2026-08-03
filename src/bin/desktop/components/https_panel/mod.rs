@@ -1,9 +1,9 @@
 //! HTTPS Panel - Stage-by-stage HTTPS testing with waterfall visualization
 
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 use fraggle_packet::framework::TestCategory;
 
 /// HTTPS testing panel with waterfall chart
@@ -18,19 +18,55 @@ pub fn HttpsPanel(
     let progress = *state.read().progress.read();
 
     // Get HTTPS results for current target
-    let https_results = state.read().get_category_results(&current_target, TestCategory::HTTPS);
+    let https_results = state
+        .read()
+        .get_category_results(&current_target, TestCategory::HTTPS);
     let latest_result = https_results.last();
 
     // Extract waterfall data from latest result
     let stages: Vec<(&str, f64, bool)> = if let Some(result) = latest_result {
         vec![
-            ("DNS", result.metrics.get("dns_time_ms").copied().unwrap_or(0.0), true),
-            ("TCP Connect", result.metrics.get("tcp_connect_time_ms").copied().unwrap_or(0.0),
-             result.metadata.get("tcp_success").map(|s| s == "true").unwrap_or(false)),
-            ("TLS Handshake", result.metrics.get("tls_handshake_time_ms").copied().unwrap_or(0.0),
-             result.metadata.get("tls_success").map(|s| s == "true").unwrap_or(false)),
-            ("TTFB", result.metrics.get("ttfb_ms").copied().unwrap_or(0.0), true),
-            ("Total", result.metrics.get("total_time_ms").copied().unwrap_or(0.0), true),
+            (
+                "DNS",
+                result.metrics.get("dns_time_ms").copied().unwrap_or(0.0),
+                true,
+            ),
+            (
+                "TCP Connect",
+                result
+                    .metrics
+                    .get("tcp_connect_time_ms")
+                    .copied()
+                    .unwrap_or(0.0),
+                result
+                    .metadata
+                    .get("tcp_success")
+                    .map(|s| s == "true")
+                    .unwrap_or(false),
+            ),
+            (
+                "TLS Handshake",
+                result
+                    .metrics
+                    .get("tls_handshake_time_ms")
+                    .copied()
+                    .unwrap_or(0.0),
+                result
+                    .metadata
+                    .get("tls_success")
+                    .map(|s| s == "true")
+                    .unwrap_or(false),
+            ),
+            (
+                "TTFB",
+                result.metrics.get("ttfb_ms").copied().unwrap_or(0.0),
+                true,
+            ),
+            (
+                "Total",
+                result.metrics.get("total_time_ms").copied().unwrap_or(0.0),
+                true,
+            ),
         ]
     } else {
         vec![
@@ -42,13 +78,23 @@ pub fn HttpsPanel(
         ]
     };
 
-    let max_time = stages.iter().map(|(_, t, _)| *t).fold(0.0_f64, f64::max).max(1.0);
+    let max_time = stages
+        .iter()
+        .map(|(_, t, _)| *t)
+        .fold(0.0_f64, f64::max)
+        .max(1.0);
 
     // Extract diagnosis info
     let diagnosis_text = latest_result
         .and_then(|r| r.diagnoses.first())
         .map(|d| (d.title.clone(), d.description.clone(), d.severity))
-        .unwrap_or_else(|| ("No test run".to_string(), "Run HTTPS test to see diagnosis".to_string(), fraggle_packet::framework::DiagnosisSeverity::Info));
+        .unwrap_or_else(|| {
+            (
+                "No test run".to_string(),
+                "Run HTTPS test to see diagnosis".to_string(),
+                fraggle_packet::framework::DiagnosisSeverity::Info,
+            )
+        });
 
     rsx! {
         div { class: "https-panel",

@@ -179,6 +179,7 @@ fn parse_value_after_label<'a>(text: &'a str, label: &str) -> Option<&'a str> {
         .map(|pair| pair[1])
 }
 
+#[allow(dead_code)]
 fn parse_mtu(text: &str) -> Option<u16> {
     parse_value_after_label(text, "mtu")?.parse().ok()
 }

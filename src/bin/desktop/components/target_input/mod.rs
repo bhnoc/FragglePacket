@@ -1,14 +1,11 @@
 //! Target input component with dropdown presets
 
+use crate::state::{get_preset_targets, AppState, Target, TargetCategory};
 use dioxus::prelude::*;
-use crate::state::{AppState, TargetCategory, Target, get_preset_targets};
 
 /// Combined text input + dropdown for target selection
 #[component]
-pub fn TargetInput(
-    state: Signal<AppState>,
-    disabled: bool,
-) -> Element {
+pub fn TargetInput(state: Signal<AppState>, disabled: bool) -> Element {
     let mut show_dropdown = use_signal(|| false);
     let current_target = state.read().current_target.read().clone();
     let selected_tests = state.read().selected_categories.read().clone();
@@ -22,9 +19,14 @@ pub fn TargetInput(
     let compatible_count: usize = if selected_tests.is_empty() {
         presets.len()
     } else {
-        presets.iter().filter(|t| {
-            selected_tests.iter().all(|test_cat| t.supports_test(*test_cat))
-        }).count()
+        presets
+            .iter()
+            .filter(|t| {
+                selected_tests
+                    .iter()
+                    .all(|test_cat| t.supports_test(*test_cat))
+            })
+            .count()
     };
 
     rsx! {
@@ -148,9 +150,17 @@ fn render_item(
     let host = target.host.clone();
     let desc = target.description.clone();
     let port = target.port;
-    let port_display = if port == 0 { "ICMP".to_string() } else { format!(":{}", port) };
+    let port_display = if port == 0 {
+        "ICMP".to_string()
+    } else {
+        format!(":{}", port)
+    };
     let host_for_click = host.clone();
-    let item_class = if dimmed { "dropdown-item dimmed" } else { "dropdown-item" };
+    let item_class = if dimmed {
+        "dropdown-item dimmed"
+    } else {
+        "dropdown-item"
+    };
 
     rsx! {
         div {

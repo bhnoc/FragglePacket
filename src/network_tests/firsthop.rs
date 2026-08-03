@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::probe::probe_icmp;
 use crate::load_guard::route::{detect_live as detect_default_route, is_tunnel_interface};
+use crate::probe::probe_icmp;
 
 /// The state of first-hop ICMP reachability. Suppression and loss are kept
 /// as distinct variants on purpose -- see module docs.
@@ -107,7 +107,11 @@ pub fn tcp_syn_timing(gateway: IpAddr, port: u16, timeout_ms: u64) -> FallbackRe
                 method: FallbackMethod::TcpSyn,
                 attempted: true,
                 succeeded: refused,
-                rtt_ms: if refused { Some(start.elapsed().as_secs_f64() * 1000.0) } else { None },
+                rtt_ms: if refused {
+                    Some(start.elapsed().as_secs_f64() * 1000.0)
+                } else {
+                    None
+                },
                 unavailable_reason: None,
             }
         }
@@ -144,7 +148,8 @@ pub fn arp_timing_unprivileged_probe(_gateway: IpAddr) -> FallbackResult {
         succeeded: false,
         rtt_ms: None,
         unavailable_reason: Some(
-            "running as root but ARP active-probe sender is not implemented; use TCP SYN timing".to_string(),
+            "running as root but ARP active-probe sender is not implemented; use TCP SYN timing"
+                .to_string(),
         ),
     }
 }
@@ -175,7 +180,10 @@ pub fn resolve_probe_interface(explicit: Option<&str>) -> (Option<String>, bool)
 /// Classifies ICMP outcome into Responding/Suppressed/Lost using a
 /// corroborating fallback result, and builds the final report. `fallback` is
 /// `None` when ICMP already succeeded and no fallback was needed.
-pub fn classify(icmp: (usize, usize), fallback: Option<FallbackResult>) -> (IcmpProbeResult, Option<FallbackResult>) {
+pub fn classify(
+    icmp: (usize, usize),
+    fallback: Option<FallbackResult>,
+) -> (IcmpProbeResult, Option<FallbackResult>) {
     let (sent, received) = icmp;
     let state = if received > 0 {
         IcmpState::Responding
@@ -184,7 +192,14 @@ pub fn classify(icmp: (usize, usize), fallback: Option<FallbackResult>) -> (Icmp
     } else {
         IcmpState::Lost
     };
-    (IcmpProbeResult { sent, received, state }, fallback)
+    (
+        IcmpProbeResult {
+            sent,
+            received,
+            state,
+        },
+        fallback,
+    )
 }
 
 #[cfg(test)]

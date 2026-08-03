@@ -6,9 +6,8 @@ use std::time::Duration;
 
 use fraggle_packet::load_guard::route::is_tunnel_interface;
 use fraggle_packet::network_tests::multicast_isolation::{
-    judge, observe_group_delivery, probe_multicast_group, probe_peer_reachability, tally_responses,
-    ExpectedPolicy, ExpectedReachability, Observation, ResponderTally, Verdict, MAX_PROBES_PER_KIND, MDNS_GROUP,
-    MDNS_PORT, SSDP_GROUP, SSDP_PORT, TUNNEL_INTERFACE_WARNING,
+    judge, observe_group_delivery, probe_multicast_group, probe_peer_reachability, tally_responses, ExpectedReachability, Observation, ResponderTally, Verdict,
+    MAX_PROBES_PER_KIND, MDNS_GROUP, MDNS_PORT, SSDP_GROUP, SSDP_PORT, TUNNEL_INTERFACE_WARNING,
 };
 
 #[derive(clap::Args, Debug)]
@@ -97,7 +96,10 @@ fn verdict_label(v: Verdict) -> &'static str {
 }
 
 fn check_result(observed: Observation, expected: Option<ExpectedReachability>) -> CheckResult {
-    CheckResult { observation: obs_label(observed), verdict: verdict_label(judge(observed, expected)) }
+    CheckResult {
+        observation: obs_label(observed),
+        verdict: verdict_label(judge(observed, expected)),
+    }
 }
 
 fn resolve(host_port: &str) -> Result<SocketAddr, String> {
@@ -124,15 +126,23 @@ fn synthetic_observation(seed: &str, kind: &str) -> Observation {
 fn synthetic_tally(seed: &str) -> ResponderTally {
     use fraggle_packet::network_tests::multicast_isolation::ServiceClass;
     match seed {
-        "all-reachable" | "mixed" => {
-            ResponderTally { total_responses: 2, by_class: vec![(ServiceClass::Printer, 1), (ServiceClass::Airplay, 1)] }
-        }
-        _ => ResponderTally { total_responses: 0, by_class: vec![] },
+        "all-reachable" | "mixed" => ResponderTally {
+            total_responses: 2,
+            by_class: vec![(ServiceClass::Printer, 1), (ServiceClass::Airplay, 1)],
+        },
+        _ => ResponderTally {
+            total_responses: 0,
+            by_class: vec![],
+        },
     }
 }
 
 pub fn run(args: &MulticastIsolationArgs) {
-    let interface_is_tunnel = args.interface.as_deref().map(is_tunnel_interface).unwrap_or(false);
+    let interface_is_tunnel = args
+        .interface
+        .as_deref()
+        .map(is_tunnel_interface)
+        .unwrap_or(false);
     if interface_is_tunnel {
         eprintln!("{} {}", "⚠".yellow().bold(), TUNNEL_INTERFACE_WARNING);
     }
@@ -140,41 +150,61 @@ pub fn run(args: &MulticastIsolationArgs) {
     let listen_for = Duration::from_millis(args.listen_ms);
     let expected_mdns = args.expect_mdns.map(ExpectedReachability::from);
     let expected_ssdp = args.expect_ssdp.map(ExpectedReachability::from);
-    let expected_multicast = args.expect_multicast_delivery.map(ExpectedReachability::from);
+    let expected_multicast = args
+        .expect_multicast_delivery
+        .map(ExpectedReachability::from);
     let expected_peer = args.expect_peer_isolation.map(ExpectedReachability::from);
 
-    let (mdns_obs, mdns_tally, ssdp_obs, ssdp_tally, multicast_obs) = if let Some(seed) = &args.inject_fixture {
-        (
-            synthetic_observation(seed, "mdns"),
-            synthetic_tally(seed),
-            synthetic_observation(seed, "ssdp"),
-            synthetic_tally(seed),
-            synthetic_observation(seed, "multicast_delivery"),
-        )
-    } else {
-        let query = b"fraggle-packet-discovery-probe";
-        let mdns_responses = probe_multicast_group(MDNS_GROUP, MDNS_PORT, query, args.probe_count, listen_for)
-            .unwrap_or_default();
-        let mdns_obs = if mdns_responses.is_empty() { Observation::NoResponse } else { Observation::Reachable };
-        let mdns_tally = tally_responses(&mdns_responses);
+    let (mdns_obs, mdns_tally, ssdp_obs, ssdp_tally, multicast_obs) =
+        if let Some(seed) = &args.inject_fixture {
+            (
+                synthetic_observation(seed, "mdns"),
+                synthetic_tally(seed),
+                synthetic_observation(seed, "ssdp"),
+                synthetic_tally(seed),
+                synthetic_observation(seed, "multicast_delivery"),
+            )
+        } else {
+            let query = b"fraggle-packet-discovery-probe";
+            let mdns_responses =
+                probe_multicast_group(MDNS_GROUP, MDNS_PORT, query, args.probe_count, listen_for)
+                    .unwrap_or_default();
+            let mdns_obs = if mdns_responses.is_empty() {
+                Observation::NoResponse
+            } else {
+                Observation::Reachable
+            };
+            let mdns_tally = tally_responses(&mdns_responses);
 
-        let ssdp_responses = probe_multicast_group(SSDP_GROUP, SSDP_PORT, query, args.probe_count, listen_for)
-            .unwrap_or_default();
-        let ssdp_obs = if ssdp_responses.is_empty() { Observation::NoResponse } else { Observation::Reachable };
-        let ssdp_tally = tally_responses(&ssdp_responses);
+            let ssdp_responses =
+                probe_multicast_group(SSDP_GROUP, SSDP_PORT, query, args.probe_count, listen_for)
+                    .unwrap_or_default();
+            let ssdp_obs = if ssdp_responses.is_empty() {
+                Observation::NoResponse
+            } else {
+                Observation::Reachable
+            };
+            let ssdp_tally = tally_responses(&ssdp_responses);
 
-        let multicast_obs = observe_group_delivery(MDNS_GROUP, MDNS_PORT, listen_for).unwrap_or(Observation::NoResponse);
+            let multicast_obs = observe_group_delivery(MDNS_GROUP, MDNS_PORT, listen_for)
+                .unwrap_or(Observation::NoResponse);
 
-        (mdns_obs, mdns_tally, ssdp_obs, ssdp_tally, multicast_obs)
-    };
+            (mdns_obs, mdns_tally, ssdp_obs, ssdp_tally, multicast_obs)
+        };
 
     let peer_result: Option<CheckResult> = if let Some(seed) = &args.inject_fixture {
-        args.peer.as_ref().map(|_| check_result(synthetic_observation(seed, "peer"), expected_peer))
+        args.peer
+            .as_ref()
+            .map(|_| check_result(synthetic_observation(seed, "peer"), expected_peer))
     } else if let Some(peer_str) = &args.peer {
         match resolve(peer_str) {
             Ok(peer_addr) => {
-                let obs = probe_peer_reachability(peer_addr, args.probe_count, Duration::from_millis(args.listen_ms))
-                    .unwrap_or(Observation::NoResponse);
+                let obs = probe_peer_reachability(
+                    peer_addr,
+                    args.probe_count,
+                    Duration::from_millis(args.listen_ms),
+                )
+                .unwrap_or(Observation::NoResponse);
                 Some(check_result(obs, expected_peer))
             }
             Err(e) => {
@@ -209,7 +239,10 @@ pub fn run(args: &MulticastIsolationArgs) {
     }
 
     println!();
-    println!("{}", "== Discovery / Multicast / Peer Isolation ==".cyan().bold());
+    println!(
+        "{}",
+        "== Discovery / Multicast / Peer Isolation ==".cyan().bold()
+    );
     if interface_is_tunnel {
         println!("  {} {}", "⚠".yellow(), TUNNEL_INTERFACE_WARNING);
     }
@@ -226,12 +259,20 @@ pub fn run(args: &MulticastIsolationArgs) {
 
 fn print_check(label: &str, result: &CheckResult, tally: Option<&ResponderTally>) {
     let verdict_display = match result.verdict {
-        "UNEXPECTEDLY_REACHABLE" | "UNEXPECTEDLY_BLOCKED" => result.verdict.red().bold().to_string(),
+        "UNEXPECTEDLY_REACHABLE" | "UNEXPECTEDLY_BLOCKED" => {
+            result.verdict.red().bold().to_string()
+        }
         "matches_expectation" => result.verdict.green().to_string(),
         _ => result.verdict.dimmed().to_string(),
     };
-    println!("  [{label}] observation={} verdict={}", result.observation, verdict_display);
+    println!(
+        "  [{label}] observation={} verdict={}",
+        result.observation, verdict_display
+    );
     if let Some(t) = tally {
-        println!("    responders: {} (by class: {:?})", t.total_responses, t.by_class);
+        println!(
+            "    responders: {} (by class: {:?})",
+            t.total_responses, t.by_class
+        );
     }
 }

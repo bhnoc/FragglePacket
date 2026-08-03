@@ -1,11 +1,11 @@
 //! Dashboard panel - Overview of test results
 
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
-use crate::state::test_runner::TestUpdate;
 use crate::components::results_display::ResultsDisplay;
 use crate::components::target_input::TargetInput;
+use crate::state::test_runner::TestUpdate;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 
 /// Dashboard component showing test results overview
 #[component]
@@ -21,10 +21,7 @@ pub fn Dashboard(
     let progress = *state.read().progress.read();
 
     // Get all results for the current target
-    let current_results: Vec<_> = results
-        .get(&current_target)
-        .cloned()
-        .unwrap_or_default();
+    let current_results: Vec<_> = results.get(&current_target).cloned().unwrap_or_default();
 
     let success_count = state.read().success_count();
     let total_tests = state.read().total_tests();

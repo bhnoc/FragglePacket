@@ -73,7 +73,12 @@ impl CadenceRun {
 /// Samples ICMP RTT at a fixed cadence. Uses `probe_icmp`'s own retry-free
 /// probe and times it locally, so the RTT reflects exactly what was sent at
 /// this rate (retries would blur cadence with retry backoff).
-pub fn sample_icmp_cadence(target: IpAddr, rate_hz: f64, count: usize, timeout_ms: u64) -> CadenceRun {
+pub fn sample_icmp_cadence(
+    target: IpAddr,
+    rate_hz: f64,
+    count: usize,
+    timeout_ms: u64,
+) -> CadenceRun {
     let interval = Duration::from_secs_f64(1.0 / rate_hz.max(0.01));
     let mut samples = Vec::with_capacity(count);
     for seq in 0..count {
@@ -82,7 +87,11 @@ pub fn sample_icmp_cadence(target: IpAddr, rate_hz: f64, count: usize, timeout_m
         let elapsed = start.elapsed();
         samples.push(RttSample {
             seq,
-            rtt_ms: if ok { Some(elapsed.as_secs_f64() * 1000.0) } else { None },
+            rtt_ms: if ok {
+                Some(elapsed.as_secs_f64() * 1000.0)
+            } else {
+                None
+            },
         });
         let spent = start.elapsed();
         if spent < interval {
@@ -239,7 +248,10 @@ mod tests {
         };
 
         let report = analyze(gateway, remote, tcp);
-        assert!(report.probable_icmp_policing, "both hops spiked together -> probable policing");
+        assert!(
+            report.probable_icmp_policing,
+            "both hops spiked together -> probable policing"
+        );
         assert!(
             !report.application_latency_confirmed,
             "ICMP-only spike must not be promoted to an application-latency claim without TCP corroboration"
@@ -267,8 +279,14 @@ mod tests {
         };
 
         let report = analyze(gateway, remote, tcp);
-        assert!(!report.probable_icmp_policing, "gateway did not spike, so this is not the correlated-hop signature");
-        assert!(report.application_latency_confirmed, "TCP corroborated the remote spike");
+        assert!(
+            !report.probable_icmp_policing,
+            "gateway did not spike, so this is not the correlated-hop signature"
+        );
+        assert!(
+            report.application_latency_confirmed,
+            "TCP corroborated the remote spike"
+        );
     }
 
     #[test]
@@ -283,7 +301,13 @@ mod tests {
             normal: run(1.0, &[Some(19.0)]),
             elevated: run(5.0, &[Some(19.3)]),
         };
-        let tcp = CorroborationProbe { protocol: "tcp_connect".to_string(), port: 443, rate_hz: 5.0, avg_ms: Some(19.5), samples: 1 };
+        let tcp = CorroborationProbe {
+            protocol: "tcp_connect".to_string(),
+            port: 443,
+            rate_hz: 5.0,
+            avg_ms: Some(19.5),
+            samples: 1,
+        };
         let report = analyze(gateway, remote, tcp);
         assert!(!report.probable_icmp_policing);
         assert!(!report.application_latency_confirmed);

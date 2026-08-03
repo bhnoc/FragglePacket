@@ -84,7 +84,10 @@ pub fn run(args: &Ipv6ValidateArgs) {
 
     if let Some(he) = he {
         println!("\n== Happy Eyeballs ==");
-        println!("  host: {}  v6_offered={} v4_offered={}", he.host, he.v6_offered, he.v4_offered);
+        println!(
+            "  host: {}  v6_offered={} v4_offered={}",
+            he.host, he.v6_offered, he.v4_offered
+        );
         let fmt = |v: Option<f64>| match v {
             Some(x) => format!("{:.2}ms", x),
             None => "unavailable".to_string(),
@@ -95,7 +98,8 @@ pub fn run(args: &Ipv6ValidateArgs) {
             "  measured fallback delta: {}",
             match he.fallback_delay_ms {
                 Some(d) => format!("{:.2}ms", d),
-                None => "unavailable (only one family was attempted; not an RFC constant)".to_string(),
+                None =>
+                    "unavailable (only one family was attempted; not an RFC constant)".to_string(),
             }
         );
         println!(

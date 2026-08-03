@@ -36,20 +36,60 @@ pub struct WiredControlArgs {
 fn synthetic_pair(seed: &str) -> (PathResult, PathResult) {
     match seed {
         "different-egress" => (
-            PathResult { label: "wired", achieved_mbps: Some(350.0), loss_pct: Some(0.0), egress_identity: Some("203.0.113.5".to_string()) },
-            PathResult { label: "wifi", achieved_mbps: Some(300.0), loss_pct: Some(20.0), egress_identity: Some("198.51.100.9".to_string()) },
+            PathResult {
+                label: "wired",
+                achieved_mbps: Some(350.0),
+                loss_pct: Some(0.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
+            PathResult {
+                label: "wifi",
+                achieved_mbps: Some(300.0),
+                loss_pct: Some(20.0),
+                egress_identity: Some("198.51.100.9".to_string()),
+            },
         ),
         "shared-edge" => (
-            PathResult { label: "wired", achieved_mbps: Some(350.0), loss_pct: Some(5.0), egress_identity: Some("203.0.113.5".to_string()) },
-            PathResult { label: "wifi", achieved_mbps: Some(300.0), loss_pct: Some(20.0), egress_identity: Some("203.0.113.5".to_string()) },
+            PathResult {
+                label: "wired",
+                achieved_mbps: Some(350.0),
+                loss_pct: Some(5.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
+            PathResult {
+                label: "wifi",
+                achieved_mbps: Some(300.0),
+                loss_pct: Some(20.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
         ),
         "missing-egress" => (
-            PathResult { label: "wired", achieved_mbps: Some(350.0), loss_pct: Some(0.0), egress_identity: None },
-            PathResult { label: "wifi", achieved_mbps: Some(300.0), loss_pct: Some(20.0), egress_identity: Some("203.0.113.5".to_string()) },
+            PathResult {
+                label: "wired",
+                achieved_mbps: Some(350.0),
+                loss_pct: Some(0.0),
+                egress_identity: None,
+            },
+            PathResult {
+                label: "wifi",
+                achieved_mbps: Some(300.0),
+                loss_pct: Some(20.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
         ),
         _ => (
-            PathResult { label: "wired", achieved_mbps: Some(350.0), loss_pct: Some(0.0), egress_identity: Some("203.0.113.5".to_string()) },
-            PathResult { label: "wifi", achieved_mbps: Some(300.0), loss_pct: Some(20.0), egress_identity: Some("203.0.113.5".to_string()) },
+            PathResult {
+                label: "wired",
+                achieved_mbps: Some(350.0),
+                loss_pct: Some(0.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
+            PathResult {
+                label: "wifi",
+                achieved_mbps: Some(300.0),
+                loss_pct: Some(20.0),
+                egress_identity: Some("203.0.113.5".to_string()),
+            },
         ),
     }
 }
@@ -59,8 +99,18 @@ pub fn run(args: &WiredControlArgs) {
         synthetic_pair(seed)
     } else {
         (
-            PathResult { label: "wired", achieved_mbps: args.wired_mbps, loss_pct: args.wired_loss_pct, egress_identity: args.wired_egress.clone() },
-            PathResult { label: "wifi", achieved_mbps: args.wifi_mbps, loss_pct: args.wifi_loss_pct, egress_identity: args.wifi_egress.clone() },
+            PathResult {
+                label: "wired",
+                achieved_mbps: args.wired_mbps,
+                loss_pct: args.wired_loss_pct,
+                egress_identity: args.wired_egress.clone(),
+            },
+            PathResult {
+                label: "wifi",
+                achieved_mbps: args.wifi_mbps,
+                loss_pct: args.wifi_loss_pct,
+                egress_identity: args.wifi_egress.clone(),
+            },
         )
     };
 
@@ -80,7 +130,10 @@ pub fn run(args: &WiredControlArgs) {
     }
 
     println!();
-    println!("{}", "== Wired-vs-Wi-Fi Fault-Domain Control ==".cyan().bold());
+    println!(
+        "{}",
+        "== Wired-vs-Wi-Fi Fault-Domain Control ==".cyan().bold()
+    );
     println!(
         "  wired: achieved={} loss={}",
         fmt_mbps(wired.achieved_mbps),
@@ -92,17 +145,27 @@ pub fn run(args: &WiredControlArgs) {
         fmt_pct(wifi.loss_pct)
     );
     match &attribution {
-        FaultAttribution::Wlan { detail } => println!("  attribution: {} {}", "WLAN".yellow().bold(), detail),
-        FaultAttribution::SharedEdgeOrWan { detail } => println!("  attribution: {} {}", "SHARED EDGE/WAN".yellow().bold(), detail),
-        FaultAttribution::Withheld { reason } => println!("  attribution: {} {}", "WITHHELD".red().bold(), reason),
+        FaultAttribution::Wlan { detail } => {
+            println!("  attribution: {} {}", "WLAN".yellow().bold(), detail)
+        }
+        FaultAttribution::SharedEdgeOrWan { detail } => println!(
+            "  attribution: {} {}",
+            "SHARED EDGE/WAN".yellow().bold(),
+            detail
+        ),
+        FaultAttribution::Withheld { reason } => {
+            println!("  attribution: {} {}", "WITHHELD".red().bold(), reason)
+        }
     }
     println!();
 }
 
 fn fmt_mbps(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.1} Mbps")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.1} Mbps"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn fmt_pct(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.2}%")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.2}%"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }

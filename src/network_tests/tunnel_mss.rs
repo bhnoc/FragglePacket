@@ -3,11 +3,13 @@
 //! Detects VPN/tunnel overhead and recommends MSS clamping values.
 //! Critical for conference networks with tunneled APs and student VPNs.
 
-use crate::framework::{NetworkTest, TestCategory, TestResult, TestStatus, Diagnosis, DiagnosisSeverity};
+use crate::framework::{
+    Diagnosis, DiagnosisSeverity, NetworkTest, TestCategory, TestResult, TestStatus,
+};
 use std::error::Error;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
 use std::os::unix::io::AsRawFd;
+use std::time::Duration;
 
 /// Known VPN/tunnel overhead values
 const OVERHEAD_WIREGUARD: u16 = 60;
@@ -67,16 +69,19 @@ impl NetworkTest for TunnelMssClampingTest {
     }
 
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
 
         // Add CLI equivalent commands for transparency
-        result.add_metadata("cli_command", format!("ss -ti dst {} | grep -i mss", target));
+        result.add_metadata(
+            "cli_command",
+            format!("ss -ti dst {} | grep -i mss", target),
+        );
         result.add_metadata("cli_tcpdump", format!("tcpdump -i any -c 5 'tcp[13] == 18' and host {} 2>/dev/null | grep -oE 'mss [0-9]+'", target));
-        result.add_metadata("cli_note", "Reads TCP_MAXSEG socket option from established connection");
+        result.add_metadata(
+            "cli_note",
+            "Reads TCP_MAXSEG socket option from established connection",
+        );
 
         let addr_str = if target.contains(':') {
             target.to_string()
@@ -88,7 +93,8 @@ impl NetworkTest for TunnelMssClampingTest {
         let addr = addrs.next().ok_or("No address resolved")?;
 
         // Connect and read actual TCP_MAXSEG
-        let stream = match TcpStream::connect_timeout(&addr, Duration::from_secs(self.timeout_secs)) {
+        let stream = match TcpStream::connect_timeout(&addr, Duration::from_secs(self.timeout_secs))
+        {
             Ok(s) => s,
             Err(e) => {
                 result.set_status(TestStatus::Failed);
@@ -115,7 +121,10 @@ impl NetworkTest for TunnelMssClampingTest {
         // margin for double-encapsulation scenarios. Mirrors the shell
         // script's RECOMMENDED_MSS_VPN_CONSERVATIVE output.
         let vpn_conservative_mss = (actual_mss.saturating_sub(20)).max(1200);
-        result.add_metric("recommended_mss_vpn_conservative", vpn_conservative_mss as f64);
+        result.add_metric(
+            "recommended_mss_vpn_conservative",
+            vpn_conservative_mss as f64,
+        );
         result.add_metadata(
             "recommended_mss_vpn_conservative",
             vpn_conservative_mss.to_string(),
@@ -153,9 +162,12 @@ impl NetworkTest for TunnelMssClampingTest {
             let mut diag = Diagnosis::new(
                 DiagnosisSeverity::Warning,
                 "Significant Tunnel Overhead Detected".to_string(),
-                format!("Effective MTU {} indicates {} bytes overhead. {}",
-                    effective_mtu, overhead,
-                    tunnel_type.unwrap_or("Multiple encapsulation layers likely")),
+                format!(
+                    "Effective MTU {} indicates {} bytes overhead. {}",
+                    effective_mtu,
+                    overhead,
+                    tunnel_type.unwrap_or("Multiple encapsulation layers likely")
+                ),
             );
             diag = diag.with_recommendation(format!(
                 "Apply MSS clamping: iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss {}",
@@ -190,10 +202,17 @@ impl NetworkTest for TunnelMssClampingTest {
             let conference_diag = Diagnosis::new(
                 DiagnosisSeverity::Warning,
                 "Conference Network Pattern".to_string(),
-                "High overhead pattern matches tunneled AP + VPN scenario common at conferences.".to_string(),
-            ).with_recommendation("Pre-configure MSS clamping on tunnel endpoints")
-             .with_recommendation("Consider reducing tunnel overhead or using more efficient encapsulation")
-             .with_recommendation(format!("Safe MSS for this path: {} bytes", actual_mss.saturating_sub(20)));
+                "High overhead pattern matches tunneled AP + VPN scenario common at conferences."
+                    .to_string(),
+            )
+            .with_recommendation("Pre-configure MSS clamping on tunnel endpoints")
+            .with_recommendation(
+                "Consider reducing tunnel overhead or using more efficient encapsulation",
+            )
+            .with_recommendation(format!(
+                "Safe MSS for this path: {} bytes",
+                actual_mss.saturating_sub(20)
+            ));
             result.add_diagnosis(conference_diag);
         }
 
@@ -209,7 +228,7 @@ impl NetworkTest for TunnelMssClampingTest {
 fn read_tcp_maxseg(stream: &TcpStream) -> u16 {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        use libc::{getsockopt, socklen_t, c_void, IPPROTO_TCP, TCP_MAXSEG};
+        use libc::{c_void, getsockopt, socklen_t, IPPROTO_TCP, TCP_MAXSEG};
 
         let fd = stream.as_raw_fd();
         let mut mss: i32 = 0;
@@ -254,19 +273,22 @@ pub fn calculate_safe_mss(base_mtu: u16, overhead: u16) -> u16 {
 
 /// Estimate total overhead from multiple tunnel layers
 pub fn estimate_layered_overhead(layers: &[&str]) -> u16 {
-    layers.iter().map(|layer| {
-        match *layer {
-            "wireguard" | "wg" => OVERHEAD_WIREGUARD,
-            "openvpn-udp" | "ovpn-udp" => OVERHEAD_OPENVPN_UDP,
-            "openvpn-tcp" | "ovpn-tcp" => OVERHEAD_OPENVPN_TCP,
-            "ipsec" | "ipsec-nat-t" => OVERHEAD_IPSEC_NAT_T,
-            "l2tp" | "l2tp-ipsec" => OVERHEAD_L2TP_IPSEC,
-            "vxlan" => OVERHEAD_VXLAN,
-            "gre" => OVERHEAD_GRE,
-            "geneve" => OVERHEAD_GENEVE,
-            _ => 50, // Unknown tunnel, assume moderate overhead
-        }
-    }).sum()
+    layers
+        .iter()
+        .map(|layer| {
+            match *layer {
+                "wireguard" | "wg" => OVERHEAD_WIREGUARD,
+                "openvpn-udp" | "ovpn-udp" => OVERHEAD_OPENVPN_UDP,
+                "openvpn-tcp" | "ovpn-tcp" => OVERHEAD_OPENVPN_TCP,
+                "ipsec" | "ipsec-nat-t" => OVERHEAD_IPSEC_NAT_T,
+                "l2tp" | "l2tp-ipsec" => OVERHEAD_L2TP_IPSEC,
+                "vxlan" => OVERHEAD_VXLAN,
+                "gre" => OVERHEAD_GRE,
+                "geneve" => OVERHEAD_GENEVE,
+                _ => 50, // Unknown tunnel, assume moderate overhead
+            }
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -277,7 +299,10 @@ mod tests {
     fn test_tunnel_identification() {
         assert_eq!(identify_tunnel_type(1440), Some("WireGuard"));
         assert_eq!(identify_tunnel_type(1438), Some("WireGuard")); // Within tolerance
-        assert_eq!(identify_tunnel_type(1380), Some("Double encapsulation (VPN over VPN)"));
+        assert_eq!(
+            identify_tunnel_type(1380),
+            Some("Double encapsulation (VPN over VPN)")
+        );
         assert_eq!(identify_tunnel_type(1500), None);
     }
 

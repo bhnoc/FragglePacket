@@ -50,9 +50,14 @@ impl std::fmt::Display for WdutilError {
         match self {
             WdutilError::ToolMissing => write!(f, "wdutil not found on this system"),
             WdutilError::PrivilegeRequired { command } => {
-                write!(f, "wdutil info requires elevated privilege; re-run as: {command}")
+                write!(
+                    f,
+                    "wdutil info requires elevated privilege; re-run as: {command}"
+                )
             }
-            WdutilError::ParseFailed(detail) => write!(f, "failed to parse wdutil info output: {detail}"),
+            WdutilError::ParseFailed(detail) => {
+                write!(f, "failed to parse wdutil info output: {detail}")
+            }
         }
     }
 }
@@ -63,14 +68,20 @@ pub fn suggested_privileged_command() -> String {
 
 fn is_privilege_error(stderr_or_stdout: &str) -> bool {
     let lower = stderr_or_stdout.to_lowercase();
-    lower.contains("sudo") || lower.contains("permission") || lower.contains("not permitted") || lower.contains("root")
+    lower.contains("sudo")
+        || lower.contains("permission")
+        || lower.contains("not permitted")
+        || lower.contains("root")
 }
 
 /// Runs `wdutil info` and extracts the allowlisted Wi-Fi fields. Never
 /// invokes sudo; a permission failure is reported as `PrivilegeRequired`
 /// naming the exact command to re-run, per the GAP-016 pattern.
 pub fn snapshot_live() -> Result<WdutilFields, WdutilError> {
-    let output = Command::new("wdutil").arg("info").output().map_err(|_| WdutilError::ToolMissing)?;
+    let output = Command::new("wdutil")
+        .arg("info")
+        .output()
+        .map_err(|_| WdutilError::ToolMissing)?;
 
     let combined = format!(
         "{}{}",
@@ -79,10 +90,15 @@ pub fn snapshot_live() -> Result<WdutilFields, WdutilError> {
     );
 
     if !output.status.success() && is_privilege_error(&combined) {
-        return Err(WdutilError::PrivilegeRequired { command: suggested_privileged_command() });
+        return Err(WdutilError::PrivilegeRequired {
+            command: suggested_privileged_command(),
+        });
     }
     if !output.status.success() {
-        return Err(WdutilError::ParseFailed(format!("wdutil exited with {:?}", output.status.code())));
+        return Err(WdutilError::ParseFailed(format!(
+            "wdutil exited with {:?}",
+            output.status.code()
+        )));
     }
 
     Ok(parse_wdutil_info(&String::from_utf8_lossy(&output.stdout)))
@@ -125,7 +141,9 @@ pub fn parse_wdutil_info(text: &str) -> WdutilFields {
             continue;
         }
 
-        let Some((key, value)) = trimmed.split_once(':') else { continue };
+        let Some((key, value)) = trimmed.split_once(':') else {
+            continue;
+        };
         let key = key.trim();
         let value = value.trim();
 
@@ -138,7 +156,9 @@ pub fn parse_wdutil_info(text: &str) -> WdutilFields {
             "RSSI" => fields.rssi_dbm = parse_dbm(value),
             "Noise" => fields.noise_dbm = parse_dbm(value),
             "CCA" => fields.cca_percent = value.trim_end_matches('%').trim().parse::<f64>().ok(),
-            "Tx Rate" => fields.tx_rate_mbps = value.trim_end_matches("Mbps").trim().parse::<f64>().ok(),
+            "Tx Rate" => {
+                fields.tx_rate_mbps = value.trim_end_matches("Mbps").trim().parse::<f64>().ok()
+            }
             "PHY Mode" => fields.phy_mode = Some(value.to_string()),
             "MCS Index" => fields.mcs_index = value.parse::<u32>().ok(),
             "Channel" => parse_wdutil_channel(value, &mut fields),
@@ -160,7 +180,10 @@ fn parse_wdutil_channel(value: &str, fields: &mut WdutilFields) {
     let parts: Vec<&str> = value.split('/').collect();
     if let Some(first) = parts.first() {
         let tokens: Vec<&str> = first.split_whitespace().collect();
-        if tokens.len() >= 4 && tokens[1].eq_ignore_ascii_case("ghz") && tokens[2].eq_ignore_ascii_case("channel") {
+        if tokens.len() >= 4
+            && tokens[1].eq_ignore_ascii_case("ghz")
+            && tokens[2].eq_ignore_ascii_case("channel")
+        {
             fields.band = Some(format!("{}GHz", tokens[0]));
             fields.channel = tokens[3].parse::<u32>().ok();
         }
@@ -229,7 +252,9 @@ mod tests {
 
     #[test]
     fn is_privilege_error_detects_sudo_wording() {
-        assert!(is_privilege_error("wdutil: this command requires root privileges, use sudo"));
+        assert!(is_privilege_error(
+            "wdutil: this command requires root privileges, use sudo"
+        ));
         assert!(is_privilege_error("Operation not permitted"));
         assert!(!is_privilege_error("wdutil: unknown command foo"));
     }

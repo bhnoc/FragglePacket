@@ -1,7 +1,8 @@
+#![allow(dead_code)]
 use colored::*;
 use fraggle_packet::probe::{
-    binary_search_mtu_icmp, binary_search_mtu_tcp, probe_icmp, resolve_hostname,
-    test_https_fetch, test_tcp_connect,
+    binary_search_mtu_icmp, binary_search_mtu_tcp, probe_icmp, resolve_hostname, test_https_fetch,
+    test_tcp_connect,
 };
 
 use crate::cli::GlobalArgs;
@@ -26,11 +27,30 @@ struct TestResult {
 }
 
 pub fn run(args: &DiagnoseArgs, global: &GlobalArgs) {
-    run_full_diagnostic(&args.target, args.port, global.timeout_ms, global.min, global.max, global.retries);
+    run_full_diagnostic(
+        &args.target,
+        args.port,
+        global.timeout_ms,
+        global.min,
+        global.max,
+        global.retries,
+    );
 }
 
-fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
-    println!("{}", format!("Running full diagnostic against: {}", target).cyan().bold());
+fn run_full_diagnostic(
+    target: &str,
+    port: u16,
+    timeout_ms: u64,
+    min_mtu: usize,
+    max_mtu: usize,
+    retries: usize,
+) {
+    println!(
+        "{}",
+        format!("Running full diagnostic against: {}", target)
+            .cyan()
+            .bold()
+    );
     println!();
 
     let mut results: Vec<TestResult> = Vec::new();
@@ -82,7 +102,10 @@ fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize,
             latency_ms: None,
         });
     } else {
-        println!("  {} Target does not respond to ICMP (may be filtered)", "WARN".yellow());
+        println!(
+            "  {} Target does not respond to ICMP (may be filtered)",
+            "WARN".yellow()
+        );
         results.push(TestResult {
             protocol: "ICMP".into(),
             target: ip.to_string(),
@@ -96,11 +119,20 @@ fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize,
     println!();
 
     // Step 3: TCP Connectivity
-    println!("{}", format!("[3/6] TCP Connection (port {})", port).yellow().bold());
+    println!(
+        "{}",
+        format!("[3/6] TCP Connection (port {})", port)
+            .yellow()
+            .bold()
+    );
     let tcp_result = test_tcp_connect(&format!("{}:{}", ip, port), timeout_ms);
     match &tcp_result {
         Ok(latency) => {
-            println!("  {} TCP connection established ({}ms)", "OK".green(), latency);
+            println!(
+                "  {} TCP connection established ({}ms)",
+                "OK".green(),
+                latency
+            );
             results.push(TestResult {
                 protocol: "TCP".into(),
                 target: format!("{}:{}", ip, port),
@@ -177,7 +209,12 @@ fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize,
     if port == 443 {
         match test_https_fetch(target, timeout_ms) {
             Ok((size, latency)) => {
-                println!("  {} HTTPS fetch successful ({} bytes, {}ms)", "OK".green(), size, latency);
+                println!(
+                    "  {} HTTPS fetch successful ({} bytes, {}ms)",
+                    "OK".green(),
+                    size,
+                    latency
+                );
                 results.push(TestResult {
                     protocol: "HTTPS".into(),
                     target: target.into(),
@@ -247,7 +284,11 @@ fn print_summary(results: &[TestResult], recommendations: &[String]) {
     // Show MTU results
     for r in results {
         if let Some(mtu) = r.mtu {
-            println!("  {:12} MTU: {} bytes", r.protocol, mtu.to_string().green().bold());
+            println!(
+                "  {:12} MTU: {} bytes",
+                r.protocol,
+                mtu.to_string().green().bold()
+            );
         }
     }
 
@@ -255,7 +296,11 @@ fn print_summary(results: &[TestResult], recommendations: &[String]) {
         println!();
         println!("{}", "ACTION:".cyan().bold());
         for rec in recommendations {
-            if rec.starts_with("SET ") || rec.starts_with("FIX:") || rec.contains("BLACK HOLE") || rec.contains("MISMATCH") {
+            if rec.starts_with("SET ")
+                || rec.starts_with("FIX:")
+                || rec.contains("BLACK HOLE")
+                || rec.contains("MISMATCH")
+            {
                 println!("  {} {}", ">".yellow().bold(), rec.yellow().bold());
             } else if rec.starts_with("NO CHANGE") {
                 println!("  {} {}", ">".green().bold(), rec.green());

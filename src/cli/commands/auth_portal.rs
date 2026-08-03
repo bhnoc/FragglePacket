@@ -59,7 +59,9 @@ fn detect_portal(url: &str, expected_marker: &str, timeout: Duration) -> PortalD
         Err(e) => {
             return PortalDetectionResult {
                 detection_url: url.to_string(),
-                status: PortalStatus::ProbeFailed { detail: e.to_string() },
+                status: PortalStatus::ProbeFailed {
+                    detail: e.to_string(),
+                },
                 http_status: None,
             }
         }
@@ -75,7 +77,10 @@ fn detect_portal(url: &str, expected_marker: &str, timeout: Duration) -> PortalD
                 status_code = code.parse().ok();
             }
         }
-        if let Some(v) = line.strip_prefix("Location:").or_else(|| line.strip_prefix("location:")) {
+        if let Some(v) = line
+            .strip_prefix("Location:")
+            .or_else(|| line.strip_prefix("location:"))
+        {
             location = Some(v.trim().to_string());
         }
         if line.is_empty() {
@@ -83,18 +88,29 @@ fn detect_portal(url: &str, expected_marker: &str, timeout: Duration) -> PortalD
             break;
         }
     }
-    let body = if body_start < text.len() { &text[body_start..] } else { "" };
+    let body = if body_start < text.len() {
+        &text[body_start..]
+    } else {
+        ""
+    };
 
     let Some(code) = status_code else {
         return PortalDetectionResult {
             detection_url: url.to_string(),
-            status: PortalStatus::ProbeFailed { detail: "no HTTP status line observed".to_string() },
+            status: PortalStatus::ProbeFailed {
+                detail: "no HTTP status line observed".to_string(),
+            },
             http_status: None,
         };
     };
 
-    let portal_status = classify_portal_response(code, location.as_deref(), body, Some(expected_marker));
-    PortalDetectionResult { detection_url: url.to_string(), status: portal_status, http_status: Some(code) }
+    let portal_status =
+        classify_portal_response(code, location.as_deref(), body, Some(expected_marker));
+    PortalDetectionResult {
+        detection_url: url.to_string(),
+        status: portal_status,
+        http_status: Some(code),
+    }
 }
 
 pub fn run(args: &AuthPortalArgs) {
@@ -120,13 +136,26 @@ pub fn run(args: &AuthPortalArgs) {
         return;
     }
 
-    println!("{}", "== Authentication / Captive-Portal Workflow ==".cyan().bold());
-    println!("  {}", "(never automates a portal login; never requests or logs credentials)".dimmed());
+    println!(
+        "{}",
+        "== Authentication / Captive-Portal Workflow =="
+            .cyan()
+            .bold()
+    );
+    println!(
+        "  {}",
+        "(never automates a portal login; never requests or logs credentials)".dimmed()
+    );
     println!("  portal detection ({}ms):", portal_elapsed_ms);
     match &portal.status {
         PortalStatus::NoPortalDetected => println!("    {}", "no portal detected".green()),
         PortalStatus::PortalDetected { redirect_location } => {
-            println!("    {}", "PORTAL DETECTED -- hand off to the user, do not proceed".yellow().bold());
+            println!(
+                "    {}",
+                "PORTAL DETECTED -- hand off to the user, do not proceed"
+                    .yellow()
+                    .bold()
+            );
             if let Some(loc) = redirect_location {
                 println!("    redirect location: {}", loc);
             }
@@ -144,6 +173,9 @@ pub fn run(args: &AuthPortalArgs) {
             role_check.expected_subnet.as_deref().unwrap_or("?"),
             role_check.observed_subnet.as_deref().unwrap_or("?")
         ),
-        None => println!("    subnet match: {}", "unavailable (expected or observed subnet not supplied)".yellow()),
+        None => println!(
+            "    subnet match: {}",
+            "unavailable (expected or observed subnet not supplied)".yellow()
+        ),
     }
 }

@@ -94,11 +94,8 @@ impl NetworkTest for UploadSizeSweepTest {
     }
 
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
 
         result.add_metadata(
             "cli_command",
@@ -170,7 +167,9 @@ impl NetworkTest for UploadSizeSweepTest {
                 )
                 .with_recommendation("Lower interface MTU to 1400 and retest")
                 .with_recommendation("Enable TCP MSS clamping on the egress path")
-                .with_recommendation("Check ICMP fragmentation-needed is not being filtered upstream")
+                .with_recommendation(
+                    "Check ICMP fragmentation-needed is not being filtered upstream",
+                )
                 .with_related_test("ICMP MTU Discovery")
                 .with_related_test("HTTPS Stage-by-Stage");
                 result.add_diagnosis(diag);
@@ -233,15 +232,14 @@ fn run_single_sweep(
     };
 
     let connect_start = Instant::now();
-    let stream =
-        match TcpStream::connect_timeout(&addr, Duration::from_secs(timeout_secs)) {
-            Ok(s) => s,
-            Err(e) => {
-                sample.error = Some(format!("TCP: {}", e));
-                sample.total_ms = total_start.elapsed().as_millis() as u64;
-                return sample;
-            }
-        };
+    let stream = match TcpStream::connect_timeout(&addr, Duration::from_secs(timeout_secs)) {
+        Ok(s) => s,
+        Err(e) => {
+            sample.error = Some(format!("TCP: {}", e));
+            sample.total_ms = total_start.elapsed().as_millis() as u64;
+            return sample;
+        }
+    };
     sample.connect_ms = connect_start.elapsed().as_millis() as u64;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(timeout_secs)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(timeout_secs)));

@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 
 use fraggle_packet::load_guard::radio::{snapshot_fast, snapshot_live};
 use fraggle_packet::network_tests::rf_survey::{
-    build_coverage_map, correlate_change_points, detect_utilization_change_points, EventWindow, ExternalTelemetry, RfSample,
-    RfTimeSeries, SurveyPlan,
+    build_coverage_map, correlate_change_points, detect_utilization_change_points, EventWindow,
+    ExternalTelemetry, RfSample, RfTimeSeries, SurveyPlan,
 };
 
 #[derive(clap::Args, Debug)]
@@ -84,7 +84,9 @@ fn parse_events(entries: &[String]) -> Vec<EventWindow> {
 fn load_telemetry(path: &str) -> Result<Vec<ExternalTelemetry>, String> {
     let text = if path == "-" {
         let mut buf = String::new();
-        std::io::stdin().read_to_string(&mut buf).map_err(|e| e.to_string())?;
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| e.to_string())?;
         buf
     } else {
         std::fs::read_to_string(path).map_err(|e| e.to_string())?
@@ -96,13 +98,20 @@ pub fn run(args: &RfSurveyArgs) {
     if let Some(loc) = &args.location {
         for bad in ["SSID", "BSSID", "MAC"] {
             if loc.contains(bad) {
-                eprintln!("{} --location must not contain '{}' (looks like a network identifier)", "✗".red(), bad);
+                eprintln!(
+                    "{} --location must not contain '{}' (looks like a network identifier)",
+                    "✗".red(),
+                    bad
+                );
                 std::process::exit(2);
             }
         }
     }
 
-    let plan = SurveyPlan { sample_count: args.sample_count, interval_secs: args.interval_secs };
+    let plan = SurveyPlan {
+        sample_count: args.sample_count,
+        interval_secs: args.interval_secs,
+    };
     let telemetry = match &args.telemetry_in {
         Some(p) => match load_telemetry(p) {
             Ok(t) => Some(t),
@@ -120,14 +129,22 @@ pub fn run(args: &RfSurveyArgs) {
             plan.sample_count,
             plan.interval_secs,
             plan.duration_secs(),
-            if args.fast { "ioreg (fast)" } else { "system_profiler (slow, full detail)" }
+            if args.fast {
+                "ioreg (fast)"
+            } else {
+                "system_profiler (slow, full detail)"
+            }
         );
     }
 
     let mut samples = Vec::with_capacity(plan.sample_count as usize);
     let start = Instant::now();
     for i in 0..plan.sample_count {
-        let snap_result = if args.fast { snapshot_fast() } else { snapshot_live() };
+        let snap_result = if args.fast {
+            snapshot_fast()
+        } else {
+            snapshot_live()
+        };
         let snap = match snap_result {
             Ok(s) => s,
             Err(e) => {
@@ -135,7 +152,11 @@ pub fn run(args: &RfSurveyArgs) {
                 fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()
             }
         };
-        let mut sample = RfSample::from_radio_snapshot(start.elapsed().as_secs_f64(), &snap, args.location.clone());
+        let mut sample = RfSample::from_radio_snapshot(
+            start.elapsed().as_secs_f64(),
+            &snap,
+            args.location.clone(),
+        );
         if let Some(t) = telemetry.as_ref().and_then(|v| v.get(i as usize)) {
             sample.merge_operator_supplied(t);
         }
@@ -167,7 +188,9 @@ pub fn run(args: &RfSurveyArgs) {
     print_human(&series, &correlations, &coverage);
 }
 
-fn fmt_metric<T: std::fmt::Display>(m: &fraggle_packet::network_tests::rf_survey::Metric<T>) -> String {
+fn fmt_metric<T: std::fmt::Display>(
+    m: &fraggle_packet::network_tests::rf_survey::Metric<T>,
+) -> String {
     use fraggle_packet::network_tests::rf_survey::Obtainability;
     match (&m.value, m.obtainability) {
         (Some(v), Obtainability::Measured) => format!("{}", v),
@@ -209,7 +232,9 @@ fn print_human(
             c.change_point.from_elapsed_secs,
             c.change_point.to_elapsed_secs,
             if c.overlapping_events.is_empty() {
-                " (no overlapping event window -- unexplained)".yellow().to_string()
+                " (no overlapping event window -- unexplained)"
+                    .yellow()
+                    .to_string()
             } else {
                 format!(" [{}]", c.overlapping_events.join(", "))
             }
@@ -224,8 +249,12 @@ fn print_human(
                     "  {:<16} samples={:<4} mean_rssi={} mean_util={}",
                     p.location_label,
                     p.sample_count,
-                    p.mean_rssi_dbm.map(|v| format!("{:.1}", v)).unwrap_or_else(|| "unavailable".to_string()),
-                    p.mean_utilization_pct.map(|v| format!("{:.1}", v)).unwrap_or_else(|| "unavailable".to_string())
+                    p.mean_rssi_dbm
+                        .map(|v| format!("{:.1}", v))
+                        .unwrap_or_else(|| "unavailable".to_string()),
+                    p.mean_utilization_pct
+                        .map(|v| format!("{:.1}", v))
+                        .unwrap_or_else(|| "unavailable".to_string())
                 );
             }
         }

@@ -5,8 +5,8 @@ use colored::*;
 
 use fraggle_packet::network_tests::iperf::{run_iperf_client, IperfParseError};
 use fraggle_packet::network_tests::listener_lease::{
-    estimate_loss_floor, is_busy_or_rate_limited, qualify_capacity, AuthorizedListener, CapacityCheck,
-    CapacityVerdict, ListenerPool, Transport,
+    estimate_loss_floor, is_busy_or_rate_limited, qualify_capacity, AuthorizedListener,
+    CapacityCheck, CapacityVerdict, ListenerPool, Transport,
 };
 
 #[derive(clap::Args, Debug)]
@@ -46,9 +46,14 @@ pub enum TransportArg {
 fn parse_authorized(raw: &[String]) -> Result<Vec<AuthorizedListener>, String> {
     raw.iter()
         .map(|s| {
-            let (host, port) = s.rsplit_once(':').ok_or_else(|| format!("expected host:port, got '{s}'"))?;
+            let (host, port) = s
+                .rsplit_once(':')
+                .ok_or_else(|| format!("expected host:port, got '{s}'"))?;
             let port: u16 = port.parse().map_err(|_| format!("invalid port in '{s}'"))?;
-            Ok(AuthorizedListener { host: host.to_string(), port })
+            Ok(AuthorizedListener {
+                host: host.to_string(),
+                port,
+            })
         })
         .collect()
 }
@@ -137,7 +142,10 @@ pub fn run(args: &ListenerLeaseArgs) {
         })
     });
 
-    let iperf_version = parsed.version.map(|v| format!("iperf {}.{}", v.major, v.minor)).unwrap_or_default();
+    let iperf_version = parsed
+        .version
+        .map(|v| format!("iperf {}.{}", v.major, v.minor))
+        .unwrap_or_default();
     let loss_floor = estimate_loss_floor(&iperf_version);
 
     if args.json {
@@ -152,7 +160,10 @@ pub fn run(args: &ListenerLeaseArgs) {
     }
 
     println!("{}", "== Listener Lease Session ==".cyan().bold());
-    println!("  listener: {}:{}", lease.listener.host, lease.listener.port);
+    println!(
+        "  listener: {}:{}",
+        lease.listener.host, lease.listener.port
+    );
     match capacity_verdict {
         Some(CapacityVerdict::Consistent) => {
             let r = received.unwrap();
@@ -163,7 +174,10 @@ pub fn run(args: &ListenerLeaseArgs) {
                 args.duration_secs
             );
         }
-        Some(CapacityVerdict::DurationInconsistent { requested_secs, reported_secs }) => {
+        Some(CapacityVerdict::DurationInconsistent {
+            requested_secs,
+            reported_secs,
+        }) => {
             println!(
                 "  {}",
                 format!(
@@ -179,7 +193,10 @@ pub fn run(args: &ListenerLeaseArgs) {
         if let Some(pct) = r.lost_percent {
             println!(
                 "  loss: {:.2}% (endpoint floor for {}: {:.1}-{:.1}%)",
-                pct, loss_floor.client_version_family, loss_floor.floor_pct_low, loss_floor.floor_pct_high
+                pct,
+                loss_floor.client_version_family,
+                loss_floor.floor_pct_low,
+                loss_floor.floor_pct_high
             );
         }
     }

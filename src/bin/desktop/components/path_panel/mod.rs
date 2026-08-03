@@ -1,9 +1,9 @@
 //! Path Analysis Panel - Traceroute with per-hop MTU
 
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 use fraggle_packet::framework::TestCategory;
 
 /// Path analysis panel with traceroute visualization
@@ -18,7 +18,9 @@ pub fn PathPanel(
     let progress = *state.read().progress.read();
 
     // Get path analysis results
-    let path_results = state.read().get_category_results(&current_target, TestCategory::PathAnalysis);
+    let path_results = state
+        .read()
+        .get_category_results(&current_target, TestCategory::PathAnalysis);
     let latest_result = path_results.last();
 
     // Extract hop data from metrics/metadata
@@ -38,7 +40,12 @@ pub fn PathPanel(
         }
         if hop_data.is_empty() {
             // Fallback: show general metrics
-            vec![(1, current_target.clone(), result.metrics.get("total_rtt_ms").copied().unwrap_or(0.0), "1500".to_string())]
+            vec![(
+                1,
+                current_target.clone(),
+                result.metrics.get("total_rtt_ms").copied().unwrap_or(0.0),
+                "1500".to_string(),
+            )]
         } else {
             hop_data
         }

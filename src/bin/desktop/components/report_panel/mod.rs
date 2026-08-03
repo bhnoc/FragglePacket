@@ -73,10 +73,7 @@ fn generate_unified_report(target: &str) -> String {
 
     lines.push(format!("--- HTTPS probe against {} ---", target));
     if let Ok(r) = HttpsTest::new().run(target) {
-        ev.tcp_connect_success = r
-            .metrics
-            .get("tls_success")
-            .map(|v| *v > 0.5);
+        ev.tcp_connect_success = r.metrics.get("tls_success").map(|v| *v > 0.5);
         lines.push(format!("  status: {:?}", r.status));
         for (k, v) in &r.metrics {
             lines.push(format!("  metric {} = {}", k, v));
@@ -85,7 +82,11 @@ fn generate_unified_report(target: &str) -> String {
 
     lines.push(format!("--- Upload sweep against {} ---", target));
     if let Ok(r) = UploadSizeSweepTest::new().run(target) {
-        let fails = r.metadata.get("upload_fail_sizes").cloned().unwrap_or_default();
+        let fails = r
+            .metadata
+            .get("upload_fail_sizes")
+            .cloned()
+            .unwrap_or_default();
         ev.upload_fail_sizes = fails
             .split(',')
             .filter_map(|s| s.trim().parse().ok())
@@ -104,7 +105,11 @@ fn generate_unified_report(target: &str) -> String {
 
     lines.push(format!("--- Raw 9100 against {} ---", target));
     if let Ok(r) = Raw9100BulkTest::new().run(target) {
-        let fails = r.metadata.get("printer_fail_sizes").cloned().unwrap_or_default();
+        let fails = r
+            .metadata
+            .get("printer_fail_sizes")
+            .cloned()
+            .unwrap_or_default();
         ev.printer_fail_sizes = fails
             .split(',')
             .filter_map(|s| s.trim().parse().ok())

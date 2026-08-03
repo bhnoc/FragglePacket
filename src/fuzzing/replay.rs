@@ -207,12 +207,15 @@ trait RawSender {
 
 #[cfg(target_os = "linux")]
 fn build_sender(opts: &ReplayOptions) -> Result<Box<dyn RawSender>, ReplayError> {
-    use std::os::fd::AsRawFd;
-    let iface = opts
-        .iface
-        .as_deref()
-        .ok_or(ReplayError::MissingInterface)?;
-    let sock = unsafe { libc::socket(libc::AF_PACKET, libc::SOCK_RAW, (libc::ETH_P_ALL as u16).to_be() as i32) };
+    
+    let iface = opts.iface.as_deref().ok_or(ReplayError::MissingInterface)?;
+    let sock = unsafe {
+        libc::socket(
+            libc::AF_PACKET,
+            libc::SOCK_RAW,
+            (libc::ETH_P_ALL as u16).to_be() as i32,
+        )
+    };
     if sock < 0 {
         let err = std::io::Error::last_os_error();
         if err.raw_os_error() == Some(libc::EPERM) {
@@ -263,13 +266,15 @@ fn build_sender(opts: &ReplayOptions) -> Result<Box<dyn RawSender>, ReplayError>
                 )
             };
             if n < 0 {
-                Err(ReplayError::Send(std::io::Error::last_os_error().to_string()))
+                Err(ReplayError::Send(
+                    std::io::Error::last_os_error().to_string(),
+                ))
             } else {
                 Ok(n as usize)
             }
         }
     }
-    let _ = AsRawFd::as_raw_fd;
+    let _ = <std::fs::File as std::os::unix::io::AsRawFd>::as_raw_fd;
     Ok(Box::new(Linux { fd: sock }))
 }
 
@@ -339,7 +344,9 @@ fn build_sender(_opts: &ReplayOptions) -> Result<Box<dyn RawSender>, ReplayError
                 )
             };
             if n < 0 {
-                Err(ReplayError::Send(std::io::Error::last_os_error().to_string()))
+                Err(ReplayError::Send(
+                    std::io::Error::last_os_error().to_string(),
+                ))
             } else {
                 Ok(n as usize)
             }

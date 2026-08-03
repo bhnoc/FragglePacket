@@ -51,11 +51,8 @@ impl NetworkTest for DnsSecureCompareTest {
         TestCategory::DNS
     }
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
 
         let udp_start = Instant::now();
         let udp_ok = platform_resolve(target).is_ok();

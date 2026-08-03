@@ -47,10 +47,14 @@ impl SessionRunner for Iperf3Runner {
     fn run(&self, target: &ListenerTarget, requested_streams: u64) -> Result<String, String> {
         let output = Command::new("iperf3")
             .args([
-                "-c", &target.host,
-                "-p", &target.port.to_string(),
-                "-P", &requested_streams.to_string(),
-                "-t", &self.duration_secs.to_string(),
+                "-c",
+                &target.host,
+                "-p",
+                &target.port.to_string(),
+                "-P",
+                &requested_streams.to_string(),
+                "-t",
+                &self.duration_secs.to_string(),
                 "-J",
             ])
             .stdout(Stdio::piped())
@@ -64,9 +68,15 @@ impl SessionRunner for Iperf3Runner {
 fn parse_targets(raw: &[String]) -> Result<Vec<ListenerTarget>, String> {
     raw.iter()
         .map(|s| {
-            let (host, port) = s.rsplit_once(':').ok_or_else(|| format!("expected host:port, got '{s}'"))?;
+            let (host, port) = s
+                .rsplit_once(':')
+                .ok_or_else(|| format!("expected host:port, got '{s}'"))?;
             let port: u16 = port.parse().map_err(|_| format!("invalid port in '{s}'"))?;
-            Ok(ListenerTarget { host: host.to_string(), port, pool_label: host.to_string() })
+            Ok(ListenerTarget {
+                host: host.to_string(),
+                port,
+                pool_label: host.to_string(),
+            })
         })
         .collect()
 }
@@ -80,7 +90,9 @@ pub fn run(args: &AdmissionFanoutArgs) {
         }
     };
 
-    let runner: Arc<dyn SessionRunner + Send + Sync> = Arc::new(Iperf3Runner { duration_secs: args.duration_secs });
+    let runner: Arc<dyn SessionRunner + Send + Sync> = Arc::new(Iperf3Runner {
+        duration_secs: args.duration_secs,
+    });
     let results = run_admission_fanout(
         targets,
         args.streams,
@@ -103,7 +115,11 @@ pub fn run(args: &AdmissionFanoutArgs) {
     println!("{}", "== Admission Fanout ==".cyan().bold());
     for r in &cohort.results {
         let admitted = r.outcome.is_admitted();
-        let marker = if admitted { "PASS".green() } else { "EXCL".yellow() };
+        let marker = if admitted {
+            "PASS".green()
+        } else {
+            "EXCL".yellow()
+        };
         println!(
             "  [{}] {}:{} ({}) skew={}ms {}",
             marker,
@@ -117,7 +133,11 @@ pub fn run(args: &AdmissionFanoutArgs) {
         );
     }
     println!();
-    println!("fully admitted: {}/{}", cohort.fully_admitted_count(), cohort.results.len());
+    println!(
+        "fully admitted: {}/{}",
+        cohort.fully_admitted_count(),
+        cohort.results.len()
+    );
     match cohort.aggregate_receiver_bps() {
         Some(bps) => println!("aggregate receiver throughput: {:.1} Mbps", bps / 1_000_000.0),
         None => println!(

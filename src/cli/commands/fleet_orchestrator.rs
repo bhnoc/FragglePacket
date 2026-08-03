@@ -12,8 +12,8 @@ use colored::*;
 use std::time::Duration;
 
 use fraggle_packet::network_tests::fleet_orchestrator::{
-    build_fleet_labels, load_or_create_node_salt, run_descriptor_digest, run_fleet_fanout, summarize_fleet_run,
-    FleetPlan, InventoryEntry, NodeOutcome, NodeRole,
+    build_fleet_labels, load_or_create_node_salt, run_descriptor_digest, run_fleet_fanout,
+    summarize_fleet_run, FleetPlan, InventoryEntry, NodeOutcome, NodeRole,
 };
 
 #[derive(clap::Args, Debug)]
@@ -55,13 +55,23 @@ pub fn run(args: &FleetOrchestratorArgs) {
         }
     };
 
-    let mut entries = vec![InventoryEntry { address: "10.220.250.53".to_string(), role: NodeRole::ManagementBastion }];
+    let mut entries = vec![InventoryEntry {
+        address: "10.220.250.53".to_string(),
+        role: NodeRole::ManagementBastion,
+    }];
     for i in 0..args.mock_node_count {
-        entries.push(InventoryEntry { address: format!("10.220.{i}.99"), role: NodeRole::TestNode });
+        entries.push(InventoryEntry {
+            address: format!("10.220.{i}.99"),
+            role: NodeRole::TestNode,
+        });
     }
     let nodes = build_fleet_labels(&entries, &salt);
 
-    let plan = FleetPlan { nodes, max_concurrency: args.max_concurrency, per_node_timeout_secs: args.per_node_timeout_secs };
+    let plan = FleetPlan {
+        nodes,
+        max_concurrency: args.max_concurrency,
+        per_node_timeout_secs: args.per_node_timeout_secs,
+    };
     if let Err(e) = plan.validate() {
         eprintln!("{} {}", "✗".red(), e);
         std::process::exit(1);
@@ -95,7 +105,10 @@ pub fn run(args: &FleetOrchestratorArgs) {
         return;
     }
 
-    println!("{}", "== Fleet Orchestrator (mock inventory) ==".cyan().bold());
+    println!(
+        "{}",
+        "== Fleet Orchestrator (mock inventory) ==".cyan().bold()
+    );
     println!("  run descriptor digest: {:016x}", digest);
     for r in &results {
         let marker = match &r.outcome {

@@ -79,8 +79,17 @@ pub fn run(args: &DependencyHealthArgs) {
     println!("  NTP offset:");
     for n in &bundle.ntp {
         match n.offset_ms {
-            Some(ms) => println!("    {}: offset={:.3}ms delay={:.3}ms", n.server, ms, n.round_trip_delay_ms.unwrap_or(0.0)),
-            None => println!("    {}: {}", n.server, "offset unavailable (never defaulted to 0)".yellow()),
+            Some(ms) => println!(
+                "    {}: offset={:.3}ms delay={:.3}ms",
+                n.server,
+                ms,
+                n.round_trip_delay_ms.unwrap_or(0.0)
+            ),
+            None => println!(
+                "    {}: {}",
+                n.server,
+                "offset unavailable (never defaulted to 0)".yellow()
+            ),
         }
     }
 
@@ -103,8 +112,13 @@ fn print_checks(label: &str, checks: &[DependencyCheck]) {
     for c in checks {
         let verdict_str = match &c.verdict {
             Verdict::Healthy => "healthy".green().to_string(),
-            Verdict::BlockedByPolicy { detail_kind } => format!("{}", format!("blocked-by-policy ({:?})", detail_kind).yellow()),
-            Verdict::Unhealthy { detail_kind } => format!("{}", format!("unhealthy ({:?})", detail_kind).red()),
+            Verdict::BlockedByPolicy { detail_kind } => format!(
+                "{}",
+                format!("blocked-by-policy ({:?})", detail_kind).yellow()
+            ),
+            Verdict::Unhealthy { detail_kind } => {
+                format!("{}", format!("unhealthy ({:?})", detail_kind).red())
+            }
             Verdict::NotApplicable => "not applicable".to_string(),
         };
         println!("    {}: {} ({}ms)", c.label, verdict_str, c.elapsed_ms);

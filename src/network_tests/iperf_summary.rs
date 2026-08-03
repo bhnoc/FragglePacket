@@ -51,16 +51,29 @@ impl IperfSummary {
     /// panics on a malformed document; missing/unexpected fields become
     /// `None`/defaults and `connected` becomes `false`.
     pub fn from_json(v: &Value) -> Self {
-        let error = v.get("error").and_then(Value::as_str).map(|s| s.to_string());
+        let error = v
+            .get("error")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
 
         let start = v.get("start");
-        let version = start.and_then(|s| s.get("version")).and_then(Value::as_str).map(|s| s.to_string());
-        let connected_list_len =
-            start.and_then(|s| s.get("connected")).and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+        let version = start
+            .and_then(|s| s.get("version"))
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
+        let connected_list_len = start
+            .and_then(|s| s.get("connected"))
+            .and_then(Value::as_array)
+            .map(|a| a.len())
+            .unwrap_or(0);
 
         let test_start = start.and_then(|s| s.get("test_start"));
-        let num_streams_requested = test_start.and_then(|t| t.get("num_streams")).and_then(Value::as_u64);
-        let requested_duration_secs = test_start.and_then(|t| t.get("duration")).and_then(Value::as_f64);
+        let num_streams_requested = test_start
+            .and_then(|t| t.get("num_streams"))
+            .and_then(Value::as_u64);
+        let requested_duration_secs = test_start
+            .and_then(|t| t.get("duration"))
+            .and_then(Value::as_f64);
 
         let connected = error.is_none() && connected_list_len > 0;
 
@@ -106,20 +119,41 @@ impl IperfSummary {
 
         let sender_block = sum_sent.filter(|b| !is_hollow(b));
 
-        let sender_bytes = sender_block.and_then(|b| b.get("bytes")).and_then(Value::as_u64);
-        let sender_seconds = sender_block.and_then(|b| b.get("seconds")).and_then(Value::as_f64);
-        let sender_bits_per_second = sender_block.and_then(|b| b.get("bits_per_second")).and_then(Value::as_f64);
+        let sender_bytes = sender_block
+            .and_then(|b| b.get("bytes"))
+            .and_then(Value::as_u64);
+        let sender_seconds = sender_block
+            .and_then(|b| b.get("seconds"))
+            .and_then(Value::as_f64);
+        let sender_bits_per_second = sender_block
+            .and_then(|b| b.get("bits_per_second"))
+            .and_then(Value::as_f64);
 
-        let receiver_bytes = receiver_block.and_then(|b| b.get("bytes")).and_then(Value::as_u64);
-        let receiver_seconds = receiver_block.and_then(|b| b.get("seconds")).and_then(Value::as_f64);
-        let receiver_bits_per_second = receiver_block.and_then(|b| b.get("bits_per_second")).and_then(Value::as_f64);
+        let receiver_bytes = receiver_block
+            .and_then(|b| b.get("bytes"))
+            .and_then(Value::as_u64);
+        let receiver_seconds = receiver_block
+            .and_then(|b| b.get("seconds"))
+            .and_then(Value::as_f64);
+        let receiver_bits_per_second = receiver_block
+            .and_then(|b| b.get("bits_per_second"))
+            .and_then(Value::as_f64);
 
-        let udp_lost_packets = receiver_block.and_then(|b| b.get("lost_packets")).and_then(Value::as_u64);
-        let udp_packets = receiver_block.and_then(|b| b.get("packets")).and_then(Value::as_u64);
-        let udp_lost_percent = receiver_block.and_then(|b| b.get("lost_percent")).and_then(Value::as_f64);
+        let udp_lost_packets = receiver_block
+            .and_then(|b| b.get("lost_packets"))
+            .and_then(Value::as_u64);
+        let udp_packets = receiver_block
+            .and_then(|b| b.get("packets"))
+            .and_then(Value::as_u64);
+        let udp_lost_percent = receiver_block
+            .and_then(|b| b.get("lost_percent"))
+            .and_then(Value::as_f64);
 
-        let streams_established =
-            end.and_then(|e| e.get("streams")).and_then(Value::as_array).map(|a| a.len() as u64).unwrap_or(0);
+        let streams_established = end
+            .and_then(|e| e.get("streams"))
+            .and_then(Value::as_array)
+            .map(|a| a.len() as u64)
+            .unwrap_or(0);
 
         IperfSummary {
             version,
@@ -147,7 +181,11 @@ mod tests {
     use std::fs;
 
     fn fixture_json(name: &str) -> Value {
-        let path = format!("{}/harness/fixtures/iperf/{}", env!("CARGO_MANIFEST_DIR"), name);
+        let path = format!(
+            "{}/harness/fixtures/iperf/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            name
+        );
         let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {}", path, e));
         serde_json::from_str(&text).unwrap()
     }

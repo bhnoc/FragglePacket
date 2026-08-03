@@ -85,8 +85,15 @@ impl ResponsivenessGrade {
 /// an RPM figure (no load is offered, so RPM isn't meaningful for it -- see
 /// `run_bufferbloat`), so requiring all four phases here would make the
 /// grade permanently uncomputable regardless of how healthy the network is.
-fn grade_from_phases(up: &PhaseLatency, down: &PhaseLatency, sim: &PhaseLatency) -> Option<ResponsivenessGrade> {
-    let vals: Option<Vec<f64>> = [up, down, sim].iter().map(|p| p.responsiveness_rpm).collect();
+fn grade_from_phases(
+    up: &PhaseLatency,
+    down: &PhaseLatency,
+    sim: &PhaseLatency,
+) -> Option<ResponsivenessGrade> {
+    let vals: Option<Vec<f64>> = [up, down, sim]
+        .iter()
+        .map(|p| p.responsiveness_rpm)
+        .collect();
     let vals = vals?;
     let worst = vals.into_iter().fold(f64::INFINITY, f64::min);
     Some(ResponsivenessGrade::from_worst_rpm(worst))
@@ -131,8 +138,11 @@ fn run_network_quality(args: &[&str], max_duration_secs: u64) -> Result<serde_js
         }
     }
 
-    let output = child.wait_with_output().map_err(|e| format!("failed to collect output: {e}"))?;
-    serde_json::from_slice(&output.stdout).map_err(|e| format!("failed to parse networkQuality JSON: {e}"))
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("failed to collect output: {e}"))?;
+    serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("failed to parse networkQuality JSON: {e}"))
 }
 
 // `-s` (sequential mode) is what makes networkQuality report a per-direction
@@ -154,7 +164,10 @@ fn extract_phase(v: &serde_json::Value, prefix: &str) -> PhaseLatency {
 /// invocation so the parsing logic is unit-testable against captured JSON
 /// without running the real tool.
 pub fn parse_idle_response(v: &serde_json::Value) -> (Option<String>, Option<f64>) {
-    let endpoint = v.get("test_endpoint").and_then(|x| x.as_str()).map(str::to_string);
+    let endpoint = v
+        .get("test_endpoint")
+        .and_then(|x| x.as_str())
+        .map(str::to_string);
     let base_rtt = v.get("base_rtt").and_then(|x| x.as_f64());
     (endpoint, base_rtt)
 }
@@ -289,7 +302,11 @@ pub fn run_bufferbloat(cfg: &BufferbloatConfig) -> BufferbloatReport {
         simultaneous,
         responsiveness_grade: grade,
         tool_available: true,
-        unavailable_reason: if errors.is_empty() { None } else { Some(errors.join("; ")) },
+        unavailable_reason: if errors.is_empty() {
+            None
+        } else {
+            Some(errors.join("; "))
+        },
     }
 }
 
@@ -368,7 +385,10 @@ mod tests {
 
     #[test]
     fn grade_is_none_when_any_loaded_phase_missing_rpm() {
-        let complete = PhaseLatency { responsiveness_rpm: Some(300.0), ..Default::default() };
+        let complete = PhaseLatency {
+            responsiveness_rpm: Some(300.0),
+            ..Default::default()
+        };
         let missing = PhaseLatency::default();
         assert!(grade_from_phases(&complete, &complete, &missing).is_none());
     }
@@ -379,7 +399,10 @@ mod tests {
         // still be computable from the three loaded phases alone, or every
         // real run (idle never has RPM) would report an uncomputable grade
         // regardless of how healthy the network is.
-        let healthy = PhaseLatency { responsiveness_rpm: Some(500.0), ..Default::default() };
+        let healthy = PhaseLatency {
+            responsiveness_rpm: Some(500.0),
+            ..Default::default()
+        };
         let grade = grade_from_phases(&healthy, &healthy, &healthy).unwrap();
         assert_eq!(grade, ResponsivenessGrade::Excellent);
     }
@@ -389,8 +412,14 @@ mod tests {
         // A field-shaped scenario: two healthy phases, one collapsed
         // simultaneous phase. Averaging would mask exactly the collapse
         // GAP-004 requires surfacing.
-        let healthy = PhaseLatency { responsiveness_rpm: Some(500.0), ..Default::default() };
-        let collapsed = PhaseLatency { responsiveness_rpm: Some(50.0), ..Default::default() };
+        let healthy = PhaseLatency {
+            responsiveness_rpm: Some(500.0),
+            ..Default::default()
+        };
+        let collapsed = PhaseLatency {
+            responsiveness_rpm: Some(50.0),
+            ..Default::default()
+        };
         let grade = grade_from_phases(&healthy, &healthy, &collapsed).unwrap();
         assert_eq!(grade, ResponsivenessGrade::Poor);
     }

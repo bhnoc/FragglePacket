@@ -1,10 +1,10 @@
 //! Fuzzing Panel - Packet fuzzing controls
 
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
 use crate::state::test_runner::TestUpdate;
 use crate::state::LogLevel;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 use fraggle_packet::framework::TestCategory;
 
 /// Fuzzing panel with mode selection and PCAP output
@@ -24,7 +24,9 @@ pub fn FuzzingPanel(
     let mut is_generating = use_signal(|| false);
 
     // Get fuzzing results
-    let fuzz_results = state.read().get_category_results(&current_target, TestCategory::Fuzzing);
+    let fuzz_results = state
+        .read()
+        .get_category_results(&current_target, TestCategory::Fuzzing);
     let latest_result = fuzz_results.last();
 
     // Extract packets count and output file from latest result for status display
@@ -38,10 +40,22 @@ pub fn FuzzingPanel(
         .unwrap_or_default();
 
     let modes = vec![
-        ("segment-size", "Segment Size", "Test TCP segment size handling"),
-        ("length-mismatch", "Length Mismatch", "Test IP/TCP length field mismatches"),
+        (
+            "segment-size",
+            "Segment Size",
+            "Test TCP segment size handling",
+        ),
+        (
+            "length-mismatch",
+            "Length Mismatch",
+            "Test IP/TCP length field mismatches",
+        ),
         ("tcp-options", "TCP Options", "Test malformed TCP options"),
-        ("fragmentation", "Fragmentation", "Test IP fragmentation handling"),
+        (
+            "fragmentation",
+            "Fragmentation",
+            "Test IP fragmentation handling",
+        ),
         ("checksum", "Checksum", "Test invalid checksum handling"),
         ("all", "All Modes", "Run all fuzzing modes"),
     ];

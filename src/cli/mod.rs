@@ -6,7 +6,11 @@ pub mod common;
 
 #[derive(Parser, Debug)]
 #[command(name = "fraggle-packet")]
-#[command(author, version, about = "FragglePacket - Comprehensive MTU and Path Discovery Tool")]
+#[command(
+    author,
+    version,
+    about = "FragglePacket - Comprehensive MTU and Path Discovery Tool"
+)]
 pub struct Args {
     #[command(subcommand)]
     pub command: Option<Commands>,

@@ -48,7 +48,12 @@ fn read_points(path: &str) -> Vec<SweepPoint> {
         Ok(t) => match serde_json::from_str(&t) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("{} {} is not a valid SweepPoint array: {}", "✗".red(), path, e);
+                eprintln!(
+                    "{} {} is not a valid SweepPoint array: {}",
+                    "✗".red(),
+                    path,
+                    e
+                );
                 std::process::exit(1);
             }
         },
@@ -102,7 +107,9 @@ fn render_verdict(label: &str, v: &KneeVerdict) {
             println!("{}", "directional unfairness".red());
             println!("      {}", detail);
         }
-        KneeVerdict::NoKneeWithinTestedRange { highest_tested_mbps } => {
+        KneeVerdict::NoKneeWithinTestedRange {
+            highest_tested_mbps,
+        } => {
             println!("{}", "no knee within tested range".green());
             println!(
                 "      combined throughput tracked offered load through the highest tested rate \
@@ -136,7 +143,10 @@ fn render(r: &KneeReport) {
 
     println!();
     match &r.cross_validation {
-        CrossValidation::Reproduced { native_knee_mbps, application_knee_mbps } => println!(
+        CrossValidation::Reproduced {
+            native_knee_mbps,
+            application_knee_mbps,
+        } => println!(
             "  cross-validation: {} native at {:.0} Mbps, application at {:.0} Mbps",
             "REPRODUCED".green(),
             native_knee_mbps,
@@ -147,7 +157,11 @@ fn render(r: &KneeReport) {
             println!("      {}", detail);
         }
         CrossValidation::NotAttempted { reason } => {
-            println!("  cross-validation: {} {}", "NOT ATTEMPTED".yellow(), reason);
+            println!(
+                "  cross-validation: {} {}",
+                "NOT ATTEMPTED".yellow(),
+                reason
+            );
         }
     }
 
@@ -180,8 +194,14 @@ pub fn run(args: &CapacityKneeArgs) {
         field_fixture()
     } else {
         (
-            args.native_points.as_deref().map(read_points).unwrap_or_default(),
-            args.application_points.as_deref().map(read_points).unwrap_or_default(),
+            args.native_points
+                .as_deref()
+                .map(read_points)
+                .unwrap_or_default(),
+            args.application_points
+                .as_deref()
+                .map(read_points)
+                .unwrap_or_default(),
         )
     };
 
@@ -205,12 +225,19 @@ pub fn run(args: &CapacityKneeArgs) {
             closing_combined_mbps: args.closing_combined_mbps,
         }
     };
-    let idle = if args.inject_fixture { Some(8.0) } else { args.idle_latency_ms };
+    let idle = if args.inject_fixture {
+        Some(8.0)
+    } else {
+        args.idle_latency_ms
+    };
 
     let report = build_report(&args.interface, native, application, drift, idle);
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).unwrap_or_default()
+        );
         return;
     }
     render(&report);

@@ -68,7 +68,14 @@ pub struct ExpectedPolicy {
 
 impl ExpectedPolicy {
     pub fn none() -> Self {
-        Self { arp_nd: None, dhcp_broadcast: None, mdns: None, ssdp: None, multicast_delivery: None, peer_isolation: None }
+        Self {
+            arp_nd: None,
+            dhcp_broadcast: None,
+            mdns: None,
+            ssdp: None,
+            multicast_delivery: None,
+            peer_isolation: None,
+        }
     }
 }
 
@@ -156,7 +163,10 @@ pub fn tally_responses(raws: &[Vec<u8>]) -> ResponderTally {
             by_class.push((class, 1));
         }
     }
-    ResponderTally { total_responses: raws.len() as u32, by_class }
+    ResponderTally {
+        total_responses: raws.len() as u32,
+        by_class,
+    }
 }
 
 /// Sends up to `MAX_PROBES_PER_KIND` mDNS/SSDP-style multicast queries and
@@ -172,11 +182,16 @@ pub fn probe_multicast_group(
     listen_for: Duration,
 ) -> Result<Vec<Vec<u8>>, String> {
     let capped = probe_count.min(MAX_PROBES_PER_KIND);
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("failed to bind local socket: {e}"))?;
-    socket.set_read_timeout(Some(Duration::from_millis(200))).ok();
+    let socket =
+        UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("failed to bind local socket: {e}"))?;
+    socket
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .ok();
     let dest = SocketAddr::new(IpAddr::V4(group), port);
     for _ in 0..capped.max(1) {
-        socket.send_to(query, dest).map_err(|e| format!("failed to send to {group}:{port}: {e}"))?;
+        socket
+            .send_to(query, dest)
+            .map_err(|e| format!("failed to send to {group}:{port}: {e}"))?;
     }
     let deadline = Instant::now() + listen_for;
     let mut responses = Vec::new();
@@ -193,7 +208,11 @@ pub fn probe_multicast_group(
 /// Attempts to join a multicast group and observes whether any traffic
 /// sent to it is delivered. Distinct from `probe_multicast_group`: this
 /// tests group *membership/delivery*, not query/response discovery.
-pub fn observe_group_delivery(group: Ipv4Addr, port: u16, listen_for: Duration) -> Result<Observation, String> {
+pub fn observe_group_delivery(
+    group: Ipv4Addr,
+    port: u16,
+    listen_for: Duration,
+) -> Result<Observation, String> {
     let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port))
         .map_err(|e| format!("failed to bind {port} for multicast join: {e}"))?;
     socket
@@ -203,7 +222,10 @@ pub fn observe_group_delivery(group: Ipv4Addr, port: u16, listen_for: Duration) 
     let mut buf = [0u8; 2048];
     match socket.recv_from(&mut buf) {
         Ok(_) => Ok(Observation::Reachable),
-        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+        Err(e)
+            if e.kind() == std::io::ErrorKind::WouldBlock
+                || e.kind() == std::io::ErrorKind::TimedOut =>
+        {
             Ok(Observation::NoResponse)
         }
         Err(e) => Err(e.to_string()),
@@ -232,9 +254,14 @@ pub enum DeliveryMechanism {
 /// path into this function, since probing an unnamed peer on a shared
 /// conference network without authorization is scanning someone else's
 /// device.
-pub fn probe_peer_reachability(peer: SocketAddr, probe_count: u32, timeout: Duration) -> Result<Observation, String> {
+pub fn probe_peer_reachability(
+    peer: SocketAddr,
+    probe_count: u32,
+    timeout: Duration,
+) -> Result<Observation, String> {
     let capped = probe_count.min(MAX_PROBES_PER_KIND);
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("failed to bind local socket: {e}"))?;
+    let socket =
+        UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("failed to bind local socket: {e}"))?;
     socket.set_read_timeout(Some(timeout)).ok();
     let mut got_response = false;
     let mut got_send_error = false;
@@ -270,15 +297,27 @@ mod tests {
 
     #[test]
     fn with_no_declared_expectation_every_observation_yields_no_expectation_declared() {
-        assert_eq!(judge(Observation::Reachable, None), Verdict::NoExpectationDeclared);
-        assert_eq!(judge(Observation::ConfirmedBlocked, None), Verdict::NoExpectationDeclared);
-        assert_eq!(judge(Observation::NoResponse, None), Verdict::NoExpectationDeclared);
+        assert_eq!(
+            judge(Observation::Reachable, None),
+            Verdict::NoExpectationDeclared
+        );
+        assert_eq!(
+            judge(Observation::ConfirmedBlocked, None),
+            Verdict::NoExpectationDeclared
+        );
+        assert_eq!(
+            judge(Observation::NoResponse, None),
+            Verdict::NoExpectationDeclared
+        );
     }
 
     #[test]
     fn expected_blocked_but_observed_reachable_is_flagged_unexpectedly_reachable() {
         assert_eq!(
-            judge(Observation::Reachable, Some(ExpectedReachability::ExpectedBlocked)),
+            judge(
+                Observation::Reachable,
+                Some(ExpectedReachability::ExpectedBlocked)
+            ),
             Verdict::UnexpectedlyReachable
         );
     }
@@ -286,7 +325,10 @@ mod tests {
     #[test]
     fn expected_reachable_but_observed_blocked_is_flagged_unexpectedly_blocked() {
         assert_eq!(
-            judge(Observation::ConfirmedBlocked, Some(ExpectedReachability::ExpectedReachable)),
+            judge(
+                Observation::ConfirmedBlocked,
+                Some(ExpectedReachability::ExpectedReachable)
+            ),
             Verdict::UnexpectedlyBlocked
         );
     }
@@ -294,26 +336,39 @@ mod tests {
     #[test]
     fn matching_expectation_in_either_direction_reports_matches_expectation() {
         assert_eq!(
-            judge(Observation::Reachable, Some(ExpectedReachability::ExpectedReachable)),
+            judge(
+                Observation::Reachable,
+                Some(ExpectedReachability::ExpectedReachable)
+            ),
             Verdict::MatchesExpectation
         );
         assert_eq!(
-            judge(Observation::ConfirmedBlocked, Some(ExpectedReachability::ExpectedBlocked)),
+            judge(
+                Observation::ConfirmedBlocked,
+                Some(ExpectedReachability::ExpectedBlocked)
+            ),
             Verdict::MatchesExpectation
         );
     }
 
     #[test]
-    fn a_no_response_observation_never_yields_a_pass_fail_verdict_even_with_a_declared_expectation() {
+    fn a_no_response_observation_never_yields_a_pass_fail_verdict_even_with_a_declared_expectation()
+    {
         // The core anti-silence assertion: "mDNS blocked" must not be
         // inferred just because a declared policy said ExpectedBlocked and
         // nothing came back -- that's still an unconfirmed observation.
         assert_eq!(
-            judge(Observation::NoResponse, Some(ExpectedReachability::ExpectedBlocked)),
+            judge(
+                Observation::NoResponse,
+                Some(ExpectedReachability::ExpectedBlocked)
+            ),
             Verdict::ObservationInconclusive
         );
         assert_eq!(
-            judge(Observation::NoResponse, Some(ExpectedReachability::ExpectedReachable)),
+            judge(
+                Observation::NoResponse,
+                Some(ExpectedReachability::ExpectedReachable)
+            ),
             Verdict::ObservationInconclusive
         );
     }
@@ -328,7 +383,11 @@ mod tests {
         ];
         let tally = tally_responses(&raws);
         assert_eq!(tally.total_responses, 4);
-        let printer_count = tally.by_class.iter().find(|(c, _)| *c == ServiceClass::Printer).map(|(_, n)| *n);
+        let printer_count = tally
+            .by_class
+            .iter()
+            .find(|(c, _)| *c == ServiceClass::Printer)
+            .map(|(_, n)| *n);
         assert_eq!(printer_count, Some(2));
     }
 

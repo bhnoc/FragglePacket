@@ -3,8 +3,8 @@
 use colored::*;
 
 use fraggle_packet::network_tests::probe_preflight::{
-    classify_dependency_check, classify_ssh_error, confirm_host_key_rotation, evaluate_clock_skew, summarize_preflight,
-    ClockCheck, NodePreflightResult, PreflightOutcome,
+    classify_dependency_check, classify_ssh_error, confirm_host_key_rotation, evaluate_clock_skew,
+    summarize_preflight, ClockCheck, NodePreflightResult, PreflightOutcome,
 };
 
 #[derive(clap::Args, Debug)]
@@ -68,10 +68,16 @@ pub fn run(args: &ProbePreflightArgs) {
 
     let mut results = mock_results();
 
-    let clock_check = ClockCheck { remote_unix_secs: 1000.0, local_unix_secs: 1002.5 };
+    let clock_check = ClockCheck {
+        remote_unix_secs: 1000.0,
+        local_unix_secs: 1002.5,
+    };
     let clock_outcome = evaluate_clock_skew(&clock_check);
     if !clock_outcome.is_healthy() {
-        results.push(NodePreflightResult { label: "node-clockskew1".to_string(), outcome: clock_outcome });
+        results.push(NodePreflightResult {
+            label: "node-clockskew1".to_string(),
+            outcome: clock_outcome,
+        });
     }
 
     if let (Some(label), Some(fp)) = (&args.confirm_host_key_for, &args.confirmed_fingerprint) {
@@ -98,11 +104,19 @@ pub fn run(args: &ProbePreflightArgs) {
 
     println!("{}", "== Probe Preflight (mock nodes) ==".cyan().bold());
     for r in &results {
-        let marker = if r.outcome.is_healthy() { "PASS".green().to_string() } else { "QUARANTINE".yellow().to_string() };
+        let marker = if r.outcome.is_healthy() {
+            "PASS".green().to_string()
+        } else {
+            "QUARANTINE".yellow().to_string()
+        };
         println!("  [{}] {}: {}", marker, r.label, r.outcome.reason());
     }
     println!();
-    println!("  healthy: {}/{}", summary.healthy_labels.len(), summary.total);
+    println!(
+        "  healthy: {}/{}",
+        summary.healthy_labels.len(),
+        summary.total
+    );
     if !summary.excluded_with_reason.is_empty() {
         println!("  excluded (never counted as a zero measurement):");
         for (label, reason) in &summary.excluded_with_reason {

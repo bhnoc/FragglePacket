@@ -17,10 +17,11 @@ pub fn run(args: &DslDemoArgs) {
     use fraggle_packet::fuzzing::dsl::*;
     let pkt = Ether::new()
         / Ip::new().dst_addr(args.dst).df()
-        / Tcp::new()
-            .dport(args.port)
-            .syn()
-            .options(vec![TcpOpt::Mss(1460), TcpOpt::SAckOK, TcpOpt::Nop])
+        / Tcp::new().dport(args.port).syn().options(vec![
+            TcpOpt::Mss(1460),
+            TcpOpt::SAckOK,
+            TcpOpt::Nop,
+        ])
         / Raw::of_size(args.size, b'X');
     println!("{}", pkt.summary().cyan());
     match pkt.hexdump() {

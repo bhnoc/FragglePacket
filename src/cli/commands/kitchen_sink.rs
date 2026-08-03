@@ -7,8 +7,9 @@ use std::io::Write;
 use std::path::Path;
 
 use fraggle_packet::probe::{
-    binary_search_mtu_icmp, binary_search_mtu_tcp, binary_search_mtu_udp, check_tracepath_available,
-    probe_icmp, probe_tcp_mss, probe_quic_mtu, resolve_hostname, run_tracepath,
+    binary_search_mtu_icmp, binary_search_mtu_tcp, binary_search_mtu_udp,
+    check_tracepath_available, probe_icmp, probe_quic_mtu, probe_tcp_mss, resolve_hostname,
+    run_tracepath,
 };
 
 use crate::cli::common::{
@@ -33,7 +34,14 @@ pub struct KitchenSinkArgs {
 }
 
 pub fn run(args: &KitchenSinkArgs, global: &GlobalArgs) {
-    run_kitchen_sink(global.timeout_ms, global.min, args.max, global.retries, args.json, args.output.clone());
+    run_kitchen_sink(
+        global.timeout_ms,
+        global.min,
+        args.max,
+        global.retries,
+        args.json,
+        args.output.clone(),
+    );
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -124,7 +132,10 @@ fn load_targets() -> Vec<(String, String, u16)> {
                 if parts.len() >= 2 {
                     let target = parts[0].trim().to_string();
                     let desc = parts[1].trim().to_string();
-                    let port: u16 = parts.get(2).and_then(|p| p.trim().parse().ok()).unwrap_or(443);
+                    let port: u16 = parts
+                        .get(2)
+                        .and_then(|p| p.trim().parse().ok())
+                        .unwrap_or(443);
                     targets.push((target, desc, port));
                 }
             }
@@ -134,13 +145,29 @@ fn load_targets() -> Vec<(String, String, u16)> {
         }
     }
 
-    default_targets.iter().map(|(t, d, p)| (t.to_string(), d.to_string(), *p)).collect()
+    default_targets
+        .iter()
+        .map(|(t, d, p)| (t.to_string(), d.to_string(), *p))
+        .collect()
 }
 
-fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize, json_output: bool, output_file: Option<String>) {
+fn run_kitchen_sink(
+    timeout_ms: u64,
+    min_mtu: usize,
+    max_mtu: usize,
+    retries: usize,
+    json_output: bool,
+    output_file: Option<String>,
+) {
     if !json_output {
         println!("{}", "=".repeat(70).blue());
-        println!("{}", " FragglePacket - COMPREHENSIVE TEST ".white().on_blue().bold());
+        println!(
+            "{}",
+            " FragglePacket - COMPREHENSIVE TEST "
+                .white()
+                .on_blue()
+                .bold()
+        );
         println!("{}", "=".repeat(70).blue());
         println!();
     }
@@ -148,62 +175,81 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     let targets = load_targets();
 
     if !json_output {
-        println!("Testing {} targets in parallel...", targets.len().to_string().cyan());
+        println!(
+            "Testing {} targets in parallel...",
+            targets.len().to_string().cyan()
+        );
         println!();
     }
 
     // Phase 1: Parallel ICMP + TCP testing
-    println!("{}", "PHASE 1: Path MTU Discovery (ICMP + TCP)".cyan().bold());
+    println!(
+        "{}",
+        "PHASE 1: Path MTU Discovery (ICMP + TCP)".cyan().bold()
+    );
     println!("{}", "-".repeat(60));
 
-    let results: Vec<MtuTestResult> = targets.par_iter().map(|(target, desc, port)| {
-        let mut result = MtuTestResult {
-            target: target.clone(),
-            desc: desc.clone(),
-            icmp_mtu: None,
-            tcp_mtu: None,
-            udp_mtu: None,
-            tcp_mss: None,
-            quic_mtu: None,
-        };
+    let results: Vec<MtuTestResult> = targets
+        .par_iter()
+        .map(|(target, desc, port)| {
+            let mut result = MtuTestResult {
+                target: target.clone(),
+                desc: desc.clone(),
+                icmp_mtu: None,
+                tcp_mtu: None,
+                udp_mtu: None,
+                tcp_mss: None,
+                quic_mtu: None,
+            };
 
-        // Resolve hostname once
-        let ip = resolve_hostname(target).ok();
+            // Resolve hostname once
+            let ip = resolve_hostname(target).ok();
 
-        // ICMP test
-        if let Some(ip) = ip {
-            if probe_icmp(ip, 64, timeout_ms, 1) {
-                result.icmp_mtu = Some(binary_search_mtu_icmp(ip, min_mtu, max_mtu, timeout_ms, retries));
+            // ICMP test
+            if let Some(ip) = ip {
+                if probe_icmp(ip, 64, timeout_ms, 1) {
+                    result.icmp_mtu = Some(binary_search_mtu_icmp(
+                        ip, min_mtu, max_mtu, timeout_ms, retries,
+                    ));
+                }
+
+                // UDP test (for DNS servers - port 0 means DNS)
+                if *port == 0 {
+                    result.udp_mtu =
+                        binary_search_mtu_udp(ip, min_mtu, max_mtu, timeout_ms, retries);
+                }
             }
 
-            // UDP test (for DNS servers - port 0 means DNS)
-            if *port == 0 {
-                result.udp_mtu = binary_search_mtu_udp(ip, min_mtu, max_mtu, timeout_ms, retries);
+            // TCP test (if port specified)
+            if *port > 0 {
+                let tcp_target = format!("{}:{}", target, port);
+                result.tcp_mtu = binary_search_mtu_tcp(&tcp_target, min_mtu, max_mtu, timeout_ms);
+
+                // Also get TCP MSS
+                if let Some(mss_info) = probe_tcp_mss(&tcp_target, timeout_ms) {
+                    result.tcp_mss = Some(mss_info.mss);
+                }
+
+                // QUIC test (port 443 only, and only if target likely supports it)
+                if *port == 443 {
+                    result.quic_mtu = probe_quic_mtu(target, 443, timeout_ms);
+                }
             }
-        }
 
-        // TCP test (if port specified)
-        if *port > 0 {
-            let tcp_target = format!("{}:{}", target, port);
-            result.tcp_mtu = binary_search_mtu_tcp(&tcp_target, min_mtu, max_mtu, timeout_ms);
-
-            // Also get TCP MSS
-            if let Some(mss_info) = probe_tcp_mss(&tcp_target, timeout_ms) {
-                result.tcp_mss = Some(mss_info.mss);
-            }
-
-            // QUIC test (port 443 only, and only if target likely supports it)
-            if *port == 443 {
-                result.quic_mtu = probe_quic_mtu(target, 443, timeout_ms);
-            }
-        }
-
-        result
-    }).collect();
+            result
+        })
+        .collect();
 
     // Display results
-    println!("  {:20} {:>6} {:>6} {:>6} {:>6} {:>6}",
-        "Target".dimmed(), "ICMP".dimmed(), "TCP".dimmed(), "UDP".dimmed(), "QUIC".dimmed(), "MSS".dimmed());
+    println!(
+        "  {:20} {:>6} {:>6} {:>6} {:>6} {:>6}",
+        "Target".dimmed(),
+        "ICMP".dimmed(),
+        "TCP".dimmed(),
+        "UDP".dimmed(),
+        "QUIC".dimmed(),
+        "MSS".dimmed()
+    );
     println!("  {}", "-".repeat(62));
 
     for r in &results {
@@ -223,7 +269,8 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
             None => "---".dimmed().to_string(),
         };
 
-        println!("  {:20} {:>6} {:>6} {:>6} {:>6} {:>6}",
+        println!(
+            "  {:20} {:>6} {:>6} {:>6} {:>6} {:>6}",
             r.desc,
             fmt_mtu(r.icmp_mtu),
             fmt_mtu(r.tcp_mtu),
@@ -257,7 +304,10 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     }
 
     if all_mtus.is_empty() {
-        println!("{}", "ERROR: No successful MTU tests. Check network connectivity.".red());
+        println!(
+            "{}",
+            "ERROR: No successful MTU tests. Check network connectivity.".red()
+        );
         return;
     }
 
@@ -266,15 +316,22 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
         let avg_mss: usize = all_mss.iter().map(|(_, m)| m).sum::<usize>() / all_mss.len();
         let min_mss = all_mss.iter().map(|(_, m)| *m).min().unwrap_or(0);
         println!();
-        println!("  TCP MSS observed: avg {} / min {} ({} connections)",
-            avg_mss, min_mss, all_mss.len());
+        println!(
+            "  TCP MSS observed: avg {} / min {} ({} connections)",
+            avg_mss,
+            min_mss,
+            all_mss.len()
+        );
     }
 
     // Phase 2: Per-Hop MTU Analysis (if tracepath available)
     let mut hop_mtu_drop: Option<(String, usize, usize)> = None;
 
     if check_tracepath_available() {
-        println!("{}", "PHASE 2: Per-Hop MTU Analysis (tracepath)".cyan().bold());
+        println!(
+            "{}",
+            "PHASE 2: Per-Hop MTU Analysis (tracepath)".cyan().bold()
+        );
         println!("{}", "-".repeat(60));
 
         // Run tracepath on a few key targets to find where MTU drops
@@ -299,8 +356,10 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
                 if let Some(mtu) = hop.mtu {
                     if let Some(prev) = prev_mtu {
                         if mtu < prev {
-                            println!("MTU drops {} -> {} at hop {} ({})",
-                                prev, mtu, hop.hop, hop.addr);
+                            println!(
+                                "MTU drops {} -> {} at hop {} ({})",
+                                prev, mtu, hop.hop, hop.addr
+                            );
                             drop_found = true;
                             if hop_mtu_drop.is_none() {
                                 hop_mtu_drop = Some((hop.addr.clone(), prev, mtu));
@@ -347,8 +406,13 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     println!();
 
     // Find anomalies (significantly lower than median)
-    let anomaly_threshold = if median_mtu >= 1400 { 1350 } else { median_mtu - 100 };
-    let anomalies: Vec<_> = all_mtus.iter()
+    let anomaly_threshold = if median_mtu >= 1400 {
+        1350
+    } else {
+        median_mtu - 100
+    };
+    let anomalies: Vec<_> = all_mtus
+        .iter()
         .filter(|(_, _, m)| *m < anomaly_threshold)
         .collect();
 
@@ -356,7 +420,11 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     if !anomalies.is_empty() && median_mtu >= 1400 {
         println!("{}", "PHASE 4: Re-testing Anomalies".cyan().bold());
         println!("{}", "-".repeat(60));
-        println!("  {} results below {} - verifying...", anomalies.len(), anomaly_threshold);
+        println!(
+            "  {} results below {} - verifying...",
+            anomalies.len(),
+            anomaly_threshold
+        );
         println!();
 
         let mut confirmed_low: Vec<(String, String, usize)> = Vec::new();
@@ -372,7 +440,9 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
                     if let Ok(ip) = resolve_hostname(target) {
                         // More retries for confirmation
                         Some(binary_search_mtu_icmp(ip, min_mtu, max_mtu, timeout_ms, 5))
-                    } else { None }
+                    } else {
+                        None
+                    }
                 } else {
                     let tcp_target = format!("{}:{}", target, port);
                     binary_search_mtu_tcp(&tcp_target, min_mtu, max_mtu, timeout_ms * 2)
@@ -406,7 +476,10 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     println!("{}", "-".repeat(60));
 
     let consensus_mtu = if pct_ok >= 90.0 { 1500 } else { median_mtu };
-    println!("  Using consensus MTU: {} bytes", consensus_mtu.to_string().white().bold());
+    println!(
+        "  Using consensus MTU: {} bytes",
+        consensus_mtu.to_string().white().bold()
+    );
     println!();
 
     let vpn_overheads = vec![
@@ -418,8 +491,15 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
 
     for (vpn_name, overhead) in &vpn_overheads {
         let inner = consensus_mtu.saturating_sub(*overhead);
-        let status = if inner >= 1280 { "OK".green() } else { "LOW".red() };
-        println!("  {:20} -{:3}b = {:4} inner [{}]", vpn_name, overhead, inner, status);
+        let status = if inner >= 1280 {
+            "OK".green()
+        } else {
+            "LOW".red()
+        };
+        println!(
+            "  {:20} -{:3}b = {:4} inner [{}]",
+            vpn_name, overhead, inner, status
+        );
     }
     println!();
 
@@ -446,24 +526,34 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
         println!("  TCP MSS Clamp: 1460 (optional)");
     } else if median_mtu >= 1400 {
         // Median OK but significant issues
-        println!("  {} Some paths have MTU restrictions", "REVIEW".yellow().bold());
+        println!(
+            "  {} Some paths have MTU restrictions",
+            "REVIEW".yellow().bold()
+        );
         println!();
         println!("  Median: {} | Lowest: {}", median_mtu, min_mtu_found);
-        println!("  Consider: Interface MTU {} if seeing connection issues", median_mtu);
+        println!(
+            "  Consider: Interface MTU {} if seeing connection issues",
+            median_mtu
+        );
         println!("  TCP MSS Clamp: {}", median_mtu - 40);
     } else {
         // Real problem
         println!("  {} Path MTU is restricted", "ACTION NEEDED".red().bold());
         println!();
         println!("  Median MTU: {} bytes", median_mtu);
-        println!("  SET INTERFACE MTU: {}", median_mtu.to_string().yellow().bold());
-        println!("  SET TCP MSS CLAMP: {}", (median_mtu - 40).to_string().yellow());
+        println!(
+            "  SET INTERFACE MTU: {}",
+            median_mtu.to_string().yellow().bold()
+        );
+        println!(
+            "  SET TCP MSS CLAMP: {}",
+            (median_mtu - 40).to_string().yellow()
+        );
         println!();
 
         // Show what's limiting
-        let limiters: Vec<_> = all_mtus.iter()
-            .filter(|(_, _, m)| *m < 1400)
-            .collect();
+        let limiters: Vec<_> = all_mtus.iter().filter(|(_, _, m)| *m < 1400).collect();
         if !limiters.is_empty() {
             println!("  Limiting factors:");
             for (desc, proto, mtu) in limiters.iter().take(5) {
@@ -474,8 +564,13 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
         // Show where MTU drops if tracepath found it
         if let Some((addr, from, to)) = &hop_mtu_drop {
             println!();
-            println!("  {} MTU drops from {} to {} at {}",
-                "WHERE:".cyan(), from, to, addr.yellow());
+            println!(
+                "  {} MTU drops from {} to {} at {}",
+                "WHERE:".cyan(),
+                from,
+                to,
+                addr.yellow()
+            );
         }
     }
     println!();
@@ -486,18 +581,28 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
             .or_else(|_| std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()))
             .unwrap_or_else(|_| "unknown".to_string());
 
-        let (status, rec_mtu, rec_mss) = if pct_ok >= 95.0 && mtu_values.first().copied().unwrap_or(0) >= 1400 {
-            ("PASS".to_string(), None, None)
-        } else if pct_ok >= 80.0 && median_mtu >= 1400 {
-            ("PASS".to_string(), None, None)
-        } else if median_mtu >= 1400 {
-            ("REVIEW".to_string(), Some(median_mtu), Some(median_mtu - 40))
-        } else {
-            ("ACTION_NEEDED".to_string(), Some(median_mtu), Some(median_mtu - 40))
-        };
+        let (status, rec_mtu, rec_mss) =
+            if pct_ok >= 95.0 && mtu_values.first().copied().unwrap_or(0) >= 1400 {
+                ("PASS".to_string(), None, None)
+            } else if pct_ok >= 80.0 && median_mtu >= 1400 {
+                ("PASS".to_string(), None, None)
+            } else if median_mtu >= 1400 {
+                (
+                    "REVIEW".to_string(),
+                    Some(median_mtu),
+                    Some(median_mtu - 40),
+                )
+            } else {
+                (
+                    "ACTION_NEEDED".to_string(),
+                    Some(median_mtu),
+                    Some(median_mtu - 40),
+                )
+            };
 
-        let target_results: Vec<TargetResult> = results.iter().map(|r| {
-            TargetResult {
+        let target_results: Vec<TargetResult> = results
+            .iter()
+            .map(|r| TargetResult {
                 target: r.target.clone(),
                 description: r.desc.clone(),
                 icmp_mtu: r.icmp_mtu,
@@ -505,8 +610,8 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
                 udp_mtu: r.udp_mtu,
                 quic_mtu: r.quic_mtu,
                 tcp_mss: r.tcp_mss,
-            }
-        }).collect();
+            })
+            .collect();
 
         let report = MtuReport {
             timestamp: Utc::now(),

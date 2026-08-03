@@ -477,10 +477,7 @@ impl Packet {
         self.layers
             .iter()
             .map(|l| match l {
-                Layer::Ether(e) => format!(
-                    "Ether(dst={:02x?}, src={:02x?})",
-                    e.dst, e.src
-                ),
+                Layer::Ether(e) => format!("Ether(dst={:02x?}, src={:02x?})", e.dst, e.src),
                 Layer::Vlan(v) => format!("Dot1Q(vid={})", v.vid),
                 Layer::Ip(ip) => format!(
                     "IP(src={}, dst={}, df={}, mf={}, ttl={})",
@@ -648,14 +645,9 @@ fn build_layers(layers: &[Layer], idx: usize, out: &mut Vec<u8>) -> Result<(), D
             build_layers(layers, idx + 1, &mut rest)?;
             let proto = ip.proto.unwrap_or_else(|| infer_ip_proto(upper));
             let total_len = 20 + rest.len();
-            let mut header = Ipv4Header::new(
-                rest.len() as u16,
-                ip.ttl,
-                IpNumber(proto),
-                ip.src,
-                ip.dst,
-            )
-            .map_err(|e| DslError::Build(e.to_string()))?;
+            let mut header =
+                Ipv4Header::new(rest.len() as u16, ip.ttl, IpNumber(proto), ip.src, ip.dst)
+                    .map_err(|e| DslError::Build(e.to_string()))?;
             header.identification = ip.id;
             header.dont_fragment = ip.dont_fragment;
             header.more_fragments = ip.more_fragments;

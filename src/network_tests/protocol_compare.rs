@@ -68,7 +68,11 @@ impl HttpProtocol {
 /// Candidate curl binaries to search, in preference order. The system curl
 /// is preferred when it's sufficient (H1/H2); H3 legs additionally require
 /// whichever candidate actually reports the `HTTP3` feature.
-const CURL_CANDIDATES: &[&str] = &["curl", "/opt/homebrew/opt/curl/bin/curl", "/usr/local/opt/curl/bin/curl"];
+const CURL_CANDIDATES: &[&str] = &[
+    "curl",
+    "/opt/homebrew/opt/curl/bin/curl",
+    "/usr/local/opt/curl/bin/curl",
+];
 
 #[derive(Debug, Clone)]
 struct CurlBinary {
@@ -181,7 +185,11 @@ const KILL_GRACE_SECS: u64 = 5;
 /// itself has its own `-m` timeout, but a hung DNS/TLS stack underneath it
 /// is not something curl's own timeout is guaranteed to interrupt cleanly on
 /// every platform, so this tool owns a second, independent deadline.
-fn run_curl_watched(curl_path: &str, args: &[String], timeout_secs: u64) -> Result<std::process::Output, String> {
+fn run_curl_watched(
+    curl_path: &str,
+    args: &[String],
+    timeout_secs: u64,
+) -> Result<std::process::Output, String> {
     // curl's `-w` write-out format prints to stdout even though the actual
     // transfer body is separately discarded via `-o /dev/null` in `args` --
     // stdout must stay piped here, or the write-out fields (status/speed/IP)
@@ -201,14 +209,19 @@ fn run_curl_watched(curl_path: &str, args: &[String], timeout_secs: u64) -> Resu
                 if Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(format!("curl exceeded watchdog deadline ({}s) and was killed", timeout_secs + KILL_GRACE_SECS));
+                    return Err(format!(
+                        "curl exceeded watchdog deadline ({}s) and was killed",
+                        timeout_secs + KILL_GRACE_SECS
+                    ));
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(e) => return Err(format!("failed to poll curl: {e}")),
         }
     }
-    child.wait_with_output().map_err(|e| format!("failed to collect curl output: {e}"))
+    child
+        .wait_with_output()
+        .map_err(|e| format!("failed to collect curl output: {e}"))
 }
 
 // Positional, `\x1f`-delimited (ASCII unit separator) rather than a `key=value|...`
@@ -216,7 +229,16 @@ fn run_curl_watched(curl_path: &str, args: &[String], timeout_secs: u64) -> Resu
 // and, in principle, other punctuation, so a delimiter that can never appear
 // in a URL or these numeric fields is required for this to parse reliably.
 const WRITE_OUT_FIELDS: &[&str] = &[
-    "code", "proto", "speed_dl", "speed_up", "size_dl", "size_up", "time_total", "remote_ip", "url_effective", "num_redirects",
+    "code",
+    "proto",
+    "speed_dl",
+    "speed_up",
+    "size_dl",
+    "size_up",
+    "time_total",
+    "remote_ip",
+    "url_effective",
+    "num_redirects",
 ];
 const WRITE_OUT_FORMAT: &str = "%{http_code}\x1f%{http_version}\x1f%{speed_download}\x1f%{speed_upload}\x1f%{size_download}\x1f%{size_upload}\x1f%{time_total}\x1f%{remote_ip}\x1f%{url_effective}\x1f%{num_redirects}";
 
@@ -257,7 +279,12 @@ const MIN_VALID_TRANSFER_BYTES: u64 = 16_384;
 /// fast rather than hanging until the outer watchdog deadline.
 const MAX_REDIRECTS: u32 = 10;
 
-fn failed_leg(protocol: HttpProtocol, direction: Direction, host: &str, error: String) -> LegResult {
+fn failed_leg(
+    protocol: HttpProtocol,
+    direction: Direction,
+    host: &str,
+    error: String,
+) -> LegResult {
     LegResult {
         protocol: protocol.as_str().to_string(),
         direction: direction.as_str().to_string(),
@@ -274,7 +301,12 @@ fn failed_leg(protocol: HttpProtocol, direction: Direction, host: &str, error: S
     }
 }
 
-fn run_leg(protocol: HttpProtocol, direction: Direction, cfg: &LegConfig, upload_body: Option<&std::path::Path>) -> LegResult {
+fn run_leg(
+    protocol: HttpProtocol,
+    direction: Direction,
+    cfg: &LegConfig,
+    upload_body: Option<&std::path::Path>,
+) -> LegResult {
     let curl = match select_curl_for(protocol) {
         Some(c) => c,
         None => {
@@ -333,7 +365,11 @@ fn run_leg(protocol: HttpProtocol, direction: Direction, cfg: &LegConfig, upload
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if stderr.is_empty() { format!("curl exited with {:?}", output.status.code()) } else { stderr };
+        let msg = if stderr.is_empty() {
+            format!("curl exited with {:?}", output.status.code())
+        } else {
+            stderr
+        };
         return failed_leg(protocol, direction, &cfg.host, msg);
     }
 
@@ -347,7 +383,10 @@ fn run_leg(protocol: HttpProtocol, direction: Direction, cfg: &LegConfig, upload
     let size_up: Option<u64> = fields.get("size_up").and_then(|s| s.parse().ok());
     let time_total: Option<f64> = fields.get("time_total").and_then(|s| s.parse().ok());
     let remote_ip = fields.get("remote_ip").filter(|s| !s.is_empty()).cloned();
-    let redirect_count: u32 = fields.get("num_redirects").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let redirect_count: u32 = fields
+        .get("num_redirects")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
     let requested_url = format!("https://{}:{}{}", cfg.host, cfg.port, cfg.path);
     let final_url = fields
         .get("url_effective")
@@ -367,7 +406,9 @@ fn run_leg(protocol: HttpProtocol, direction: Direction, cfg: &LegConfig, upload
     // module was built to avoid repeating: a redirect stub's few hundred
     // bytes silently became "0.02 Mbps, loss=Clean".
     let is_success_status = matches!(status, Some(s) if (200..300).contains(&s));
-    let body_large_enough = transferred_bytes.map(|b| b >= MIN_VALID_TRANSFER_BYTES).unwrap_or(false);
+    let body_large_enough = transferred_bytes
+        .map(|b| b >= MIN_VALID_TRANSFER_BYTES)
+        .unwrap_or(false);
     let is_real_transfer = is_success_status && body_large_enough;
 
     let (throughput_bps, bytes_transferred) = if is_real_transfer {
@@ -450,15 +491,26 @@ fn confidence_for(legs: &[Option<&LegResult>]) -> (Confidence, Vec<String>) {
         reasons.push("no legs completed".to_string());
         return (Confidence::Low, reasons);
     }
-    let clean_count = present.iter().filter(|l| l.loss_indicator == LossIndicator::Clean).count();
+    let clean_count = present
+        .iter()
+        .filter(|l| l.loss_indicator == LossIndicator::Clean)
+        .count();
     let total = present.len();
     if clean_count < total {
-        reasons.push(format!("{}/{} legs did not complete cleanly", total - clean_count, total));
+        reasons.push(format!(
+            "{}/{} legs did not complete cleanly",
+            total - clean_count,
+            total
+        ));
     }
     // Every leg here is one sample, not repeated/averaged -- never claim
     // more than Medium confidence off a single sample per leg.
     reasons.push("single sample per leg; repeat runs for statistical confidence".to_string());
-    let confidence = if clean_count == total { Confidence::Medium } else { Confidence::Low };
+    let confidence = if clean_count == total {
+        Confidence::Medium
+    } else {
+        Confidence::Low
+    };
     (confidence, reasons)
 }
 
@@ -490,7 +542,10 @@ mod tempfile_like {
     impl TempBody {
         pub fn random(bytes: usize) -> std::io::Result<Self> {
             let mut path = std::env::temp_dir();
-            path.push(format!("fraggle-packet-protocol-compare-upload-{}.bin", std::process::id()));
+            path.push(format!(
+                "fraggle-packet-protocol-compare-upload-{}.bin",
+                std::process::id()
+            ));
             let mut f = std::fs::File::create(&path)?;
             // Deterministic filler is fine here -- we need bytes on the
             // wire to time upload throughput, not entropy.
@@ -541,7 +596,13 @@ pub fn run_comparison(cfg: &CompareConfig) -> ComparisonReport {
         // supported, so gating them the same way would just add noise.
         let preflight_verdict = if matches!(protocol, HttpProtocol::Http3) {
             let ip = preflight::resolve_for_preflight(&cfg.host, cfg.forced_ip);
-            let result = preflight::preflight_one(&cfg.host, ip, preflight::Protocol::Http3, cfg.port, Duration::from_secs(cfg.timeout_secs));
+            let result = preflight::preflight_one(
+                &cfg.host,
+                ip,
+                preflight::Protocol::Http3,
+                cfg.port,
+                Duration::from_secs(cfg.timeout_secs),
+            );
             Some(result)
         } else {
             None
@@ -582,8 +643,14 @@ pub fn run_comparison(cfg: &CompareConfig) -> ComparisonReport {
             let leg_cfg_ul = leg_cfg.clone();
             let up_path = upload_body.as_ref().map(|b| b.path.clone());
             let proto = *protocol;
-            let dl_handle = std::thread::spawn(move || run_leg(proto, Direction::Simultaneous, &leg_cfg_dl, None));
-            let ul_handle = up_path.map(|p| std::thread::spawn(move || run_leg(proto, Direction::Simultaneous, &leg_cfg_ul, Some(&p))));
+            let dl_handle = std::thread::spawn(move || {
+                run_leg(proto, Direction::Simultaneous, &leg_cfg_dl, None)
+            });
+            let ul_handle = up_path.map(|p| {
+                std::thread::spawn(move || {
+                    run_leg(proto, Direction::Simultaneous, &leg_cfg_ul, Some(&p))
+                })
+            });
             let dl_result = dl_handle.join().ok();
             let ul_result = ul_handle.and_then(|h| h.join().ok());
             (dl_result, ul_result)
@@ -627,7 +694,8 @@ pub fn run_comparison(cfg: &CompareConfig) -> ComparisonReport {
     }
 
     let (endpoint_mismatch, endpoint_mismatch_detail) = detect_endpoint_mismatch(&all_ips);
-    let (redirected_to_different_host, redirect_detail) = detect_redirect_host_drift(&cfg.host, &final_urls);
+    let (redirected_to_different_host, redirect_detail) =
+        detect_redirect_host_drift(&cfg.host, &final_urls);
 
     ComparisonReport {
         host: cfg.host.clone(),
@@ -646,7 +714,10 @@ pub fn run_comparison(cfg: &CompareConfig) -> ComparisonReport {
 /// this same run: this compares the requested name against where curl
 /// actually ended up, since that final host may itself resolve to a
 /// different edge than the requested name would have.
-fn detect_redirect_host_drift(requested_host: &str, final_urls: &[String]) -> (bool, Option<String>) {
+fn detect_redirect_host_drift(
+    requested_host: &str,
+    final_urls: &[String],
+) -> (bool, Option<String>) {
     let drifted: Vec<&str> = final_urls
         .iter()
         .filter_map(|u| url_host(u))
@@ -670,7 +741,9 @@ fn detect_redirect_host_drift(requested_host: &str, final_urls: &[String]) -> (b
 /// Minimal `https://host[:port]/...` host extraction -- no full URL parser
 /// dependency needed for this one field.
 fn url_host(url: &str) -> Option<&str> {
-    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
     let end = rest.find(['/', ':']).unwrap_or(rest.len());
     let host = &rest[..end];
     if host.is_empty() {
@@ -779,7 +852,9 @@ mod tests {
         let b = leg("1.2.3.4", LossIndicator::TransferFailed);
         let (confidence, reasons) = confidence_for(&[Some(&a), Some(&b)]);
         assert_eq!(confidence, Confidence::Low);
-        assert!(reasons.iter().any(|r| r.contains("did not complete cleanly")));
+        assert!(reasons
+            .iter()
+            .any(|r| r.contains("did not complete cleanly")));
     }
 
     #[test]
@@ -791,18 +866,28 @@ mod tests {
 
     #[test]
     fn write_out_parser_extracts_all_fields() {
-        let text = "200\x1f2\x1f123.4\x1f0\x1f1000\x1f0\x1f0.5\x1f1.2.3.4\x1fhttps://example.com/\x1f1";
+        let text =
+            "200\x1f2\x1f123.4\x1f0\x1f1000\x1f0\x1f0.5\x1f1.2.3.4\x1fhttps://example.com/\x1f1";
         let fields = parse_write_out(text);
         assert_eq!(fields.get("code"), Some(&"200".to_string()));
         assert_eq!(fields.get("remote_ip"), Some(&"1.2.3.4".to_string()));
-        assert_eq!(fields.get("url_effective"), Some(&"https://example.com/".to_string()));
+        assert_eq!(
+            fields.get("url_effective"),
+            Some(&"https://example.com/".to_string())
+        );
         assert_eq!(fields.get("num_redirects"), Some(&"1".to_string()));
     }
 
     #[test]
     fn url_host_extracts_hostname_from_https_url() {
-        assert_eq!(url_host("https://www.cloudflare.com/"), Some("www.cloudflare.com"));
-        assert_eq!(url_host("https://example.com:8443/path"), Some("example.com"));
+        assert_eq!(
+            url_host("https://www.cloudflare.com/"),
+            Some("www.cloudflare.com")
+        );
+        assert_eq!(
+            url_host("https://example.com:8443/path"),
+            Some("example.com")
+        );
         assert_eq!(url_host("not-a-url"), None);
     }
 

@@ -1,9 +1,9 @@
 //! Logs panel - Live test output viewer with expandable details
 
-use dioxus::prelude::*;
-use std::collections::HashSet;
 use crate::state::{AppState, LogLevel, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
+use std::collections::HashSet;
 
 /// Logs panel showing live test output
 #[component]

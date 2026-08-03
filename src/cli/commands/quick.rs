@@ -13,7 +13,13 @@ pub struct QuickArgs {
 }
 
 pub fn run(args: &QuickArgs, global: &GlobalArgs) {
-    run_quick_icmp(&args.target, global.timeout_ms, global.min, global.max, global.retries);
+    run_quick_icmp(
+        &args.target,
+        global.timeout_ms,
+        global.min,
+        global.max,
+        global.retries,
+    );
 }
 
 fn run_quick_icmp(target: &str, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
@@ -21,8 +27,8 @@ fn run_quick_icmp(target: &str, timeout_ms: u64, min_mtu: usize, max_mtu: usize,
         Ok(ip) => ip,
         Err(e) => {
             eprintln!("{}: {}", "DNS resolution failed".red(), e);
-        std::process::exit(1);
-    }
+            std::process::exit(1);
+        }
     };
 
     println!("Target: {} ({})", target, ip);

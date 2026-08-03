@@ -12,7 +12,8 @@ use colored::*;
 use std::io::Write as _;
 
 use fraggle_packet::load_guard::{
-    evaluate_cross_client, jain_fairness_index, ClientRole, CrossClientVerdict, PhaseMark, RoleDescriptor,
+    evaluate_cross_client, jain_fairness_index, ClientRole, CrossClientVerdict, PhaseMark,
+    RoleDescriptor,
 };
 
 #[derive(clap::Args, Debug)]
@@ -71,11 +72,16 @@ impl From<Expectation> for ClientRole {
 }
 
 fn now_epoch() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
 }
 
 fn emit(args: &MulticlientFairnessArgs) {
-    let Some(path) = &args.emit_descriptor else { return };
+    let Some(path) = &args.emit_descriptor else {
+        return;
+    };
     let role = match args.role {
         Some(r) => ClientRole::from(r),
         None => {
@@ -83,8 +89,14 @@ fn emit(args: &MulticlientFairnessArgs) {
             std::process::exit(1);
         }
     };
-    let client_id = args.client_id.clone().unwrap_or_else(|| "unnamed-client".to_string());
-    let interface = args.interface.clone().unwrap_or_else(|| "unspecified".to_string());
+    let client_id = args
+        .client_id
+        .clone()
+        .unwrap_or_else(|| "unnamed-client".to_string());
+    let interface = args
+        .interface
+        .clone()
+        .unwrap_or_else(|| "unspecified".to_string());
     let now = now_epoch();
     let descriptor = RoleDescriptor {
         client_id,
@@ -93,7 +105,10 @@ fn emit(args: &MulticlientFairnessArgs) {
         association_label: None,
         listener_endpoints: args.listener_endpoints.clone(),
         reported_start_epoch: now,
-        phase_marks: vec![PhaseMark { phase: "load_start".to_string(), epoch_secs: now }],
+        phase_marks: vec![PhaseMark {
+            phase: "load_start".to_string(),
+            epoch_secs: now,
+        }],
     };
     let text = serde_json::to_string_pretty(&descriptor).unwrap();
     let mut f = match std::fs::File::create(path) {
@@ -120,7 +135,13 @@ fn synthetic_pair(seed: &str) -> (Option<RoleDescriptor>, Option<RoleDescriptor>
         association_label: Some("ap-deadbeef".to_string()),
         listener_endpoints: listeners.iter().map(|s| s.to_string()).collect(),
         reported_start_epoch: start,
-        phase_marks: marks.iter().map(|t| PhaseMark { phase: "load".to_string(), epoch_secs: *t }).collect(),
+        phase_marks: marks
+            .iter()
+            .map(|t| PhaseMark {
+                phase: "load".to_string(),
+                epoch_secs: *t,
+            })
+            .collect(),
     };
     match seed {
         "missing-b" => (Some(base("a", &[100.0, 120.0], &["s:5201"], 100.0)), None),
@@ -156,7 +177,9 @@ pub fn run(args: &MulticlientFairnessArgs) {
 
     let verdict = evaluate_cross_client(a.as_ref(), b.as_ref());
     let fairness = match &verdict {
-        CrossClientVerdict::Comparable { .. } if args.rates_mbps.len() >= 2 => jain_fairness_index(&args.rates_mbps),
+        CrossClientVerdict::Comparable { .. } if args.rates_mbps.len() >= 2 => {
+            jain_fairness_index(&args.rates_mbps)
+        }
         _ => None,
     };
 
@@ -179,12 +202,23 @@ pub fn run(args: &MulticlientFairnessArgs) {
         CrossClientVerdict::Refused { reason } => {
             println!("  {} {}", "REFUSED".red().bold(), reason);
         }
-        CrossClientVerdict::Comparable { clock_offset_secs, shared_listeners } => {
-            println!("  {} clock_offset_secs={:.2}", "COMPARABLE".green().bold(), clock_offset_secs);
+        CrossClientVerdict::Comparable {
+            clock_offset_secs,
+            shared_listeners,
+        } => {
+            println!(
+                "  {} clock_offset_secs={:.2}",
+                "COMPARABLE".green().bold(),
+                clock_offset_secs
+            );
             if shared_listeners.is_empty() {
                 println!("  shared listeners: none");
             } else {
-                println!("  {} shared listeners: {:?} (contention confound, not a network fault)", "⚠".yellow(), shared_listeners);
+                println!(
+                    "  {} shared listeners: {:?} (contention confound, not a network fault)",
+                    "⚠".yellow(),
+                    shared_listeners
+                );
             }
             match fairness {
                 Some(f) => println!("  Jain fairness index: {f:.4} (from {} rate samples)", args.rates_mbps.len()),

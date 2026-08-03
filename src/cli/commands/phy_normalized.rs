@@ -36,7 +36,12 @@ pub fn run(args: &PhyNormalizedArgs) {
     let text = match fs::read_to_string(&args.measurements_file) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("{} could not read {}: {}", "✗".red(), args.measurements_file, e);
+            eprintln!(
+                "{} could not read {}: {}",
+                "✗".red(),
+                args.measurements_file,
+                e
+            );
             std::process::exit(1);
         }
     };
@@ -58,13 +63,28 @@ pub fn run(args: &PhyNormalizedArgs) {
             let a_items: Vec<_> = a_idx.iter().filter_map(|&i| normalized.get(i)).collect();
             let b_items: Vec<_> = b_idx.iter().filter_map(|&i| normalized.get(i)).collect();
             if a_items.is_empty() || b_items.is_empty() {
-                eprintln!("{} cohort-a/cohort-b indices did not resolve to any measurements", "✗".red());
+                eprintln!(
+                    "{} cohort-a/cohort-b indices did not resolve to any measurements",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
             let a_strata = stratify(&a_items.iter().map(|m| (*m).clone()).collect::<Vec<_>>());
             let b_strata = stratify(&b_items.iter().map(|m| (*m).clone()).collect::<Vec<_>>());
-            let a_strong_directional = a_items.iter().all(|m| m.directional_control && matches!(m.rf_quality, fraggle_packet::load_guard::radio::RfQuality::Strong));
-            let b_strong_directional = b_items.iter().all(|m| m.directional_control && matches!(m.rf_quality, fraggle_packet::load_guard::radio::RfQuality::Strong));
+            let a_strong_directional = a_items.iter().all(|m| {
+                m.directional_control
+                    && matches!(
+                        m.rf_quality,
+                        fraggle_packet::load_guard::radio::RfQuality::Strong
+                    )
+            });
+            let b_strong_directional = b_items.iter().all(|m| {
+                m.directional_control
+                    && matches!(
+                        m.rf_quality,
+                        fraggle_packet::load_guard::radio::RfQuality::Strong
+                    )
+            });
             Some(attribute_cohort_difference(
                 a_strata.into_iter().next().unwrap(),
                 b_strata.into_iter().next().unwrap(),
@@ -89,19 +109,33 @@ pub fn run(args: &PhyNormalizedArgs) {
             m.offered_mbps, m.phy_capacity_mbps, m.offered_phy_fraction * 100.0, m.loss_percent, m.rf_quality, m.directional_control
         );
     }
-    println!("{}", "-- Strata (generation/driver/kernel) --".white().bold());
+    println!(
+        "{}",
+        "-- Strata (generation/driver/kernel) --".white().bold()
+    );
     for s in &strata {
         println!(
             "  {:?}/{}/{}: n={} mean_phy_fraction={:.2} mean_loss={:.2}%",
-            s.phy_generation, s.driver, s.kernel, s.sample_count, s.mean_offered_phy_fraction, s.mean_loss_percent
+            s.phy_generation,
+            s.driver,
+            s.kernel,
+            s.sample_count,
+            s.mean_offered_phy_fraction,
+            s.mean_loss_percent
         );
     }
     if let Some(a) = &attribution {
         println!("{}", "-- Cohort attribution --".white().bold());
         let verdict_str = match a.verdict {
             AttributionVerdict::Attributable => "Attributable".green().bold(),
-            AttributionVerdict::WithheldMissingControls => "WITHHELD (missing strong-RF/directional controls)".yellow().bold(),
-            AttributionVerdict::WithheldIncomparableTargets => "WITHHELD (incomparable PHY fractions)".yellow().bold(),
+            AttributionVerdict::WithheldMissingControls => {
+                "WITHHELD (missing strong-RF/directional controls)"
+                    .yellow()
+                    .bold()
+            }
+            AttributionVerdict::WithheldIncomparableTargets => {
+                "WITHHELD (incomparable PHY fractions)".yellow().bold()
+            }
         };
         println!("  verdict: {}", verdict_str);
         println!("  {}", a.explanation.dimmed());

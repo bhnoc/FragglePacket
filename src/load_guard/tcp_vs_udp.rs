@@ -50,14 +50,23 @@ fn unusable(protocol: Protocol, port: u16, target_mbps: f64, reason: String) -> 
 /// Builds a TCP result from a parsed `IperfResult`. Prefers the receiver
 /// side's `received` sample (GAP-039: only the receiver saw what actually
 /// arrived), falling back to `sent` only if `received` is absent/hollow.
-pub fn tcp_result(port: u16, target_mbps: f64, parsed: &Result<IperfResult, IperfParseError>) -> ProtocolResult {
+pub fn tcp_result(
+    port: u16,
+    target_mbps: f64,
+    parsed: &Result<IperfResult, IperfParseError>,
+) -> ProtocolResult {
     let result = match parsed {
         Err(e) => return unusable(Protocol::Tcp, port, target_mbps, e.to_string()),
         Ok(r) => r,
     };
     let sample = result.forward.received.or(result.forward.sent);
     let Some(sample) = sample else {
-        return unusable(Protocol::Tcp, port, target_mbps, "no usable rate sample (sum_sent/sum_received missing or hollow)".to_string());
+        return unusable(
+            Protocol::Tcp,
+            port,
+            target_mbps,
+            "no usable rate sample (sum_sent/sum_received missing or hollow)".to_string(),
+        );
     };
     ProtocolResult {
         protocol: Protocol::Tcp,
@@ -73,14 +82,26 @@ pub fn tcp_result(port: u16, target_mbps: f64, parsed: &Result<IperfResult, Iper
     }
 }
 
-pub fn udp_result(port: u16, target_mbps: f64, parsed: &Result<IperfResult, IperfParseError>) -> ProtocolResult {
+pub fn udp_result(
+    port: u16,
+    target_mbps: f64,
+    parsed: &Result<IperfResult, IperfParseError>,
+) -> ProtocolResult {
     let result = match parsed {
         Err(e) => return unusable(Protocol::Udp, port, target_mbps, e.to_string()),
         Ok(r) => r,
     };
-    let sample = result.forward.received.or(result.forward.estimated_received);
+    let sample = result
+        .forward
+        .received
+        .or(result.forward.estimated_received);
     let Some(sample) = sample else {
-        return unusable(Protocol::Udp, port, target_mbps, "no usable rate sample (sum_received/sum missing or hollow)".to_string());
+        return unusable(
+            Protocol::Udp,
+            port,
+            target_mbps,
+            "no usable rate sample (sum_received/sum missing or hollow)".to_string(),
+        );
     };
     ProtocolResult {
         protocol: Protocol::Udp,
@@ -120,7 +141,11 @@ mod tests {
     use crate::network_tests::iperf::parse_iperf_json;
 
     fn load_fixture(name: &str) -> String {
-        let path = format!("{}/harness/fixtures/iperf/{}", env!("CARGO_MANIFEST_DIR"), name);
+        let path = format!(
+            "{}/harness/fixtures/iperf/{}",
+            env!("CARGO_MANIFEST_DIR"),
+            name
+        );
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {}", path, e))
     }
 

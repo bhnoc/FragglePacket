@@ -45,11 +45,17 @@ pub struct RedactionPolicy {
 
 impl RedactionPolicy {
     pub fn default_redacted() -> Self {
-        RedactionPolicy { mode: RedactionMode::Redacted, extra_literals: Vec::new() }
+        RedactionPolicy {
+            mode: RedactionMode::Redacted,
+            extra_literals: Vec::new(),
+        }
     }
 
     pub fn reveal() -> Self {
-        RedactionPolicy { mode: RedactionMode::Retained, extra_literals: Vec::new() }
+        RedactionPolicy {
+            mode: RedactionMode::Retained,
+            extra_literals: Vec::new(),
+        }
     }
 
     /// Builds a policy from the presence of an operator-facing "retain"
@@ -98,7 +104,11 @@ impl RedactionPolicy {
 /// an `=`-prefixed BSSID (`bssid=aa:bb:cc:dd:ee:ff`) still get found: the
 /// candidate run is extracted from wherever it starts inside the token,
 /// not just from a whole whitespace-delimited word.
-fn scan_and_replace(text: &str, is_candidate_char: impl Fn(char) -> bool, try_redact: impl Fn(&str) -> Option<&'static str>) -> String {
+fn scan_and_replace(
+    text: &str,
+    is_candidate_char: impl Fn(char) -> bool,
+    try_redact: impl Fn(&str) -> Option<&'static str>,
+) -> String {
     let mut out = String::with_capacity(text.len());
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
@@ -146,13 +156,22 @@ fn redact_mac_or_bssid(text: &str) -> String {
 
 fn is_mac_shaped(s: &str) -> bool {
     let parts: Vec<&str> = s.split(':').collect();
-    parts.len() == 6 && parts.iter().all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
+    parts.len() == 6
+        && parts
+            .iter()
+            .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 fn redact_ipv4(text: &str) -> String {
-    scan_and_replace(text, |c| c.is_ascii_digit() || c == '.', |run| {
-        run.parse::<Ipv4Addr>().ok().map(|addr| redaction_label_for(IpAddr::V4(addr)))
-    })
+    scan_and_replace(
+        text,
+        |c| c.is_ascii_digit() || c == '.',
+        |run| {
+            run.parse::<Ipv4Addr>()
+                .ok()
+                .map(|addr| redaction_label_for(IpAddr::V4(addr)))
+        },
+    )
 }
 
 fn redact_ipv6(text: &str) -> String {
@@ -164,7 +183,10 @@ fn redact_ipv6(text: &str) -> String {
                 return None;
             }
             let candidate = run.split('%').next().unwrap_or(run);
-            candidate.parse::<Ipv6Addr>().ok().map(|addr| redaction_label_for(IpAddr::V6(addr)))
+            candidate
+                .parse::<Ipv6Addr>()
+                .ok()
+                .map(|addr| redaction_label_for(IpAddr::V6(addr)))
         },
     )
 }
@@ -185,7 +207,9 @@ fn is_private_or_local(addr: IpAddr) -> bool {
     match addr {
         IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local(),
         IpAddr::V6(v6) => {
-            v6.is_loopback() || (v6.segments()[0] & 0xffc0) == 0xfe80 || (v6.segments()[0] & 0xfe00) == 0xfc00
+            v6.is_loopback()
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
         }
     }
 }
@@ -240,7 +264,8 @@ mod tests {
 
     #[test]
     fn extra_literal_masks_a_known_hostname_with_no_syntactic_marker() {
-        let policy = RedactionPolicy::default_redacted().with_literal("internal-resolver.example.corp");
+        let policy =
+            RedactionPolicy::default_redacted().with_literal("internal-resolver.example.corp");
         let out = policy.apply("query sent to internal-resolver.example.corp");
         assert!(!out.contains("internal-resolver.example.corp"));
         assert!(out.contains("<redacted>"));
@@ -324,7 +349,10 @@ mod section_allowlist_tests {
         let allowlist = SectionAllowlist::new(&["WIFI"]);
         let mut lines = Vec::new();
         allowlist.extract_fields(SAMPLE, |line| lines.push(line.to_string()));
-        assert_eq!(lines, vec!["RSSI : -55", "BSSID : aa:bb:cc:dd:ee:ff", "Noise : -90"]);
+        assert_eq!(
+            lines,
+            vec!["RSSI : -55", "BSSID : aa:bb:cc:dd:ee:ff", "Noise : -90"]
+        );
     }
 
     #[test]
@@ -336,7 +364,10 @@ mod section_allowlist_tests {
                 saw_bluetooth_content = true;
             }
         });
-        assert!(!saw_bluetooth_content, "BLUETOOTH section content must never reach the field callback");
+        assert!(
+            !saw_bluetooth_content,
+            "BLUETOOTH section content must never reach the field callback"
+        );
     }
 
     #[test]

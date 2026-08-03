@@ -1,13 +1,13 @@
 //! Test Panel - Category selection and test execution
 
-use std::collections::HashSet;
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
-use crate::state::test_runner::TestUpdate;
 use crate::components::results_display::ResultsDisplay;
 use crate::components::target_input::TargetInput;
+use crate::state::test_runner::TestUpdate;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 use fraggle_packet::framework::TestCategory;
+use std::collections::HashSet;
 
 /// Test panel component with category grid (multi-select)
 #[component]
@@ -27,7 +27,9 @@ pub fn TestPanel(
     let filtered_results: Vec<_> = if selected_categories.is_empty() {
         results.get(&current_target).cloned().unwrap_or_default()
     } else {
-        state.read().get_categories_results(&current_target, &selected_categories)
+        state
+            .read()
+            .get_categories_results(&current_target, &selected_categories)
     };
 
     let categories = vec![

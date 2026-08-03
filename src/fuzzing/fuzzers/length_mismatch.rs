@@ -109,11 +109,10 @@ mod tests {
     fn test_length_mismatch_fuzzer() {
         let ctx = PacketContext::new("192.168.1.1", "8.8.8.8").unwrap();
         let output = "/tmp/test_length_mismatch.pcap";
-        
+
         let packets = fuzz(&ctx, output).unwrap();
         assert_eq!(packets, 7); // 1 baseline + 2 main + 4 variations
-        
+
         std::fs::remove_file(output).ok();
     }
 }
-

@@ -12,7 +12,9 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::path::Path;
 
 use fraggle_packet::load_guard::route::is_tunnel_interface;
-use fraggle_packet::network_tests::ecn_aqm::{evaluate_capability_without_marking, tunnel_warning, EcnCodepoint, EcnCounts};
+use fraggle_packet::network_tests::ecn_aqm::{
+    evaluate_capability_without_marking, tunnel_warning, EcnCodepoint, EcnCounts,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct EcnAqmArgs {
@@ -105,29 +107,71 @@ fn attempt_set_ecn(codepoint: &str, target: IpAddr, port: u16) -> Result<(), Str
     let cp: u8 = match codepoint {
         "ect0" => libc::IPTOS_ECN_ECT0,
         "ect1" => libc::IPTOS_ECN_ECT1,
-        other => return Err(format!("unknown codepoint '{}' (expected ect0 or ect1)", other)),
+        other => {
+            return Err(format!(
+                "unknown codepoint '{}' (expected ect0 or ect1)",
+                other
+            ))
+        }
     };
-    let socket = UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).map_err(|e| e.to_string())?;
+    let socket = UdpSocket::bind(if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .map_err(|e| e.to_string())?;
     use std::os::fd::AsRawFd;
     let fd = socket.as_raw_fd();
     let tos: libc::c_int = cp as i32;
-    let (level, name) = if target.is_ipv4() { (libc::IPPROTO_IP, libc::IP_TOS) } else { (libc::IPPROTO_IPV6, libc::IPV6_TCLASS) };
-    let rc = unsafe { libc::setsockopt(fd, level, name, &tos as *const _ as *const libc::c_void, std::mem::size_of::<libc::c_int>() as libc::socklen_t) };
+    let (level, name) = if target.is_ipv4() {
+        (libc::IPPROTO_IP, libc::IP_TOS)
+    } else {
+        (libc::IPPROTO_IPV6, libc::IPV6_TCLASS)
+    };
+    let rc = unsafe {
+        libc::setsockopt(
+            fd,
+            level,
+            name,
+            &tos as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        )
+    };
     if rc != 0 {
-        return Err(format!("setsockopt failed: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "setsockopt failed: {}",
+            std::io::Error::last_os_error()
+        ));
     }
     // Confirm the platform actually applied it, not just accepted the call.
     let mut got: libc::c_int = 0;
     let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
-    let rc2 = unsafe { libc::getsockopt(fd, level, name, &mut got as *mut _ as *mut libc::c_void, &mut len) };
+    let rc2 = unsafe {
+        libc::getsockopt(
+            fd,
+            level,
+            name,
+            &mut got as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
     if rc2 != 0 {
-        return Err(format!("getsockopt (confirmation) failed: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "getsockopt (confirmation) failed: {}",
+            std::io::Error::last_os_error()
+        ));
     }
     if (got as u8 & 0x03) != cp {
-        return Err(format!("platform accepted setsockopt but readback shows codepoint {} (requested {})", got & 0x03, cp));
+        return Err(format!(
+            "platform accepted setsockopt but readback shows codepoint {} (requested {})",
+            got & 0x03,
+            cp
+        ));
     }
     let dest = SocketAddr::new(target, port);
-    socket.send_to(b"ecn-probe", dest).map_err(|e| e.to_string())?;
+    socket
+        .send_to(b"ecn-probe", dest)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -152,17 +196,39 @@ pub fn run(args: &EcnAqmArgs) {
             }
         };
         let is_pcapng = bytes.len() >= 4 && bytes[0..4] == [0x0a, 0x0d, 0x0d, 0x0a];
-        let counts = if is_pcapng { parse_pcapng_ecn(&bytes) } else { parse_pcap_classic_ecn(&bytes) };
+        let counts = if is_pcapng {
+            parse_pcapng_ecn(&bytes)
+        } else {
+            parse_pcap_classic_ecn(&bytes)
+        };
         match counts {
             Ok(counts) => {
                 let finding = evaluate_capability_without_marking(&counts);
                 if args.json {
                     out.insert("counts".to_string(), serde_json::to_value(&counts).unwrap());
-                    out.insert("scheme".to_string(), serde_json::to_value(counts.scheme()).unwrap());
-                    out.insert("finding".to_string(), serde_json::to_value(&finding).unwrap());
+                    out.insert(
+                        "scheme".to_string(),
+                        serde_json::to_value(counts.scheme()).unwrap(),
+                    );
+                    out.insert(
+                        "finding".to_string(),
+                        serde_json::to_value(&finding).unwrap(),
+                    );
                 } else {
-                    println!("{}", format!("== ECN counts: {} ==", Path::new(path).display()).cyan().bold());
-                    println!("  not_ect={} ect0={} ect1={} ce={} total={}", counts.not_ect, counts.ect0, counts.ect1, counts.ce, counts.total());
+                    println!(
+                        "{}",
+                        format!("== ECN counts: {} ==", Path::new(path).display())
+                            .cyan()
+                            .bold()
+                    );
+                    println!(
+                        "  not_ect={} ect0={} ect1={} ce={} total={}",
+                        counts.not_ect,
+                        counts.ect0,
+                        counts.ect1,
+                        counts.ce,
+                        counts.total()
+                    );
                     println!("  scheme: {:?}", counts.scheme());
                     println!("  finding: {}", finding.statement);
                 }
@@ -180,12 +246,19 @@ pub fn run(args: &EcnAqmArgs) {
                 if args.json {
                     out.insert("ecn_set_attempt".to_string(), serde_json::json!({"requested": cp, "applied": true, "detail": "setsockopt applied and confirmed via getsockopt"}));
                 } else {
-                    println!("{} ECN codepoint '{}' applied and confirmed", "✓".green(), cp);
+                    println!(
+                        "{} ECN codepoint '{}' applied and confirmed",
+                        "✓".green(),
+                        cp
+                    );
                 }
             }
             Err(e) => {
                 if args.json {
-                    out.insert("ecn_set_attempt".to_string(), serde_json::json!({"requested": cp, "applied": false, "detail": e}));
+                    out.insert(
+                        "ecn_set_attempt".to_string(),
+                        serde_json::json!({"requested": cp, "applied": false, "detail": e}),
+                    );
                 } else {
                     println!("{} ECN codepoint '{}' NOT applied: {}", "✗".red(), cp, e);
                 }
@@ -194,6 +267,9 @@ pub fn run(args: &EcnAqmArgs) {
     }
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&serde_json::Value::Object(out)).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::Value::Object(out)).unwrap()
+        );
     }
 }

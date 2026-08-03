@@ -78,7 +78,11 @@ pub struct MergedTimeline {
 
 pub fn merge_timeline(upload: SessionWindow, download: SessionWindow) -> MergedTimeline {
     let time_aligned = upload.overlaps(&download);
-    MergedTimeline { upload, download, time_aligned }
+    MergedTimeline {
+        upload,
+        download,
+        time_aligned,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,7 +145,12 @@ mod tests {
     use super::*;
 
     fn point(target: f64, achieved: Option<f64>, loss: Option<f64>, usable: bool) -> RatePoint {
-        RatePoint { target_mbps: target, achieved_mbps: achieved, loss_percent: loss, usable }
+        RatePoint {
+            target_mbps: target,
+            achieved_mbps: achieved,
+            loss_percent: loss,
+            usable,
+        }
     }
 
     #[test]
@@ -156,7 +165,13 @@ mod tests {
             ],
         };
         let result = first_lossy_rate(&sweep, 2.0);
-        assert_eq!(result, FirstLossyRate::Found { clean_mbps: 250.0, lossy_mbps: 300.0 });
+        assert_eq!(
+            result,
+            FirstLossyRate::Found {
+                clean_mbps: 250.0,
+                lossy_mbps: 300.0
+            }
+        );
     }
 
     #[test]
@@ -168,7 +183,10 @@ mod tests {
                 point(150.0, Some(149.8), Some(0.1), true),
             ],
         };
-        assert_eq!(first_lossy_rate(&sweep, 2.0), FirstLossyRate::NoneObservedWithinTestedRange);
+        assert_eq!(
+            first_lossy_rate(&sweep, 2.0),
+            FirstLossyRate::NoneObservedWithinTestedRange
+        );
     }
 
     #[test]
@@ -180,7 +198,10 @@ mod tests {
                 point(350.0, Some(246.0), Some(29.7), true),
             ],
         };
-        assert_eq!(first_lossy_rate(&sweep, 2.0), FirstLossyRate::AllTestedRatesLossy);
+        assert_eq!(
+            first_lossy_rate(&sweep, 2.0),
+            FirstLossyRate::AllTestedRatesLossy
+        );
     }
 
     #[test]
@@ -196,7 +217,13 @@ mod tests {
             ],
         };
         let result = first_lossy_rate(&sweep, 2.0);
-        assert_eq!(result, FirstLossyRate::Found { clean_mbps: 250.0, lossy_mbps: 350.0 });
+        assert_eq!(
+            result,
+            FirstLossyRate::Found {
+                clean_mbps: 250.0,
+                lossy_mbps: 350.0
+            }
+        );
     }
 
     #[test]
@@ -205,21 +232,44 @@ mod tests {
             direction: Direction::Upload,
             points: vec![point(250.0, Some(249.9), Some(0.02), true)],
         };
-        assert_eq!(first_lossy_rate(&sweep, 2.0), FirstLossyRate::InsufficientData);
+        assert_eq!(
+            first_lossy_rate(&sweep, 2.0),
+            FirstLossyRate::InsufficientData
+        );
     }
 
     #[test]
     fn overlapping_windows_are_time_aligned() {
-        let upload = SessionWindow { direction: Direction::Upload, port: 5201, start_secs: 0.0, end_secs: 5.0 };
-        let download = SessionWindow { direction: Direction::Download, port: 5202, start_secs: 1.0, end_secs: 6.0 };
+        let upload = SessionWindow {
+            direction: Direction::Upload,
+            port: 5201,
+            start_secs: 0.0,
+            end_secs: 5.0,
+        };
+        let download = SessionWindow {
+            direction: Direction::Download,
+            port: 5202,
+            start_secs: 1.0,
+            end_secs: 6.0,
+        };
         let merged = merge_timeline(upload, download);
         assert!(merged.time_aligned);
     }
 
     #[test]
     fn sequential_windows_are_not_time_aligned() {
-        let upload = SessionWindow { direction: Direction::Upload, port: 5201, start_secs: 0.0, end_secs: 5.0 };
-        let download = SessionWindow { direction: Direction::Download, port: 5202, start_secs: 5.5, end_secs: 10.0 };
+        let upload = SessionWindow {
+            direction: Direction::Upload,
+            port: 5201,
+            start_secs: 0.0,
+            end_secs: 5.0,
+        };
+        let download = SessionWindow {
+            direction: Direction::Download,
+            port: 5202,
+            start_secs: 5.5,
+            end_secs: 10.0,
+        };
         let merged = merge_timeline(upload, download);
         assert!(!merged.time_aligned);
     }

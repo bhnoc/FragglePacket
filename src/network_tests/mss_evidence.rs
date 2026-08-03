@@ -186,7 +186,13 @@ pub fn ingest_syn_mss<P: AsRef<Path>>(
 
     let mut flows: HashMap<(String, u16, String, u16), FlowMssEvidence> = HashMap::new();
 
-    let mut record = |src_ip: IpAddr, src_port: u16, dst_ip: IpAddr, dst_port: u16, syn: bool, ack: bool, mss: Option<u16>| {
+    let mut record = |src_ip: IpAddr,
+                      src_port: u16,
+                      dst_ip: IpAddr,
+                      dst_port: u16,
+                      syn: bool,
+                      ack: bool,
+                      mss: Option<u16>| {
         let mss = match mss {
             Some(m) => m,
             None => return,
@@ -201,24 +207,33 @@ pub fn ingest_syn_mss<P: AsRef<Path>>(
         // Fall back when no local-IP hint was given: treat the SYN
         // (non-ACK) sender as local, the SYN-ACK sender as peer. This
         // matches the common single-host-capture case.
-        let (local_addr, local_port, peer_addr, peer_port, is_local_leg) =
-            if local_ips.is_empty() {
-                if !ack {
-                    (src_ip, src_port, dst_ip, dst_port, true)
-                } else {
-                    (dst_ip, dst_port, src_ip, src_port, false)
-                }
-            } else if src_is_local {
+        let (local_addr, local_port, peer_addr, peer_port, is_local_leg) = if local_ips.is_empty() {
+            if !ack {
                 (src_ip, src_port, dst_ip, dst_port, true)
-            } else if dst_is_local {
-                (dst_ip, dst_port, src_ip, src_port, false)
             } else {
-                return;
-            };
+                (dst_ip, dst_port, src_ip, src_port, false)
+            }
+        } else if src_is_local {
+            (src_ip, src_port, dst_ip, dst_port, true)
+        } else if dst_is_local {
+            (dst_ip, dst_port, src_ip, src_port, false)
+        } else {
+            return;
+        };
 
-        let key = (local_addr.to_string(), local_port, peer_addr.to_string(), peer_port);
+        let key = (
+            local_addr.to_string(),
+            local_port,
+            peer_addr.to_string(),
+            peer_port,
+        );
         let entry = flows.entry(key).or_insert_with(|| {
-            FlowMssEvidence::new(local_addr.to_string(), local_port, peer_addr.to_string(), peer_port)
+            FlowMssEvidence::new(
+                local_addr.to_string(),
+                local_port,
+                peer_addr.to_string(),
+                peer_port,
+            )
         });
 
         if is_local_leg {
@@ -230,8 +245,8 @@ pub fn ingest_syn_mss<P: AsRef<Path>>(
     };
 
     if is_pcapng {
-        let mut reader =
-            PcapNgReader::new(bytes.as_slice()).map_err(|e| MssEvidenceError::Pcap(e.to_string()))?;
+        let mut reader = PcapNgReader::new(bytes.as_slice())
+            .map_err(|e| MssEvidenceError::Pcap(e.to_string()))?;
         while let Some(block) = reader.next_block() {
             let block = block.map_err(|e| MssEvidenceError::Pcap(e.to_string()))?;
             if let Some(epb) = block.as_enhanced_packet() {
@@ -250,10 +265,15 @@ pub fn ingest_syn_mss<P: AsRef<Path>>(
     }
 
     let mut flow_list: Vec<FlowMssEvidence> = flows.into_values().collect();
-    flow_list.sort_by(|a, b| (a.peer_ip.clone(), a.peer_port).cmp(&(b.peer_ip.clone(), b.peer_port)));
+    flow_list
+        .sort_by(|a, b| (a.peer_ip.clone(), a.peer_port).cmp(&(b.peer_ip.clone(), b.peer_port)));
 
-    let attributions: Vec<MiddleboxAttribution> = flow_list.iter().map(attribute_middlebox).collect();
-    let flows_with_both = flow_list.iter().filter(|f| f.both_directions_observed).count();
+    let attributions: Vec<MiddleboxAttribution> =
+        flow_list.iter().map(attribute_middlebox).collect();
+    let flows_with_both = flow_list
+        .iter()
+        .filter(|f| f.both_directions_observed)
+        .count();
     let flows_total = flow_list.len();
 
     Ok(GapTenReport {
@@ -293,7 +313,15 @@ fn inspect_frame(
             return;
         }
         let mss = mss_from_options(tcp.options());
-        record(src, tcp.source_port(), dst, tcp.destination_port(), true, tcp.ack(), mss);
+        record(
+            src,
+            tcp.source_port(),
+            dst,
+            tcp.destination_port(),
+            true,
+            tcp.ack(),
+            mss,
+        );
     }
 }
 
@@ -436,19 +464,35 @@ mod tests {
     #[test]
     fn mgm_case_reports_uniform_clamp_not_pmtu_ceiling() {
         let dests = vec![
-            DestinationMss { destination: "apple".into(), negotiated_mss: 1238 },
-            DestinationMss { destination: "cloudflare".into(), negotiated_mss: 1238 },
-            DestinationMss { destination: "google".into(), negotiated_mss: 1238 },
+            DestinationMss {
+                destination: "apple".into(),
+                negotiated_mss: 1238,
+            },
+            DestinationMss {
+                destination: "cloudflare".into(),
+                negotiated_mss: 1238,
+            },
+            DestinationMss {
+                destination: "google".into(),
+                negotiated_mss: 1238,
+            },
         ];
-        let report = cluster_destination_mss(dests, Some(1500), Some("en0".into()), false, Some(true));
+        let report =
+            cluster_destination_mss(dests, Some(1500), Some("en0".into()), false, Some(true));
         assert_eq!(report.verdict, ClusterVerdict::UniformClampOrProxy);
     }
 
     #[test]
     fn true_pmtu_ceiling_when_large_probe_fails() {
         let dests = vec![
-            DestinationMss { destination: "a".into(), negotiated_mss: 1220 },
-            DestinationMss { destination: "b".into(), negotiated_mss: 1230 },
+            DestinationMss {
+                destination: "a".into(),
+                negotiated_mss: 1220,
+            },
+            DestinationMss {
+                destination: "b".into(),
+                negotiated_mss: 1230,
+            },
         ];
         let report = cluster_destination_mss(dests, Some(1280), None, false, Some(false));
         assert_eq!(report.verdict, ClusterVerdict::TruePmtuCeiling);
@@ -457,11 +501,21 @@ mod tests {
     #[test]
     fn destination_specific_spread_is_peer_specific() {
         let dests = vec![
-            DestinationMss { destination: "apple".into(), negotiated_mss: 1460 },
-            DestinationMss { destination: "cloudflare".into(), negotiated_mss: 1400 },
-            DestinationMss { destination: "google".into(), negotiated_mss: 1412 },
+            DestinationMss {
+                destination: "apple".into(),
+                negotiated_mss: 1460,
+            },
+            DestinationMss {
+                destination: "cloudflare".into(),
+                negotiated_mss: 1400,
+            },
+            DestinationMss {
+                destination: "google".into(),
+                negotiated_mss: 1412,
+            },
         ];
-        let report = cluster_destination_mss(dests, Some(1500), Some("en0".into()), false, Some(true));
+        let report =
+            cluster_destination_mss(dests, Some(1500), Some("en0".into()), false, Some(true));
         assert_eq!(report.verdict, ClusterVerdict::PeerSpecific);
     }
 
@@ -469,7 +523,9 @@ mod tests {
     fn mss_from_options_parses_maximum_segment_size() {
         use etherparse::TcpHeader;
         let mut header = TcpHeader::new(1234, 443, 0, 65535);
-        header.set_options(&[TcpOptionElement::MaximumSegmentSize(1460)]).unwrap();
+        header
+            .set_options(&[TcpOptionElement::MaximumSegmentSize(1460)])
+            .unwrap();
         let mut buf = Vec::new();
         header.write(&mut buf).unwrap();
         assert_eq!(mss_from_options(&buf[20..]), Some(1460));

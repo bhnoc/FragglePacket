@@ -103,7 +103,9 @@ pub fn run(args: &CounterDeltasArgs) {
         (
             RadioSource::new(|| Ok(strong_snapshot())),
             RadioSource::new(|| Ok(strong_snapshot())),
-            CounterSource::new(|| Err("counter-deltas: unused when --fake-radio is set".to_string())),
+            CounterSource::new(|| {
+                Err("counter-deltas: unused when --fake-radio is set".to_string())
+            }),
         )
     } else {
         real_sources_for_interface(&interface)
@@ -123,7 +125,9 @@ pub fn run(args: &CounterDeltasArgs) {
     });
 
     let guard = match LoadGuard::new(budget, interface.clone(), false, radio, counters) {
-        Ok(g) => g.with_fast_radio_source(radio_fast).with_synthetic_radio_marker(args.fake_radio),
+        Ok(g) => g
+            .with_fast_radio_source(radio_fast)
+            .with_synthetic_radio_marker(args.fake_radio),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);
@@ -136,7 +140,10 @@ pub fn run(args: &CounterDeltasArgs) {
         move |_rate: f64, _elapsed: Duration| {
             let delta = 512u64;
             sent_for_closure.fetch_add(delta, Ordering::SeqCst);
-            PhaseTick { bytes_sent_delta: delta, ..Default::default() }
+            PhaseTick {
+                bytes_sent_delta: delta,
+                ..Default::default()
+            }
         },
         Arc::new(AtomicBool::new(false)),
     );
@@ -150,7 +157,13 @@ pub fn run(args: &CounterDeltasArgs) {
         let before = report.counters_before;
         let mut after = before;
         after.rx_packets = before.rx_packets.saturating_sub(1);
-        compute_delta(&interface, before, after, report.raw.elapsed_secs, args.assume_isolated)
+        compute_delta(
+            &interface,
+            before,
+            after,
+            report.raw.elapsed_secs,
+            args.assume_isolated,
+        )
     } else {
         compute_delta(
             &interface,
@@ -161,7 +174,10 @@ pub fn run(args: &CounterDeltasArgs) {
         )
     };
 
-    let out = CounterDeltasReport { delta: counter_delta, radio_validity: report.validity };
+    let out = CounterDeltasReport {
+        delta: counter_delta,
+        radio_validity: report.validity,
+    };
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&out).unwrap());
@@ -188,22 +204,34 @@ fn print_human(out: &CounterDeltasReport) {
         DeltaQualification::Clean => println!("  qualification: {}", "clean".green().bold()),
         DeltaQualification::CounterWrappedOrReset => println!(
             "  qualification: {}",
-            "COUNTER WRAPPED OR RESET -- delta withheld, raw before/after retained below".yellow().bold()
+            "COUNTER WRAPPED OR RESET -- delta withheld, raw before/after retained below"
+                .yellow()
+                .bold()
         ),
         DeltaQualification::SharedInterfaceUnrelatedTraffic => println!(
             "  qualification: {}",
-            "SHARED INTERFACE -- may carry traffic this phase did not generate; delta withheld".yellow().bold()
+            "SHARED INTERFACE -- may carry traffic this phase did not generate; delta withheld"
+                .yellow()
+                .bold()
         ),
     }
     println!(
         "  before: rx_packets={} tx_packets={} rx_bytes={} tx_bytes={} rx_errors={} tx_errors={}",
-        delta.before.rx_packets, delta.before.tx_packets, delta.before.rx_bytes,
-        delta.before.tx_bytes, delta.before.rx_errors, delta.before.tx_errors
+        delta.before.rx_packets,
+        delta.before.tx_packets,
+        delta.before.rx_bytes,
+        delta.before.tx_bytes,
+        delta.before.rx_errors,
+        delta.before.tx_errors
     );
     println!(
         "  after:  rx_packets={} tx_packets={} rx_bytes={} tx_bytes={} rx_errors={} tx_errors={}",
-        delta.after.rx_packets, delta.after.tx_packets, delta.after.rx_bytes,
-        delta.after.tx_bytes, delta.after.rx_errors, delta.after.tx_errors
+        delta.after.rx_packets,
+        delta.after.tx_packets,
+        delta.after.rx_bytes,
+        delta.after.tx_bytes,
+        delta.after.rx_errors,
+        delta.after.tx_errors
     );
     match &delta.normalized {
         Some(n) => {

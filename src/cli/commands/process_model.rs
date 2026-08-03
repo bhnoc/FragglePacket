@@ -15,9 +15,8 @@ use std::process::Command;
 use std::time::Duration;
 
 use fraggle_packet::load_guard::{
-    HostResourceCounters,
     judge_collapse, receive_path_from_external, sample_receive_path_live, CollapseVerdict,
-    ExternalReceivePathTelemetry, ProcessModel, ProcessModelTrial,
+    ExternalReceivePathTelemetry, HostResourceCounters, ProcessModel, ProcessModelTrial,
 };
 use fraggle_packet::network_tests::iperf::{parse_iperf_json, IperfResult};
 
@@ -82,7 +81,9 @@ pub struct ProcessModelArgs {
 fn load_external_telemetry(path: &str) -> Result<ExternalReceivePathTelemetry, String> {
     let text = if path == "-" {
         let mut buf = String::new();
-        std::io::stdin().read_to_string(&mut buf).map_err(|e| e.to_string())?;
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| e.to_string())?;
         buf
     } else {
         std::fs::read_to_string(path).map_err(|e| e.to_string())?
@@ -145,9 +146,12 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
                 upload_mbps: Some(300.0),
                 download_mbps: Some(20.0),
                 receive_path: fraggle_packet::load_guard::ReceivePathCounters {
-                    tcp_rcv_collapsed: fraggle_packet::network_tests::rf_survey::Metric::operator_supplied(86),
-                    softnet_drops: fraggle_packet::network_tests::rf_survey::Metric::platform_limited(),
-                    qdisc_drops: fraggle_packet::network_tests::rf_survey::Metric::platform_limited(),
+                    tcp_rcv_collapsed:
+                        fraggle_packet::network_tests::rf_survey::Metric::operator_supplied(86),
+                    softnet_drops:
+                        fraggle_packet::network_tests::rf_survey::Metric::platform_limited(),
+                    qdisc_drops: fraggle_packet::network_tests::rf_survey::Metric::platform_limited(
+                    ),
                 },
                 host_resources: HostResourceCounters::platform_limited(),
             },
@@ -157,18 +161,47 @@ fn fixture_trials(seed: &str, target_mbps: f64) -> (ProcessModelTrial, ProcessMo
 
 /// Runs a bounded native `iperf3 --bidir` trial. Requires `--server`,
 /// `--interface`, and `--local-ip`; this never runs by default.
-fn run_native_bidir(server: &str, interface: &str, local_ip: &str, port: u16, rate_mbps: f64, duration_secs: u64) -> Result<IperfResult, String> {
+fn run_native_bidir(
+    server: &str,
+    interface: &str,
+    local_ip: &str,
+    port: u16,
+    rate_mbps: f64,
+    duration_secs: u64,
+) -> Result<IperfResult, String> {
     let bind = format!("{local_ip}%{interface}");
     let rate_arg = format!("{rate_mbps}M");
     let mut cmd = Command::new("iperf3");
     cmd.args([
-        "-c", server, "-p", &port.to_string(), "-4", "-B", &bind, "-u", "-b", &rate_arg,
-        "-t", &duration_secs.to_string(), "--bidir", "-J", "--connect-timeout", "3000",
+        "-c",
+        server,
+        "-p",
+        &port.to_string(),
+        "-4",
+        "-B",
+        &bind,
+        "-u",
+        "-b",
+        &rate_arg,
+        "-t",
+        &duration_secs.to_string(),
+        "--bidir",
+        "-J",
+        "--connect-timeout",
+        "3000",
     ]);
     run_with_timeout(cmd, Duration::from_secs(duration_secs.max(1) + 10))
 }
 
-fn run_paired(server: &str, interface: &str, local_ip: &str, upload_port: u16, download_port: u16, rate_mbps: f64, duration_secs: u64) -> (Result<IperfResult, String>, Result<IperfResult, String>) {
+fn run_paired(
+    server: &str,
+    interface: &str,
+    local_ip: &str,
+    upload_port: u16,
+    download_port: u16,
+    rate_mbps: f64,
+    duration_secs: u64,
+) -> (Result<IperfResult, String>, Result<IperfResult, String>) {
     let barrier = std::time::Instant::now() + Duration::from_millis(200);
     let up_server = server.to_string();
     let up_local_ip = local_ip.to_string();
@@ -182,8 +215,21 @@ fn run_paired(server: &str, interface: &str, local_ip: &str, upload_port: u16, d
         let rate_arg = format!("{rate_mbps}M");
         let mut cmd = Command::new("iperf3");
         cmd.args([
-            "-c", &up_server, "-p", &upload_port.to_string(), "-4", "-B", &bind, "-u", "-b", &rate_arg,
-            "-t", &duration_secs.to_string(), "-J", "--connect-timeout", "3000",
+            "-c",
+            &up_server,
+            "-p",
+            &upload_port.to_string(),
+            "-4",
+            "-B",
+            &bind,
+            "-u",
+            "-b",
+            &rate_arg,
+            "-t",
+            &duration_secs.to_string(),
+            "-J",
+            "--connect-timeout",
+            "3000",
         ]);
         run_with_timeout(cmd, Duration::from_secs(duration_secs.max(1) + 10))
     });
@@ -196,18 +242,36 @@ fn run_paired(server: &str, interface: &str, local_ip: &str, upload_port: u16, d
     let rate_arg = format!("{rate_mbps}M");
     let mut cmd = Command::new("iperf3");
     cmd.args([
-        "-c", server, "-p", &download_port.to_string(), "-4", "-B", &bind, "-u", "-b", &rate_arg,
-        "-t", &duration_secs.to_string(), "-R", "-J", "--connect-timeout", "3000",
+        "-c",
+        server,
+        "-p",
+        &download_port.to_string(),
+        "-4",
+        "-B",
+        &bind,
+        "-u",
+        "-b",
+        &rate_arg,
+        "-t",
+        &duration_secs.to_string(),
+        "-R",
+        "-J",
+        "--connect-timeout",
+        "3000",
     ]);
     let download_result = run_with_timeout(cmd, Duration::from_secs(duration_secs.max(1) + 10));
-    let upload_result = handle.join().unwrap_or_else(|_| Err("upload thread panicked".to_string()));
+    let upload_result = handle
+        .join()
+        .unwrap_or_else(|_| Err("upload thread panicked".to_string()));
     (upload_result, download_result)
 }
 
 fn run_with_timeout(mut cmd: Command, hard_timeout: Duration) -> Result<IperfResult, String> {
     use std::process::Stdio;
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd.spawn().map_err(|e| format!("failed to run iperf3: {e}"))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to run iperf3: {e}"))?;
     let start = std::time::Instant::now();
     loop {
         match child.try_wait() {
@@ -216,14 +280,18 @@ fn run_with_timeout(mut cmd: Command, hard_timeout: Duration) -> Result<IperfRes
                 if start.elapsed() >= hard_timeout {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(format!("iperf3 did not exit within {hard_timeout:?}; killed"));
+                    return Err(format!(
+                        "iperf3 did not exit within {hard_timeout:?}; killed"
+                    ));
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
             Err(e) => return Err(format!("failed to poll iperf3: {e}")),
         }
     }
-    let output = child.wait_with_output().map_err(|e| format!("failed to collect iperf3 output: {e}"))?;
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("failed to collect iperf3 output: {e}"))?;
     parse_iperf_json(&String::from_utf8_lossy(&output.stdout)).map_err(|e| format!("{e:?}"))
 }
 
@@ -231,7 +299,10 @@ fn mbps_of(sample: Option<fraggle_packet::network_tests::iperf::RateSample>) -> 
     sample.map(|s| s.bits_per_second / 1e6)
 }
 
-fn native_trial_from_result(target_mbps: f64, result: &Result<IperfResult, String>) -> ProcessModelTrial {
+fn native_trial_from_result(
+    target_mbps: f64,
+    result: &Result<IperfResult, String>,
+) -> ProcessModelTrial {
     let mut upload = None;
     let mut download = None;
     if let Ok(r) = result {
@@ -240,7 +311,10 @@ fn native_trial_from_result(target_mbps: f64, result: &Result<IperfResult, Strin
         // side per GAP-039's guidance -- only the receiver saw what actually
         // arrived -- falling back to the estimated block if hollow.
         upload = mbps_of(r.forward.sent.or(r.forward.estimated_received));
-        download = r.bidir_reverse.as_ref().and_then(|rev| mbps_of(rev.received.or(rev.estimated_received)));
+        download = r
+            .bidir_reverse
+            .as_ref()
+            .and_then(|rev| mbps_of(rev.received.or(rev.estimated_received)));
     }
     ProcessModelTrial {
         model: ProcessModel::NativeBidir,
@@ -257,8 +331,14 @@ fn paired_trial_from_results(
     upload: &Result<IperfResult, String>,
     download: &Result<IperfResult, String>,
 ) -> ProcessModelTrial {
-    let upload_mbps = upload.as_ref().ok().and_then(|r| mbps_of(r.forward.sent.or(r.forward.estimated_received)));
-    let download_mbps = download.as_ref().ok().and_then(|r| mbps_of(r.forward.received.or(r.forward.estimated_received)));
+    let upload_mbps = upload
+        .as_ref()
+        .ok()
+        .and_then(|r| mbps_of(r.forward.sent.or(r.forward.estimated_received)));
+    let download_mbps = download
+        .as_ref()
+        .ok()
+        .and_then(|r| mbps_of(r.forward.received.or(r.forward.estimated_received)));
     ProcessModelTrial {
         model: ProcessModel::PairedProcess,
         target_mbps_per_direction: target_mbps,
@@ -276,27 +356,51 @@ pub fn run(args: &ProcessModelArgs) {
         let interface = match &args.interface {
             Some(i) => i.clone(),
             None => {
-                eprintln!("{} --interface is required (default route is frequently a VPN tunnel).", "✗".red());
+                eprintln!(
+                    "{} --interface is required (default route is frequently a VPN tunnel).",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
         let server = match &args.server {
             Some(s) => s.clone(),
             None => {
-                eprintln!("{} --server is required; there is no hardcoded default endpoint.", "✗".red());
+                eprintln!(
+                    "{} --server is required; there is no hardcoded default endpoint.",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
         let local_ip = match &args.local_ip {
             Some(ip) => ip.clone(),
             None => {
-                eprintln!("{} --local-ip is required to bind sessions to --interface explicitly.", "✗".red());
+                eprintln!(
+                    "{} --local-ip is required to bind sessions to --interface explicitly.",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
 
-        let native_result = run_native_bidir(&server, &interface, &local_ip, args.bidir_port, args.target_mbps, args.duration_secs);
-        let (up_result, down_result) = run_paired(&server, &interface, &local_ip, args.upload_port, args.download_port, args.target_mbps, args.duration_secs);
+        let native_result = run_native_bidir(
+            &server,
+            &interface,
+            &local_ip,
+            args.bidir_port,
+            args.target_mbps,
+            args.duration_secs,
+        );
+        let (up_result, down_result) = run_paired(
+            &server,
+            &interface,
+            &local_ip,
+            args.upload_port,
+            args.download_port,
+            args.target_mbps,
+            args.duration_secs,
+        );
 
         (
             native_trial_from_result(args.target_mbps, &native_result),
@@ -308,7 +412,11 @@ pub fn run(args: &ProcessModelArgs) {
         match load_external_telemetry(path) {
             Ok(ext) => native.receive_path = receive_path_from_external(&ext),
             Err(e) => {
-                eprintln!("{} failed to load --native-receive-path-in: {}", "✗".red(), e);
+                eprintln!(
+                    "{} failed to load --native-receive-path-in: {}",
+                    "✗".red(),
+                    e
+                );
                 std::process::exit(1);
             }
         }
@@ -317,7 +425,11 @@ pub fn run(args: &ProcessModelArgs) {
         match load_external_telemetry(path) {
             Ok(ext) => paired.receive_path = receive_path_from_external(&ext),
             Err(e) => {
-                eprintln!("{} failed to load --paired-receive-path-in: {}", "✗".red(), e);
+                eprintln!(
+                    "{} failed to load --paired-receive-path-in: {}",
+                    "✗".red(),
+                    e
+                );
                 std::process::exit(1);
             }
         }
@@ -339,7 +451,8 @@ pub fn run(args: &ProcessModelArgs) {
 }
 
 fn fmt_mbps(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.1} Mbps")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.1} Mbps"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn fmt_metric_u64(m: &fraggle_packet::network_tests::rf_survey::Metric<u64>) -> String {
@@ -354,14 +467,23 @@ fn fmt_metric_u64(m: &fraggle_packet::network_tests::rf_survey::Metric<u64>) -> 
 
 fn print_human(native: &ProcessModelTrial, paired: &ProcessModelTrial, verdict: &CollapseVerdict) {
     println!();
-    println!("{}", "== Process-Model Equivalence Guard (GAP-069) ==".cyan().bold());
+    println!(
+        "{}",
+        "== Process-Model Equivalence Guard (GAP-069) =="
+            .cyan()
+            .bold()
+    );
     println!(
         "  native --bidir:      up={} down={} TCPRcvCollapsed={}",
-        fmt_mbps(native.upload_mbps), fmt_mbps(native.download_mbps), fmt_metric_u64(&native.receive_path.tcp_rcv_collapsed)
+        fmt_mbps(native.upload_mbps),
+        fmt_mbps(native.download_mbps),
+        fmt_metric_u64(&native.receive_path.tcp_rcv_collapsed)
     );
     println!(
         "  paired-process:      up={} down={} TCPRcvCollapsed={}",
-        fmt_mbps(paired.upload_mbps), fmt_mbps(paired.download_mbps), fmt_metric_u64(&paired.receive_path.tcp_rcv_collapsed)
+        fmt_mbps(paired.upload_mbps),
+        fmt_mbps(paired.download_mbps),
+        fmt_metric_u64(&paired.receive_path.tcp_rcv_collapsed)
     );
     println!();
     match verdict {
@@ -372,15 +494,28 @@ fn print_human(native: &ProcessModelTrial, paired: &ProcessModelTrial, verdict: 
             }
         }
         CollapseVerdict::MethodSpecificUnfairness { detail } => {
-            println!("  verdict: {}", "METHOD-SPECIFIC UNFAIRNESS (not a network finding)".yellow().bold());
+            println!(
+                "  verdict: {}",
+                "METHOD-SPECIFIC UNFAIRNESS (not a network finding)"
+                    .yellow()
+                    .bold()
+            );
             println!("  {}", detail);
         }
         CollapseVerdict::ReproducesAcrossProcessModels { detail } => {
-            println!("  verdict: {}", "REPRODUCES ACROSS PROCESS MODELS (network-attributable)".red().bold());
+            println!(
+                "  verdict: {}",
+                "REPRODUCES ACROSS PROCESS MODELS (network-attributable)"
+                    .red()
+                    .bold()
+            );
             println!("  {}", detail);
         }
         CollapseVerdict::NoCollapseObserved => {
-            println!("  verdict: {}", "no directional collapse observed in either model".green());
+            println!(
+                "  verdict: {}",
+                "no directional collapse observed in either model".green()
+            );
         }
     }
     println!();

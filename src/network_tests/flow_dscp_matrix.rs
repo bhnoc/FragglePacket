@@ -56,7 +56,11 @@ pub struct AggregateConstancyCheck {
 const DEFAULT_AGGREGATE_TOLERANCE: f64 = 0.15;
 
 pub fn check_aggregate_constancy(matrix: &FlowCountMatrix) -> AggregateConstancyCheck {
-    let measured: Vec<f64> = matrix.points.iter().filter_map(|p| p.actual_aggregate_bps).collect();
+    let measured: Vec<f64> = matrix
+        .points
+        .iter()
+        .filter_map(|p| p.actual_aggregate_bps)
+        .collect();
     if measured.len() < 2 {
         return AggregateConstancyCheck {
             max_deviation_fraction: None,
@@ -67,7 +71,13 @@ pub fn check_aggregate_constancy(matrix: &FlowCountMatrix) -> AggregateConstancy
     let mean = measured.iter().sum::<f64>() / measured.len() as f64;
     let max_deviation_fraction = measured
         .iter()
-        .map(|v| if mean > 0.0 { (v - mean).abs() / mean } else { 0.0 })
+        .map(|v| {
+            if mean > 0.0 {
+                (v - mean).abs() / mean
+            } else {
+                0.0
+            }
+        })
         .fold(0.0_f64, f64::max);
 
     // Every point must have contributed a measurement, not just the ones
@@ -154,10 +164,23 @@ pub fn classify_dscp_survival(samples: &[DscpCaptureSample]) -> DscpSurvival {
     }
 }
 
-pub fn build_dscp_result(dscp_class: u8, samples: Vec<DscpCaptureSample>, loss_percent: Option<f64>) -> DscpClassResult {
+pub fn build_dscp_result(
+    dscp_class: u8,
+    samples: Vec<DscpCaptureSample>,
+    loss_percent: Option<f64>,
+) -> DscpClassResult {
     let survival = classify_dscp_survival(&samples);
-    let loss_percent_if_survived = if survival == DscpSurvival::Survived { loss_percent } else { None };
-    DscpClassResult { dscp_class, samples, survival, loss_percent_if_survived }
+    let loss_percent_if_survived = if survival == DscpSurvival::Survived {
+        loss_percent
+    } else {
+        None
+    };
+    DscpClassResult {
+        dscp_class,
+        samples,
+        survival,
+        loss_percent_if_survived,
+    }
 }
 
 /// Flags a repeated control whose loss deviates materially from its first
@@ -197,7 +220,14 @@ pub fn detect_control_drift(matrix: &FlowCountMatrix) -> Vec<ControlDrift> {
 mod tests {
     use super::*;
 
-    fn pt(flow_count: u32, per_flow: f64, target_agg: f64, actual_agg: Option<f64>, loss: Option<f64>, repeat: bool) -> FlowCountPoint {
+    fn pt(
+        flow_count: u32,
+        per_flow: f64,
+        target_agg: f64,
+        actual_agg: Option<f64>,
+        loss: Option<f64>,
+        repeat: bool,
+    ) -> FlowCountPoint {
         FlowCountPoint {
             flow_count,
             per_flow_bps: per_flow,
@@ -220,7 +250,11 @@ mod tests {
             ],
         };
         let check = check_aggregate_constancy(&matrix);
-        assert!(check.held_constant, "deviation {:?} should be within tolerance", check.max_deviation_fraction);
+        assert!(
+            check.held_constant,
+            "deviation {:?} should be within tolerance",
+            check.max_deviation_fraction
+        );
     }
 
     #[test]
@@ -244,27 +278,56 @@ mod tests {
             ],
         };
         let check = check_aggregate_constancy(&matrix);
-        assert!(!check.held_constant, "an unmeasured point must not be assumed constant");
+        assert!(
+            !check.held_constant,
+            "an unmeasured point must not be assumed constant"
+        );
     }
 
     #[test]
     fn dscp_survival_requires_both_sides_captured() {
-        let both_match = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: Some(46), observed_at_destination: Some(46) }];
+        let both_match = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: Some(46),
+            observed_at_destination: Some(46),
+        }];
         assert_eq!(classify_dscp_survival(&both_match), DscpSurvival::Survived);
 
-        let mismatched = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: Some(46), observed_at_destination: Some(0) }];
-        assert_eq!(classify_dscp_survival(&mismatched), DscpSurvival::AlteredOnPath);
+        let mismatched = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: Some(46),
+            observed_at_destination: Some(0),
+        }];
+        assert_eq!(
+            classify_dscp_survival(&mismatched),
+            DscpSurvival::AlteredOnPath
+        );
 
-        let no_dest = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: Some(46), observed_at_destination: None }];
+        let no_dest = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: Some(46),
+            observed_at_destination: None,
+        }];
         assert_eq!(classify_dscp_survival(&no_dest), DscpSurvival::Unverified);
 
-        let no_capture = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: None, observed_at_destination: None }];
-        assert_eq!(classify_dscp_survival(&no_capture), DscpSurvival::Unverified);
+        let no_capture = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: None,
+            observed_at_destination: None,
+        }];
+        assert_eq!(
+            classify_dscp_survival(&no_capture),
+            DscpSurvival::Unverified
+        );
     }
 
     #[test]
     fn unverified_survival_withholds_loss_correlation() {
-        let no_dest = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: Some(46), observed_at_destination: None }];
+        let no_dest = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: Some(46),
+            observed_at_destination: None,
+        }];
         let result = build_dscp_result(46, no_dest, Some(5.0));
         assert_eq!(result.survival, DscpSurvival::Unverified);
         assert_eq!(
@@ -275,7 +338,11 @@ mod tests {
 
     #[test]
     fn survived_survival_carries_its_loss_figure() {
-        let both_match = vec![DscpCaptureSample { sent_dscp: 46, observed_at_source: Some(46), observed_at_destination: Some(46) }];
+        let both_match = vec![DscpCaptureSample {
+            sent_dscp: 46,
+            observed_at_source: Some(46),
+            observed_at_destination: Some(46),
+        }];
         let result = build_dscp_result(46, both_match, Some(5.0));
         assert_eq!(result.survival, DscpSurvival::Survived);
         assert_eq!(result.loss_percent_if_survived, Some(5.0));

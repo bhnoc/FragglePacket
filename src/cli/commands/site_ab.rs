@@ -6,7 +6,9 @@ use std::net::IpAddr;
 
 use colored::*;
 
-use fraggle_packet::network_tests::site_ab::{compare_sites, run_site_samples, CompareConfigInput, SiteAbVerdict};
+use fraggle_packet::network_tests::site_ab::{
+    compare_sites, run_site_samples, CompareConfigInput, SiteAbVerdict,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct SiteAbArgs {
@@ -55,7 +57,11 @@ pub struct SiteAbArgs {
 
 pub fn run(args: &SiteAbArgs) {
     let protocols = if args.protocols.is_empty() {
-        vec!["http1".to_string(), "http2".to_string(), "http3".to_string()]
+        vec![
+            "http1".to_string(),
+            "http2".to_string(),
+            "http3".to_string(),
+        ]
     } else {
         args.protocols.clone()
     };
@@ -118,7 +124,11 @@ pub fn run(args: &SiteAbArgs) {
     for r in &reports {
         println!("  protocol: {}", r.protocol);
         match &r.verdict {
-            SiteAbVerdict::Compared { affected_mbps, control_mbps, ratio } => {
+            SiteAbVerdict::Compared {
+                affected_mbps,
+                control_mbps,
+                ratio,
+            } => {
                 println!(
                     "    {} affected={:.2} Mbps control={:.2} Mbps ratio={:.3}",
                     "COMPARED".green(),

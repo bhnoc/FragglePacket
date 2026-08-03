@@ -1,9 +1,9 @@
 //! History panel - Previous test results
 
-use dioxus::prelude::*;
-use crate::state::{AppState, PanelId};
 use crate::components::results_display::ResultsDisplay;
+use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 use fraggle_packet::framework::TestStatus;
 
 /// History panel showing previous test runs
@@ -13,7 +13,8 @@ pub fn HistoryPanel(state: Signal<AppState>, panel: PanelId) -> Element {
     let mut selected_history = use_signal(|| None::<u64>);
 
     // Get selected entry
-    let selected_entry = selected_history.read()
+    let selected_entry = selected_history
+        .read()
         .and_then(|id| history.iter().find(|e| e.id == id).cloned());
 
     rsx! {

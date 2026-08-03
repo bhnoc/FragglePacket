@@ -1,8 +1,8 @@
 //! MTU Simulator and VPN Calculator
 
-use dioxus::prelude::*;
 use crate::state::{AppState, PanelId};
 use crate::window_manager::DetachButton;
+use dioxus::prelude::*;
 
 /// VPN overhead data
 const VPN_OVERHEADS: &[(&str, &str, u32)] = &[
@@ -30,7 +30,8 @@ pub fn Simulator(state: Signal<AppState>, panel: PanelId) -> Element {
     let mut base_mtu = use_signal(|| 1500_u32);
     let mut selected_vpn = use_signal(|| "none".to_string());
 
-    let overhead = VPN_OVERHEADS.iter()
+    let overhead = VPN_OVERHEADS
+        .iter()
         .find(|(id, _, _)| *id == *selected_vpn.read())
         .map(|(_, _, o)| *o)
         .unwrap_or(0);

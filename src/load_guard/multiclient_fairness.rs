@@ -57,8 +57,16 @@ impl RoleDescriptor {
         if self.phase_marks.is_empty() {
             return None;
         }
-        let start = self.phase_marks.iter().map(|p| p.epoch_secs).fold(f64::INFINITY, f64::min);
-        let end = self.phase_marks.iter().map(|p| p.epoch_secs).fold(f64::NEG_INFINITY, f64::max);
+        let start = self
+            .phase_marks
+            .iter()
+            .map(|p| p.epoch_secs)
+            .fold(f64::INFINITY, f64::min);
+        let end = self
+            .phase_marks
+            .iter()
+            .map(|p| p.epoch_secs)
+            .fold(f64::NEG_INFINITY, f64::max);
         Some((start, end))
     }
 }
@@ -76,19 +84,29 @@ pub fn windows_overlap(a: &RoleDescriptor, b: &RoleDescriptor) -> Option<bool> {
 /// endpoint means load attributed to "the network" might actually be
 /// listener admission contention between the two clients.
 pub fn shared_listener_confound(a: &RoleDescriptor, b: &RoleDescriptor) -> Vec<String> {
-    a.listener_endpoints.iter().filter(|e| b.listener_endpoints.contains(e)).cloned().collect()
+    a.listener_endpoints
+        .iter()
+        .filter(|e| b.listener_endpoints.contains(e))
+        .cloned()
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CrossClientVerdict {
     /// Both descriptors present, windows overlap: a verdict can be computed.
-    Comparable { clock_offset_secs: f64, shared_listeners: Vec<String> },
+    Comparable {
+        clock_offset_secs: f64,
+        shared_listeners: Vec<String>,
+    },
     /// Refuses the verdict and names exactly why, mirroring
     /// `CircuitVerdict::Refused`'s pattern.
     Refused { reason: String },
 }
 
-pub fn evaluate_cross_client(a: Option<&RoleDescriptor>, b: Option<&RoleDescriptor>) -> CrossClientVerdict {
+pub fn evaluate_cross_client(
+    a: Option<&RoleDescriptor>,
+    b: Option<&RoleDescriptor>,
+) -> CrossClientVerdict {
     let (Some(a), Some(b)) = (a, b) else {
         let mut missing = Vec::new();
         if a.is_none() {
@@ -144,16 +162,31 @@ mod tests {
             association_label: Some("ap-deadbeef".to_string()),
             listener_endpoints: listeners.iter().map(|s| s.to_string()).collect(),
             reported_start_epoch: start,
-            phase_marks: marks.iter().map(|t| PhaseMark { phase: "load".to_string(), epoch_secs: *t }).collect(),
+            phase_marks: marks
+                .iter()
+                .map(|t| PhaseMark {
+                    phase: "load".to_string(),
+                    epoch_secs: *t,
+                })
+                .collect(),
         }
     }
 
     #[test]
     fn cross_client_verdict_is_refused_when_either_descriptor_is_missing() {
         let a = descriptor("a", &[100.0, 110.0], &["s:5201"], 100.0);
-        assert!(matches!(evaluate_cross_client(Some(&a), None), CrossClientVerdict::Refused { .. }));
-        assert!(matches!(evaluate_cross_client(None, Some(&a)), CrossClientVerdict::Refused { .. }));
-        assert!(matches!(evaluate_cross_client(None, None), CrossClientVerdict::Refused { .. }));
+        assert!(matches!(
+            evaluate_cross_client(Some(&a), None),
+            CrossClientVerdict::Refused { .. }
+        ));
+        assert!(matches!(
+            evaluate_cross_client(None, Some(&a)),
+            CrossClientVerdict::Refused { .. }
+        ));
+        assert!(matches!(
+            evaluate_cross_client(None, None),
+            CrossClientVerdict::Refused { .. }
+        ));
     }
 
     #[test]
@@ -181,7 +214,9 @@ mod tests {
         let a = descriptor("a", &[100.0, 120.0], &["s:5201", "s:5202"], 100.0);
         let b = descriptor("b", &[110.0, 130.0], &["s:5202"], 110.0);
         match evaluate_cross_client(Some(&a), Some(&b)) {
-            CrossClientVerdict::Comparable { shared_listeners, .. } => {
+            CrossClientVerdict::Comparable {
+                shared_listeners, ..
+            } => {
                 assert_eq!(shared_listeners, vec!["s:5202".to_string()]);
             }
             other => panic!("expected Comparable, got {other:?}"),
@@ -210,6 +245,9 @@ mod tests {
     fn phase_window_is_none_with_no_marks_not_a_zero_length_window() {
         let a = descriptor("a", &[], &[], 100.0);
         assert_eq!(a.phase_window(), None);
-        assert_eq!(windows_overlap(&a, &descriptor("b", &[1.0], &[], 1.0)), None);
+        assert_eq!(
+            windows_overlap(&a, &descriptor("b", &[1.0], &[], 1.0)),
+            None
+        );
     }
 }

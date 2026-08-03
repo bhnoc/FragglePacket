@@ -25,12 +25,18 @@ pub struct PathResult {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FaultAttribution {
-    Wlan { detail: String },
-    SharedEdgeOrWan { detail: String },
+    Wlan {
+        detail: String,
+    },
+    SharedEdgeOrWan {
+        detail: String,
+    },
     /// The matched control does not support attribution. Names the reason
     /// explicitly rather than defaulting to the WLAN explanation, which
     /// field evidence shows is often the wrong one to assume.
-    Withheld { reason: String },
+    Withheld {
+        reason: String,
+    },
 }
 
 const LOSS_MATERIAL_THRESHOLD_PCT: f64 = 1.0;
@@ -83,8 +89,18 @@ pub fn attribute(wired: &PathResult, wifi: &PathResult) -> FaultAttribution {
 mod tests {
     use super::*;
 
-    fn path(label: &'static str, mbps: Option<f64>, loss: Option<f64>, egress: Option<&str>) -> PathResult {
-        PathResult { label, achieved_mbps: mbps, loss_pct: loss, egress_identity: egress.map(str::to_string) }
+    fn path(
+        label: &'static str,
+        mbps: Option<f64>,
+        loss: Option<f64>,
+        egress: Option<&str>,
+    ) -> PathResult {
+        PathResult {
+            label,
+            achieved_mbps: mbps,
+            loss_pct: loss,
+            egress_identity: egress.map(str::to_string),
+        }
     }
 
     #[test]
@@ -94,7 +110,9 @@ mod tests {
         let wired = path("wired", Some(350.0), Some(0.0), Some("203.0.113.5"));
         let wifi = path("wifi", Some(300.0), Some(20.0), Some("198.51.100.9"));
         match attribute(&wired, &wifi) {
-            FaultAttribution::Withheld { reason } => assert!(reason.contains("different public egress identities")),
+            FaultAttribution::Withheld { reason } => {
+                assert!(reason.contains("different public egress identities"))
+            }
             other => panic!("expected Withheld, got {other:?}"),
         }
     }

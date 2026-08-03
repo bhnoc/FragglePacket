@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 use fraggle_packet::load_guard::ap_identity::{label_for_bssid, load_or_create_salt};
 use fraggle_packet::load_guard::wdutil::{self, WdutilError};
-use fraggle_packet::load_guard::{build_transition, ApIdentity, IdentityContinuity, RoamTransition, TransitionKind};
+use fraggle_packet::load_guard::{
+    build_transition, ApIdentity, IdentityContinuity, RoamTransition, TransitionKind,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct RoamingArgs {
@@ -34,16 +36,31 @@ fn sample_identity(fixture: Option<(&str, &str, u32)>) -> (Option<ApIdentity>, O
         match wdutil::snapshot_live() {
             Ok(f) => (f.bssid, f.band, f.channel),
             Err(WdutilError::PrivilegeRequired { command }) => {
-                return (None, Some(format!("requires elevated wdutil access; re-run as: {command}")))
+                return (
+                    None,
+                    Some(format!(
+                        "requires elevated wdutil access; re-run as: {command}"
+                    )),
+                )
             }
             Err(e) => return (None, Some(e.to_string())),
         }
     };
     let Some(bssid) = bssid else {
-        return (None, Some("no BSSID reported for the current association".to_string()));
+        return (
+            None,
+            Some("no BSSID reported for the current association".to_string()),
+        );
     };
     let label = label_for_bssid(&bssid, &salt);
-    (Some(ApIdentity { label, band, channel }), None)
+    (
+        Some(ApIdentity {
+            label,
+            band,
+            channel,
+        }),
+        None,
+    )
 }
 
 pub fn run(args: &RoamingArgs) {
@@ -76,7 +93,10 @@ pub fn run(args: &RoamingArgs) {
                     sample_identity(Some(("02:00:00:00:00:01", "6GHz", 37))).0,
                     None,
                     None,
-                    Some("association never re-established within the observation window".to_string()),
+                    Some(
+                        "association never re-established within the observation window"
+                            .to_string(),
+                    ),
                     None,
                     None,
                     false,
@@ -106,7 +126,9 @@ pub fn run(args: &RoamingArgs) {
             std::thread::sleep(Duration::from_secs(args.wait_secs));
             let (after, after_err) = sample_identity(None);
             let handoff_ms = Some(start.elapsed().as_secs_f64() * 1000.0);
-            (before, before_err, after, after_err, handoff_ms, None, false, None, None)
+            (
+                before, before_err, after, after_err, handoff_ms, None, false, None, None,
+            )
         };
 
     let transition: RoamTransition = build_transition(
@@ -142,14 +164,26 @@ pub fn run(args: &RoamingArgs) {
     println!("  kind: {}", format_kind(transition.kind));
     println!(
         "  handoff duration: {}",
-        transition.handoff_duration_ms.map(|v| format!("{v:.1}ms")).unwrap_or_else(|| "unavailable (handoff not observed to complete)".to_string())
+        transition
+            .handoff_duration_ms
+            .map(|v| format!("{v:.1}ms"))
+            .unwrap_or_else(|| "unavailable (handoff not observed to complete)".to_string())
     );
     println!(
         "  packets lost during handoff: {}",
-        transition.packets_lost_during_handoff.map(|v| v.to_string()).unwrap_or_else(|| "unavailable".to_string())
+        transition
+            .packets_lost_during_handoff
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "unavailable".to_string())
     );
-    println!("  session reset detected: {}", transition.session_reset_detected);
-    println!("  identity (VLAN/public) continuity: {}", format_continuity(transition.identity_continuity));
+    println!(
+        "  session reset detected: {}",
+        transition.session_reset_detected
+    );
+    println!(
+        "  identity (VLAN/public) continuity: {}",
+        format_continuity(transition.identity_continuity)
+    );
     if let Some(e) = &before_err {
         println!("  {} before-sample: {}", "note:".dimmed(), e);
     }
@@ -164,7 +198,9 @@ fn format_kind(k: TransitionKind) -> String {
         TransitionKind::SameApSameRadio => "same AP, same radio".to_string(),
         TransitionKind::SameApDifferentRadio => "same AP, different radio".to_string(),
         TransitionKind::DifferentAp => "different AP".yellow().bold().to_string(),
-        TransitionKind::Undetermined => "undetermined (identity unavailable on one or both sides)".to_string(),
+        TransitionKind::Undetermined => {
+            "undetermined (identity unavailable on one or both sides)".to_string()
+        }
     }
 }
 

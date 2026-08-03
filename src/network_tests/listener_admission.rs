@@ -43,7 +43,10 @@ pub enum AdmissionOutcome {
     /// Fewer streams connected than requested -- the field's "one admitted
     /// three of four" case. Distinct from full admission and from total
     /// failure; must not be averaged into either.
-    PartiallyAdmitted { streams_established: u64, streams_requested: u64 },
+    PartiallyAdmitted {
+        streams_established: u64,
+        streams_requested: u64,
+    },
     /// No connection was ever established. This must never be reported as
     /// 0 Mbps -- see module doc.
     NeverAdmitted { detail: String },
@@ -105,7 +108,12 @@ where
 fn streams_established(raw_json: &str) -> u64 {
     serde_json::from_str::<serde_json::Value>(raw_json)
         .ok()
-        .and_then(|v| v.get("start")?.get("connected")?.as_array().map(|a| a.len() as u64))
+        .and_then(|v| {
+            v.get("start")?
+                .get("connected")?
+                .as_array()
+                .map(|a| a.len() as u64)
+        })
         .unwrap_or(0)
 }
 
@@ -114,15 +122,19 @@ pub fn classify_result(raw_json: &str, requested_streams: u64) -> AdmissionOutco
 
     match parse_iperf_json(raw_json) {
         Err(IperfParseError::ServerError(detail)) => AdmissionOutcome::NeverAdmitted { detail },
-        Err(e) => AdmissionOutcome::NeverAdmitted { detail: e.to_string() },
-        Ok(_) if established == 0 => {
-            AdmissionOutcome::NeverAdmitted { detail: "no streams reported in start.connected".to_string() }
-        }
+        Err(e) => AdmissionOutcome::NeverAdmitted {
+            detail: e.to_string(),
+        },
+        Ok(_) if established == 0 => AdmissionOutcome::NeverAdmitted {
+            detail: "no streams reported in start.connected".to_string(),
+        },
         Ok(_) if established < requested_streams => AdmissionOutcome::PartiallyAdmitted {
             streams_established: established,
             streams_requested: requested_streams,
         },
-        Ok(_) => AdmissionOutcome::FullyAdmitted { streams_established: established },
+        Ok(_) => AdmissionOutcome::FullyAdmitted {
+            streams_established: established,
+        },
     }
 }
 
@@ -181,17 +193,28 @@ pub fn run_admission_fanout(
                 let (outcome, receiver_bits_per_second) = match outcome_result {
                     Ok(Ok(raw_json)) => {
                         let outcome = classify_result(&raw_json, requested_streams);
-                        let bps = if outcome.is_admitted() { receiver_bps(&raw_json) } else { None };
+                        let bps = if outcome.is_admitted() {
+                            receiver_bps(&raw_json)
+                        } else {
+                            None
+                        };
                         (outcome, bps)
                     }
                     Ok(Err(e)) => (AdmissionOutcome::NeverAdmitted { detail: e }, None),
                     Err(_) => (
-                        AdmissionOutcome::SafetyTimeout { elapsed_secs: elapsed.as_secs_f64() },
+                        AdmissionOutcome::SafetyTimeout {
+                            elapsed_secs: elapsed.as_secs_f64(),
+                        },
                         None,
                     ),
                 };
 
-                SessionResult { target, outcome, start_skew_ms, receiver_bits_per_second }
+                SessionResult {
+                    target,
+                    outcome,
+                    start_skew_ms,
+                    receiver_bits_per_second,
+                }
             })
         })
         .collect();
@@ -214,7 +237,10 @@ pub struct AdmissionCohort {
 
 impl AdmissionCohort {
     pub fn fully_admitted_count(&self) -> usize {
-        self.results.iter().filter(|r| self.session_is_valid(r)).count()
+        self.results
+            .iter()
+            .filter(|r| self.session_is_valid(r))
+            .count()
     }
 
     fn session_is_valid(&self, r: &SessionResult) -> bool {
@@ -226,7 +252,10 @@ impl AdmissionCohort {
     /// substitutes 0 for any of them -- they are absent from this list
     /// entirely, not present-as-zero.
     pub fn valid_throughput_results(&self) -> Vec<&SessionResult> {
-        self.results.iter().filter(|r| self.session_is_valid(r)).collect()
+        self.results
+            .iter()
+            .filter(|r| self.session_is_valid(r))
+            .collect()
     }
 
     /// `None` means the cohort verdict is blocked: too few sessions
@@ -265,11 +294,17 @@ mod tests {
     use super::*;
 
     fn target(port: u16, pool: &str) -> ListenerTarget {
-        ListenerTarget { host: "example.test".to_string(), port, pool_label: pool.to_string() }
+        ListenerTarget {
+            host: "example.test".to_string(),
+            port,
+            pool_label: pool.to_string(),
+        }
     }
 
     fn ok_json(streams: usize, bps: f64) -> String {
-        let connected: Vec<_> = (0..streams).map(|i| serde_json::json!({"socket": i})).collect();
+        let connected: Vec<_> = (0..streams)
+            .map(|i| serde_json::json!({"socket": i}))
+            .collect();
         serde_json::json!({
             "start": {"connected": connected, "version": "iperf 3.21", "test_start": {"num_streams": 4, "protocol": "TCP", "reverse": 0, "bidir": 0}},
             "end": {"sum_sent": {"bytes": 1000, "seconds": 1.0, "bits_per_second": bps}, "sum_received": {"bytes": 1000, "seconds": 1.0, "bits_per_second": bps}}
@@ -298,7 +333,10 @@ mod tests {
         let outcome = classify_result(&ok_json(3, 500_000.0), 4);
         assert_eq!(
             outcome,
-            AdmissionOutcome::PartiallyAdmitted { streams_established: 3, streams_requested: 4 }
+            AdmissionOutcome::PartiallyAdmitted {
+                streams_established: 3,
+                streams_requested: 4
+            }
         );
         assert!(!outcome.is_admitted());
     }
@@ -306,7 +344,12 @@ mod tests {
     #[test]
     fn full_admission_classified_correctly() {
         let outcome = classify_result(&ok_json(4, 500_000.0), 4);
-        assert_eq!(outcome, AdmissionOutcome::FullyAdmitted { streams_established: 4 });
+        assert_eq!(
+            outcome,
+            AdmissionOutcome::FullyAdmitted {
+                streams_established: 4
+            }
+        );
         assert!(outcome.is_admitted());
     }
 
@@ -315,18 +358,27 @@ mod tests {
         let results = vec![
             SessionResult {
                 target: target(1, "a"),
-                outcome: AdmissionOutcome::FullyAdmitted { streams_established: 4 },
+                outcome: AdmissionOutcome::FullyAdmitted {
+                    streams_established: 4,
+                },
                 start_skew_ms: 0,
                 receiver_bits_per_second: Some(1_000_000.0),
             },
             SessionResult {
                 target: target(2, "a"),
-                outcome: AdmissionOutcome::NeverAdmitted { detail: "refused".to_string() },
+                outcome: AdmissionOutcome::NeverAdmitted {
+                    detail: "refused".to_string(),
+                },
                 start_skew_ms: 0,
                 receiver_bits_per_second: None,
             },
         ];
-        let cohort = AdmissionCohort { requested_streams: 4, results, minimum_valid_cohort: 2, max_start_skew_ms: 1000 };
+        let cohort = AdmissionCohort {
+            requested_streams: 4,
+            results,
+            minimum_valid_cohort: 2,
+            max_start_skew_ms: 1000,
+        };
         assert_eq!(cohort.fully_admitted_count(), 1);
         assert_eq!(cohort.aggregate_receiver_bps(), None);
         assert_eq!(cohort.excluded_with_reason().len(), 1);
@@ -337,24 +389,35 @@ mod tests {
         let results = vec![
             SessionResult {
                 target: target(1, "a"),
-                outcome: AdmissionOutcome::FullyAdmitted { streams_established: 4 },
+                outcome: AdmissionOutcome::FullyAdmitted {
+                    streams_established: 4,
+                },
                 start_skew_ms: 0,
                 receiver_bits_per_second: Some(1_000_000.0),
             },
             SessionResult {
                 target: target(2, "a"),
-                outcome: AdmissionOutcome::FullyAdmitted { streams_established: 4 },
+                outcome: AdmissionOutcome::FullyAdmitted {
+                    streams_established: 4,
+                },
                 start_skew_ms: 0,
                 receiver_bits_per_second: Some(2_000_000.0),
             },
             SessionResult {
                 target: target(3, "a"),
-                outcome: AdmissionOutcome::NeverAdmitted { detail: "timeout".to_string() },
+                outcome: AdmissionOutcome::NeverAdmitted {
+                    detail: "timeout".to_string(),
+                },
                 start_skew_ms: 0,
                 receiver_bits_per_second: None,
             },
         ];
-        let cohort = AdmissionCohort { requested_streams: 4, results, minimum_valid_cohort: 2, max_start_skew_ms: 1000 };
+        let cohort = AdmissionCohort {
+            requested_streams: 4,
+            results,
+            minimum_valid_cohort: 2,
+            max_start_skew_ms: 1000,
+        };
         assert_eq!(cohort.aggregate_receiver_bps(), Some(3_000_000.0));
         assert_eq!(cohort.valid_throughput_results().len(), 2);
     }

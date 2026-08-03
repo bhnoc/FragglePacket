@@ -110,16 +110,28 @@ pub struct PreflightLimits {
 }
 
 pub fn detect_preflight_limits() -> PreflightLimits {
-    let cpu_cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let cpu_cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
     let max_open_files = read_rlimit_nofile();
-    PreflightLimits { cpu_cores, max_open_files }
+    PreflightLimits {
+        cpu_cores,
+        max_open_files,
+    }
 }
 
 #[cfg(unix)]
 fn read_rlimit_nofile() -> Option<u64> {
-    let mut rl = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    let mut rl = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
     let rc = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut rl) };
-    if rc == 0 { Some(rl.rlim_cur as u64) } else { None }
+    if rc == 0 {
+        Some(rl.rlim_cur as u64)
+    } else {
+        None
+    }
 }
 
 #[cfg(not(unix))]
@@ -132,8 +144,14 @@ pub enum PreflightVerdict {
     Ok,
     /// Streams requested would need more file descriptors than currently
     /// allowed. Each TCP stream is roughly one socket/fd.
-    SocketLimitRisk { requested_streams: u32, fd_limit: u64 },
-    CpuOversubscriptionRisk { requested_streams: u32, cpu_cores: usize },
+    SocketLimitRisk {
+        requested_streams: u32,
+        fd_limit: u64,
+    },
+    CpuOversubscriptionRisk {
+        requested_streams: u32,
+        cpu_cores: usize,
+    },
 }
 
 pub fn preflight_candidate(candidate: &Candidate, limits: &PreflightLimits) -> PreflightVerdict {
@@ -141,7 +159,10 @@ pub fn preflight_candidate(candidate: &Candidate, limits: &PreflightLimits) -> P
         // Leave headroom for the process's own fds (stdio, sockets already
         // open, etc); a candidate must not consume the whole budget.
         if (candidate.streams as u64) * 2 > fd_limit.saturating_sub(16) {
-            return PreflightVerdict::SocketLimitRisk { requested_streams: candidate.streams, fd_limit };
+            return PreflightVerdict::SocketLimitRisk {
+                requested_streams: candidate.streams,
+                fd_limit,
+            };
         }
     }
     if candidate.streams as usize > limits.cpu_cores * 4 {
@@ -220,7 +241,10 @@ pub fn build_verdict(
     representative: Candidate,
     drift: Option<DriftBracket>,
 ) -> TunerVerdict {
-    let mut accepted: Vec<&TrialResult> = trials.iter().filter(|t| t.rejected_reason.is_none()).collect();
+    let mut accepted: Vec<&TrialResult> = trials
+        .iter()
+        .filter(|t| t.rejected_reason.is_none())
+        .collect();
     accepted.sort_by(|a, b| {
         b.receiver_bits_per_second
             .unwrap_or(0.0)
@@ -249,9 +273,13 @@ pub fn build_verdict(
         },
         synthetic_maximum_bps: best.and_then(|t| t.receiver_bits_per_second),
         synthetic_maximum_candidate: best.map(|t| t.candidate),
-        representative_application_bps: representative_trial.and_then(|t| t.receiver_bits_per_second),
+        representative_application_bps: representative_trial
+            .and_then(|t| t.receiver_bits_per_second),
         representative_candidate: Some(representative),
-        rejected_trials: trials.into_iter().filter(|t| t.rejected_reason.is_some()).collect(),
+        rejected_trials: trials
+            .into_iter()
+            .filter(|t| t.rejected_reason.is_some())
+            .collect(),
         drift_provisional,
     }
 }
@@ -280,7 +308,13 @@ mod tests {
             forward: RateEvidence {
                 offered_bps: None,
                 sent: None,
-                received: Some(RateSample { bits_per_second: bps, bytes: 1000, seconds, packets: None, lost_percent: None }),
+                received: Some(RateSample {
+                    bits_per_second: bps,
+                    bytes: 1000,
+                    seconds,
+                    packets: None,
+                    lost_percent: None,
+                }),
                 estimated_received: None,
             },
             bidir_reverse: None,
@@ -289,13 +323,19 @@ mod tests {
     }
 
     fn refused_result() -> Result<IperfResult, IperfParseError> {
-        Err(IperfParseError::ServerError("connection refused".to_string()))
+        Err(IperfParseError::ServerError(
+            "connection refused".to_string(),
+        ))
     }
 
     #[test]
     fn duration_inconsistent_trial_is_rejected_not_scored() {
         // The field's 16-stream/15.84s-for-a-shorter-run case.
-        let candidate = Candidate { streams: 16, block_size_kib: 512, zero_copy: true };
+        let candidate = Candidate {
+            streams: 16,
+            block_size_kib: 512,
+            zero_copy: true,
+        };
         let result = usable_result(15.84, 900_000_000.0);
         let trial = evaluate_trial(candidate, 8.0, &result);
         assert!(trial.rejected_reason.is_some());
@@ -304,7 +344,11 @@ mod tests {
 
     #[test]
     fn duration_consistent_trial_is_scored() {
-        let candidate = Candidate { streams: 8, block_size_kib: 512, zero_copy: true };
+        let candidate = Candidate {
+            streams: 8,
+            block_size_kib: 512,
+            zero_copy: true,
+        };
         let result = usable_result(10.1, 454_000_000.0);
         let trial = evaluate_trial(candidate, 10.0, &result);
         assert!(trial.rejected_reason.is_none());
@@ -313,7 +357,11 @@ mod tests {
 
     #[test]
     fn unusable_summary_is_rejected_never_scored() {
-        let candidate = Candidate { streams: 4, block_size_kib: 128, zero_copy: false };
+        let candidate = Candidate {
+            streams: 4,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
         let result = refused_result();
         let trial = evaluate_trial(candidate, 10.0, &result);
         assert!(trial.rejected_reason.is_some());
@@ -322,18 +370,35 @@ mod tests {
 
     #[test]
     fn preflight_flags_socket_limit_risk() {
-        let limits = PreflightLimits { cpu_cores: 8, max_open_files: Some(64) };
-        let candidate = Candidate { streams: 100, block_size_kib: 128, zero_copy: false };
+        let limits = PreflightLimits {
+            cpu_cores: 8,
+            max_open_files: Some(64),
+        };
+        let candidate = Candidate {
+            streams: 100,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
         assert_eq!(
             preflight_candidate(&candidate, &limits),
-            PreflightVerdict::SocketLimitRisk { requested_streams: 100, fd_limit: 64 }
+            PreflightVerdict::SocketLimitRisk {
+                requested_streams: 100,
+                fd_limit: 64
+            }
         );
     }
 
     #[test]
     fn preflight_flags_cpu_oversubscription() {
-        let limits = PreflightLimits { cpu_cores: 2, max_open_files: Some(100_000) };
-        let candidate = Candidate { streams: 64, block_size_kib: 128, zero_copy: false };
+        let limits = PreflightLimits {
+            cpu_cores: 2,
+            max_open_files: Some(100_000),
+        };
+        let candidate = Candidate {
+            streams: 64,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
         assert!(matches!(
             preflight_candidate(&candidate, &limits),
             PreflightVerdict::CpuOversubscriptionRisk { .. }
@@ -343,26 +408,45 @@ mod tests {
     #[test]
     fn preflight_passes_a_reasonable_candidate() {
         let limits = detect_preflight_limits();
-        let candidate = Candidate { streams: 2, block_size_kib: 128, zero_copy: false };
-        assert_eq!(preflight_candidate(&candidate, &limits), PreflightVerdict::Ok);
+        let candidate = Candidate {
+            streams: 2,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
+        assert_eq!(
+            preflight_candidate(&candidate, &limits),
+            PreflightVerdict::Ok
+        );
     }
 
     #[test]
     fn severe_drift_is_detected_from_repeated_baseline() {
-        let drift = DriftBracket { samples_bps: vec![100_000_000.0, 40_000_000.0] };
+        let drift = DriftBracket {
+            samples_bps: vec![100_000_000.0, 40_000_000.0],
+        };
         assert!(drift.is_severe());
     }
 
     #[test]
     fn low_drift_is_not_severe() {
-        let drift = DriftBracket { samples_bps: vec![100_000_000.0, 98_000_000.0] };
+        let drift = DriftBracket {
+            samples_bps: vec![100_000_000.0, 98_000_000.0],
+        };
         assert!(!drift.is_severe());
     }
 
     #[test]
     fn synthetic_maximum_and_representative_are_independent_fields() {
-        let candidate_best = Candidate { streams: 8, block_size_kib: 512, zero_copy: true };
-        let candidate_rep = Candidate { streams: 4, block_size_kib: 128, zero_copy: false };
+        let candidate_best = Candidate {
+            streams: 8,
+            block_size_kib: 512,
+            zero_copy: true,
+        };
+        let candidate_rep = Candidate {
+            streams: 4,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
         let trials = vec![
             evaluate_trial(candidate_best, 10.0, &usable_result(10.0, 454_000_000.0)),
             evaluate_trial(candidate_rep, 10.0, &usable_result(10.0, 200_000_000.0)),
@@ -370,13 +454,24 @@ mod tests {
         let verdict = build_verdict("PV03/iperf3-3.16", trials, candidate_rep, None);
         assert_eq!(verdict.synthetic_maximum_bps, Some(454_000_000.0));
         assert_eq!(verdict.representative_application_bps, Some(200_000_000.0));
-        assert_ne!(verdict.synthetic_maximum_bps, verdict.representative_application_bps);
+        assert_ne!(
+            verdict.synthetic_maximum_bps,
+            verdict.representative_application_bps
+        );
     }
 
     #[test]
     fn rejected_trials_never_influence_synthetic_maximum() {
-        let bad = Candidate { streams: 16, block_size_kib: 512, zero_copy: true };
-        let good = Candidate { streams: 4, block_size_kib: 128, zero_copy: false };
+        let bad = Candidate {
+            streams: 16,
+            block_size_kib: 512,
+            zero_copy: true,
+        };
+        let good = Candidate {
+            streams: 4,
+            block_size_kib: 128,
+            zero_copy: false,
+        };
         let trials = vec![
             evaluate_trial(bad, 8.0, &usable_result(15.84, 900_000_000.0)),
             evaluate_trial(good, 8.0, &usable_result(8.1, 100_000_000.0)),
@@ -389,9 +484,21 @@ mod tests {
     #[test]
     fn randomization_is_deterministic_given_a_seed_and_covers_all_candidates() {
         let candidates = vec![
-            Candidate { streams: 1, block_size_kib: 64, zero_copy: false },
-            Candidate { streams: 4, block_size_kib: 128, zero_copy: false },
-            Candidate { streams: 8, block_size_kib: 512, zero_copy: true },
+            Candidate {
+                streams: 1,
+                block_size_kib: 64,
+                zero_copy: false,
+            },
+            Candidate {
+                streams: 4,
+                block_size_kib: 128,
+                zero_copy: false,
+            },
+            Candidate {
+                streams: 8,
+                block_size_kib: 512,
+                zero_copy: true,
+            },
         ];
         let a = randomize_candidates(candidates.clone(), 42);
         let b = randomize_candidates(candidates.clone(), 42);

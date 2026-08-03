@@ -26,7 +26,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 const SALT_FILE_NAME: &str = "fraggle-packet-fleet-node-salt";
@@ -36,7 +35,8 @@ fn salt_path() -> Option<PathBuf> {
 }
 
 pub fn load_or_create_node_salt() -> Result<String, String> {
-    let path = salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
+    let path =
+        salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
     if let Ok(existing) = std::fs::read_to_string(&path) {
         let trimmed = existing.trim().to_string();
         if !trimmed.is_empty() {
@@ -62,7 +62,10 @@ fn generate_node_salt() -> String {
         let h = hasher.finish();
         h.hash(&mut hasher);
     }
-    format!("{:032x}", hasher.finish() as u128 ^ ((hasher.finish() as u128) << 64))
+    format!(
+        "{:032x}",
+        hasher.finish() as u128 ^ ((hasher.finish() as u128) << 64)
+    )
 }
 
 /// Produces a stable opaque label from a management address and salt.
@@ -102,7 +105,13 @@ pub struct FleetNode {
 }
 
 pub fn build_fleet_labels(entries: &[InventoryEntry], salt: &str) -> Vec<FleetNode> {
-    entries.iter().map(|e| FleetNode { label: label_for_node(&e.address, salt), role: e.role }).collect()
+    entries
+        .iter()
+        .map(|e| FleetNode {
+            label: label_for_node(&e.address, salt),
+            role: e.role,
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,7 +150,11 @@ impl FleetPlan {
         if self.per_node_timeout_secs == 0 {
             return Err(PlanError::ZeroTimeout);
         }
-        let test_nodes: Vec<&FleetNode> = self.nodes.iter().filter(|n| n.role == NodeRole::TestNode).collect();
+        let test_nodes: Vec<&FleetNode> = self
+            .nodes
+            .iter()
+            .filter(|n| n.role == NodeRole::TestNode)
+            .collect();
         if test_nodes.is_empty() {
             return Err(PlanError::NoTestNodes);
         }
@@ -151,10 +164,17 @@ impl FleetPlan {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeOutcome {
-    Completed { radio_before_fingerprint: Option<String>, radio_after_fingerprint: Option<String> },
+    Completed {
+        radio_before_fingerprint: Option<String>,
+        radio_after_fingerprint: Option<String>,
+    },
     TimedOut,
-    ConnectionFailed { detail: String },
-    Quarantined { reason: String },
+    ConnectionFailed {
+        detail: String,
+    },
+    Quarantined {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,12 +197,18 @@ where
     use std::sync::{Arc, Mutex};
 
     let runner = Arc::new(runner);
-    let semaphore = Arc::new(std::sync::atomic::AtomicUsize::new(plan.max_concurrency as usize));
+    let semaphore = Arc::new(std::sync::atomic::AtomicUsize::new(
+        plan.max_concurrency as usize,
+    ));
     let results = Arc::new(Mutex::new(Vec::new()));
     let timeout = Duration::from_secs(plan.per_node_timeout_secs);
 
-    let test_nodes: Vec<FleetNode> =
-        plan.nodes.iter().filter(|n| n.role == NodeRole::TestNode).cloned().collect();
+    let test_nodes: Vec<FleetNode> = plan
+        .nodes
+        .iter()
+        .filter(|n| n.role == NodeRole::TestNode)
+        .cloned()
+        .collect();
 
     let handles: Vec<_> = test_nodes
         .into_iter()
@@ -197,12 +223,15 @@ where
                         std::thread::sleep(Duration::from_millis(10));
                         continue;
                     }
-                    if semaphore.compare_exchange(
-                        current,
-                        current - 1,
-                        std::sync::atomic::Ordering::SeqCst,
-                        std::sync::atomic::Ordering::SeqCst,
-                    ).is_ok() {
+                    if semaphore
+                        .compare_exchange(
+                            current,
+                            current - 1,
+                            std::sync::atomic::Ordering::SeqCst,
+                            std::sync::atomic::Ordering::SeqCst,
+                        )
+                        .is_ok()
+                    {
                         break;
                     }
                 }
@@ -216,15 +245,19 @@ where
                 });
 
                 let outcome = match rx.recv_timeout(timeout) {
-                    Ok(Ok((before, after))) => {
-                        NodeOutcome::Completed { radio_before_fingerprint: before, radio_after_fingerprint: after }
-                    }
+                    Ok(Ok((before, after))) => NodeOutcome::Completed {
+                        radio_before_fingerprint: before,
+                        radio_after_fingerprint: after,
+                    },
                     Ok(Err(e)) => NodeOutcome::ConnectionFailed { detail: e },
                     Err(_) => NodeOutcome::TimedOut,
                 };
 
                 semaphore.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                results.lock().unwrap().push(NodeRunResult { label: node.label, outcome });
+                results.lock().unwrap().push(NodeRunResult {
+                    label: node.label,
+                    outcome,
+                });
             })
         })
         .collect();
@@ -254,11 +287,19 @@ pub fn summarize_fleet_run(results: &[NodeRunResult]) -> FleetSummary {
         match &r.outcome {
             NodeOutcome::Completed { .. } => completed += 1,
             NodeOutcome::TimedOut => excluded.push((r.label.clone(), "timed out".to_string())),
-            NodeOutcome::ConnectionFailed { detail } => excluded.push((r.label.clone(), format!("connection failed: {detail}"))),
-            NodeOutcome::Quarantined { reason } => excluded.push((r.label.clone(), format!("quarantined: {reason}"))),
+            NodeOutcome::ConnectionFailed { detail } => {
+                excluded.push((r.label.clone(), format!("connection failed: {detail}")))
+            }
+            NodeOutcome::Quarantined { reason } => {
+                excluded.push((r.label.clone(), format!("quarantined: {reason}")))
+            }
         }
     }
-    FleetSummary { total_nodes: results.len(), completed, excluded_with_reason: excluded }
+    FleetSummary {
+        total_nodes: results.len(),
+        completed,
+        excluded_with_reason: excluded,
+    }
 }
 
 /// Deterministic, hashable run descriptor -- not a signature (GAP-029/065
@@ -305,7 +346,10 @@ mod tests {
     #[test]
     fn plan_refuses_a_bastion_marked_as_the_only_role_with_no_test_nodes() {
         let plan = FleetPlan {
-            nodes: vec![FleetNode { label: "node-aaaaaaaa".to_string(), role: NodeRole::ManagementBastion }],
+            nodes: vec![FleetNode {
+                label: "node-aaaaaaaa".to_string(),
+                role: NodeRole::ManagementBastion,
+            }],
             max_concurrency: 4,
             per_node_timeout_secs: 50,
         };
@@ -316,8 +360,14 @@ mod tests {
     fn plan_with_test_nodes_and_valid_bounds_is_accepted() {
         let plan = FleetPlan {
             nodes: vec![
-                FleetNode { label: "node-aaaaaaaa".to_string(), role: NodeRole::ManagementBastion },
-                FleetNode { label: "node-bbbbbbbb".to_string(), role: NodeRole::TestNode },
+                FleetNode {
+                    label: "node-aaaaaaaa".to_string(),
+                    role: NodeRole::ManagementBastion,
+                },
+                FleetNode {
+                    label: "node-bbbbbbbb".to_string(),
+                    role: NodeRole::TestNode,
+                },
             ],
             max_concurrency: 4,
             per_node_timeout_secs: 50,
@@ -328,7 +378,10 @@ mod tests {
     #[test]
     fn zero_concurrency_rejected() {
         let plan = FleetPlan {
-            nodes: vec![FleetNode { label: "node-bbbbbbbb".to_string(), role: NodeRole::TestNode }],
+            nodes: vec![FleetNode {
+                label: "node-bbbbbbbb".to_string(),
+                role: NodeRole::TestNode,
+            }],
             max_concurrency: 0,
             per_node_timeout_secs: 50,
         };
@@ -338,7 +391,10 @@ mod tests {
     #[test]
     fn zero_timeout_rejected() {
         let plan = FleetPlan {
-            nodes: vec![FleetNode { label: "node-bbbbbbbb".to_string(), role: NodeRole::TestNode }],
+            nodes: vec![FleetNode {
+                label: "node-bbbbbbbb".to_string(),
+                role: NodeRole::TestNode,
+            }],
             max_concurrency: 4,
             per_node_timeout_secs: 0,
         };
@@ -349,14 +405,28 @@ mod tests {
     fn fanout_only_runs_test_nodes_never_the_bastion() {
         let plan = FleetPlan {
             nodes: vec![
-                FleetNode { label: "node-bastion0".to_string(), role: NodeRole::ManagementBastion },
-                FleetNode { label: "node-test0001".to_string(), role: NodeRole::TestNode },
-                FleetNode { label: "node-test0002".to_string(), role: NodeRole::TestNode },
+                FleetNode {
+                    label: "node-bastion0".to_string(),
+                    role: NodeRole::ManagementBastion,
+                },
+                FleetNode {
+                    label: "node-test0001".to_string(),
+                    role: NodeRole::TestNode,
+                },
+                FleetNode {
+                    label: "node-test0002".to_string(),
+                    role: NodeRole::TestNode,
+                },
             ],
             max_concurrency: 2,
             per_node_timeout_secs: 2,
         };
-        let results = run_fleet_fanout(&plan, |label| Ok((Some(format!("before-{label}")), Some(format!("after-{label}")))));
+        let results = run_fleet_fanout(&plan, |label| {
+            Ok((
+                Some(format!("before-{label}")),
+                Some(format!("after-{label}")),
+            ))
+        });
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.label != "node-bastion0"));
     }
@@ -364,7 +434,10 @@ mod tests {
     #[test]
     fn timeout_is_reported_distinctly_and_excluded_not_zeroed() {
         let plan = FleetPlan {
-            nodes: vec![FleetNode { label: "node-slow0001".to_string(), role: NodeRole::TestNode }],
+            nodes: vec![FleetNode {
+                label: "node-slow0001".to_string(),
+                role: NodeRole::TestNode,
+            }],
             max_concurrency: 1,
             per_node_timeout_secs: 1,
         };
@@ -384,9 +457,23 @@ mod tests {
     #[test]
     fn summary_never_averages_over_a_node_that_never_completed() {
         let results = vec![
-            NodeRunResult { label: "node-ok000001".to_string(), outcome: NodeOutcome::Completed { radio_before_fingerprint: None, radio_after_fingerprint: None } },
-            NodeRunResult { label: "node-bad000001".to_string(), outcome: NodeOutcome::TimedOut },
-            NodeRunResult { label: "node-bad000002".to_string(), outcome: NodeOutcome::Quarantined { reason: "changed host key".to_string() } },
+            NodeRunResult {
+                label: "node-ok000001".to_string(),
+                outcome: NodeOutcome::Completed {
+                    radio_before_fingerprint: None,
+                    radio_after_fingerprint: None,
+                },
+            },
+            NodeRunResult {
+                label: "node-bad000001".to_string(),
+                outcome: NodeOutcome::TimedOut,
+            },
+            NodeRunResult {
+                label: "node-bad000002".to_string(),
+                outcome: NodeOutcome::Quarantined {
+                    reason: "changed host key".to_string(),
+                },
+            },
         ];
         let summary = summarize_fleet_run(&results);
         assert_eq!(summary.total_nodes, 3);
@@ -397,7 +484,10 @@ mod tests {
     #[test]
     fn run_descriptor_is_deterministic() {
         let plan = FleetPlan {
-            nodes: vec![FleetNode { label: "node-aaaaaaaa".to_string(), role: NodeRole::TestNode }],
+            nodes: vec![FleetNode {
+                label: "node-aaaaaaaa".to_string(),
+                role: NodeRole::TestNode,
+            }],
             max_concurrency: 4,
             per_node_timeout_secs: 50,
         };
@@ -411,7 +501,10 @@ mod tests {
         let max_seen = Arc::new(AtomicUsize::new(0));
         let plan = FleetPlan {
             nodes: (0..8)
-                .map(|i| FleetNode { label: format!("node-{i:08x}"), role: NodeRole::TestNode })
+                .map(|i| FleetNode {
+                    label: format!("node-{i:08x}"),
+                    role: NodeRole::TestNode,
+                })
                 .collect(),
             max_concurrency: 3,
             per_node_timeout_secs: 5,

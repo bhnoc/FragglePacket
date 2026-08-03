@@ -2,7 +2,9 @@
 
 use colored::*;
 
-use fraggle_packet::network_tests::wired_edge::{compute_delta, judge_wired_edge, WiredEdgeBracket, WiredEdgeVerdict};
+use fraggle_packet::network_tests::wired_edge::{
+    compute_delta, judge_wired_edge, WiredEdgeBracket, WiredEdgeVerdict,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct WiredEdgeArgs {
@@ -21,7 +23,12 @@ pub fn run(args: &WiredEdgeArgs) {
     let text = match std::fs::read_to_string(&args.bracket) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("{} could not read bracket file {}: {}", "✗".red(), args.bracket, e);
+            eprintln!(
+                "{} could not read bracket file {}: {}",
+                "✗".red(),
+                args.bracket,
+                e
+            );
             std::process::exit(1);
         }
     };

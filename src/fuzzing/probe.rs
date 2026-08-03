@@ -15,12 +15,11 @@
 use crate::fuzzing::capture::{start_capture, CaptureError, FilterFn};
 use crate::fuzzing::dsl::{Ether, Icmp, Ip, Packet, Raw};
 use crate::fuzzing::replay::{replay_pcap, ReplayError, ReplayOptions};
-use std::net::Ipv4Addr;
-use std::path::Path;
-use std::time::{Duration, Instant};
-use std::fs::File;
 use pcap_file::pcap::{PcapHeader, PcapPacket, PcapWriter};
 use pcap_file::DataLink;
+use std::fs::File;
+use std::net::Ipv4Addr;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct ProbeResponse {
@@ -145,10 +144,7 @@ pub fn active_pmtu_probe(
 }
 
 fn write_tmp_pcap(frames: &[Vec<u8>]) -> Result<std::path::PathBuf, ProbeError> {
-    let path = std::env::temp_dir().join(format!(
-        "fraggle_probe_{}.pcap",
-        std::process::id()
-    ));
+    let path = std::env::temp_dir().join(format!("fraggle_probe_{}.pcap", std::process::id()));
     let file = File::create(&path)?;
     let header = PcapHeader {
         datalink: DataLink::ETHERNET,

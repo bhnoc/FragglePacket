@@ -122,11 +122,18 @@ pub fn evaluate_capability_without_marking(counts: &EcnCounts) -> CapabilityWith
             counts.total()
         )
     } else if ecn_capable {
-        format!("ECN capability observed with {} CE mark(s) present -- congestion marking did occur", counts.ce)
+        format!(
+            "ECN capability observed with {} CE mark(s) present -- congestion marking did occur",
+            counts.ce
+        )
     } else {
         "no ECN capability observed (no ECT-marked packets); ECN negotiation state on this path is unknown from packet marks alone".to_string()
     };
-    CapabilityWithoutMarkingFinding { ecn_capable, ce_marks_observed: counts.ce, statement }
+    CapabilityWithoutMarkingFinding {
+        ecn_capable,
+        ce_marks_observed: counts.ce,
+        statement,
+    }
 }
 
 /// Whether this process could actually set the ECN codepoint bits on an
@@ -175,9 +182,18 @@ pub fn correlate_ce_with_queue_delay(samples: &[QueueDelayCeSample]) -> Vec<Queu
     samples
         .iter()
         .map(|s| {
-            let ce_rate_pct = if s.total_packets == 0 { 0.0 } else { (s.ce_marks as f64 / s.total_packets as f64) * 100.0 };
+            let ce_rate_pct = if s.total_packets == 0 {
+                0.0
+            } else {
+                (s.ce_marks as f64 / s.total_packets as f64) * 100.0
+            };
             let correlated = s.ce_marks > 0 && s.mean_queue_delay_ms.is_some();
-            QueueDelayCorrelation { direction: s.direction, ce_rate_pct, mean_queue_delay_ms: s.mean_queue_delay_ms, correlated }
+            QueueDelayCorrelation {
+                direction: s.direction,
+                ce_rate_pct,
+                mean_queue_delay_ms: s.mean_queue_delay_ms,
+                correlated,
+            }
         })
         .collect()
 }
@@ -278,14 +294,35 @@ mod tests {
     #[test]
     fn correlation_requires_both_a_nonzero_ce_rate_and_a_delay_measurement() {
         let samples = vec![
-            QueueDelayCeSample { direction: Direction::Download, ce_marks: 5, total_packets: 100, mean_queue_delay_ms: Some(40.0) },
-            QueueDelayCeSample { direction: Direction::Upload, ce_marks: 0, total_packets: 100, mean_queue_delay_ms: Some(5.0) },
-            QueueDelayCeSample { direction: Direction::Download, ce_marks: 3, total_packets: 50, mean_queue_delay_ms: None },
+            QueueDelayCeSample {
+                direction: Direction::Download,
+                ce_marks: 5,
+                total_packets: 100,
+                mean_queue_delay_ms: Some(40.0),
+            },
+            QueueDelayCeSample {
+                direction: Direction::Upload,
+                ce_marks: 0,
+                total_packets: 100,
+                mean_queue_delay_ms: Some(5.0),
+            },
+            QueueDelayCeSample {
+                direction: Direction::Download,
+                ce_marks: 3,
+                total_packets: 50,
+                mean_queue_delay_ms: None,
+            },
         ];
         let correlations = correlate_ce_with_queue_delay(&samples);
         assert!(correlations[0].correlated);
-        assert!(!correlations[1].correlated, "zero CE marks must not be reported as correlated");
-        assert!(!correlations[2].correlated, "missing delay measurement must not be reported as correlated");
+        assert!(
+            !correlations[1].correlated,
+            "zero CE marks must not be reported as correlated"
+        );
+        assert!(
+            !correlations[2].correlated,
+            "missing delay measurement must not be reported as correlated"
+        );
     }
 
     #[test]
@@ -296,11 +333,26 @@ mod tests {
 
     #[test]
     fn tos_byte_masking_matches_libc_ecn_constants() {
-        assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_NOTECT), EcnCodepoint::NotEct);
-        assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT1), EcnCodepoint::Ect1);
-        assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT0), EcnCodepoint::Ect0);
-        assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_CE), EcnCodepoint::Ce);
+        assert_eq!(
+            EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_NOTECT),
+            EcnCodepoint::NotEct
+        );
+        assert_eq!(
+            EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT1),
+            EcnCodepoint::Ect1
+        );
+        assert_eq!(
+            EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT0),
+            EcnCodepoint::Ect0
+        );
+        assert_eq!(
+            EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_CE),
+            EcnCodepoint::Ce
+        );
         // High DSCP bits must not affect the ECN read.
-        assert_eq!(EcnCodepoint::from_tos_byte(0xB8 | libc::IPTOS_ECN_CE), EcnCodepoint::Ce);
+        assert_eq!(
+            EcnCodepoint::from_tos_byte(0xB8 | libc::IPTOS_ECN_CE),
+            EcnCodepoint::Ce
+        );
     }
 }

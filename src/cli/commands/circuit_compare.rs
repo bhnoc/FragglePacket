@@ -27,7 +27,12 @@ pub fn run(args: &CircuitCompareArgs) {
     let text = match std::fs::read_to_string(&args.manifest) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("{} could not read manifest {}: {}", "✗".red(), args.manifest, e);
+            eprintln!(
+                "{} could not read manifest {}: {}",
+                "✗".red(),
+                args.manifest,
+                e
+            );
             std::process::exit(1);
         }
     };
@@ -35,7 +40,11 @@ pub fn run(args: &CircuitCompareArgs) {
     let manifest: CircuitManifest = match serde_json::from_str(&text) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("{} manifest is not valid circuit-comparison JSON: {}", "✗".red(), e);
+            eprintln!(
+                "{} manifest is not valid circuit-comparison JSON: {}",
+                "✗".red(),
+                e
+            );
             std::process::exit(1);
         }
     };

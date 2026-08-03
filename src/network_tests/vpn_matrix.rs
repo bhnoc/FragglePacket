@@ -84,7 +84,9 @@ pub enum ReachabilityOutcome {
     /// without raw sockets, and it is real negative evidence.
     Refused,
     TimedOut,
-    LocalError { detail: String },
+    LocalError {
+        detail: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,7 +108,12 @@ pub fn probe_protocol_reachability(
         Transport::Tcp => probe_tcp_reachability(target, port, timeout),
         Transport::Udp => probe_udp_reachability(target, port, timeout),
     };
-    ProtocolProbeResult { protocol, port, outcome, elapsed_ms: start.elapsed().as_millis() as u64 }
+    ProtocolProbeResult {
+        protocol,
+        port,
+        outcome,
+        elapsed_ms: start.elapsed().as_millis() as u64,
+    }
 }
 
 fn probe_tcp_reachability(target: IpAddr, port: u16, timeout: Duration) -> ReachabilityOutcome {
@@ -116,19 +123,31 @@ fn probe_tcp_reachability(target: IpAddr, port: u16, timeout: Duration) -> Reach
         Ok(_) => ReachabilityOutcome::ReachableOrNoResponse,
         Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => ReachabilityOutcome::Refused,
         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => ReachabilityOutcome::TimedOut,
-        Err(e) => ReachabilityOutcome::LocalError { detail: e.to_string() },
+        Err(e) => ReachabilityOutcome::LocalError {
+            detail: e.to_string(),
+        },
     }
 }
 
 fn probe_udp_reachability(target: IpAddr, port: u16, timeout: Duration) -> ReachabilityOutcome {
     use std::net::SocketAddr;
-    let bind = if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
+    let bind = if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    };
     let socket = match UdpSocket::bind(bind) {
         Ok(s) => s,
-        Err(e) => return ReachabilityOutcome::LocalError { detail: e.to_string() },
+        Err(e) => {
+            return ReachabilityOutcome::LocalError {
+                detail: e.to_string(),
+            }
+        }
     };
     if socket.set_read_timeout(Some(timeout)).is_err() {
-        return ReachabilityOutcome::LocalError { detail: "failed to set read timeout".to_string() };
+        return ReachabilityOutcome::LocalError {
+            detail: "failed to set read timeout".to_string(),
+        };
     }
     // A single zero-length-adjacent probe byte -- not a protocol handshake
     // of any kind, and never anything derived from a credential.
@@ -137,19 +156,26 @@ fn probe_udp_reachability(target: IpAddr, port: u16, timeout: Duration) -> Reach
         if e.kind() == std::io::ErrorKind::ConnectionRefused {
             return ReachabilityOutcome::Refused;
         }
-        return ReachabilityOutcome::LocalError { detail: e.to_string() };
+        return ReachabilityOutcome::LocalError {
+            detail: e.to_string(),
+        };
     }
     let mut buf = [0u8; 512];
     match socket.recv_from(&mut buf) {
         Ok(_) => ReachabilityOutcome::ReachableOrNoResponse,
-        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+        Err(e)
+            if e.kind() == std::io::ErrorKind::WouldBlock
+                || e.kind() == std::io::ErrorKind::TimedOut =>
+        {
             // UDP has no handshake, so silence is the expected common case,
             // not a failure -- distinct from Refused, which requires an
             // actual ICMP error to have been observed.
             ReachabilityOutcome::ReachableOrNoResponse
         }
         Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => ReachabilityOutcome::Refused,
-        Err(e) => ReachabilityOutcome::LocalError { detail: e.to_string() },
+        Err(e) => ReachabilityOutcome::LocalError {
+            detail: e.to_string(),
+        },
     }
 }
 
@@ -187,14 +213,20 @@ pub fn measure_effective_mss_via_tcp(
     let stream = if let Some(ip) = bind_ip {
         let local = SocketAddr::new(ip, 0);
         let socket2 = socket2::Socket::new(
-            if ip.is_ipv4() { socket2::Domain::IPV4 } else { socket2::Domain::IPV6 },
+            if ip.is_ipv4() {
+                socket2::Domain::IPV4
+            } else {
+                socket2::Domain::IPV6
+            },
             socket2::Type::STREAM,
             None,
         )
         .map_err(|e| e.to_string())?;
         socket2.bind(&local.into()).map_err(|e| e.to_string())?;
         socket2.set_nonblocking(false).map_err(|e| e.to_string())?;
-        socket2.connect_timeout(&remote.into(), timeout).map_err(|e| e.to_string())?;
+        socket2
+            .connect_timeout(&remote.into(), timeout)
+            .map_err(|e| e.to_string())?;
         TcpStream::from(socket2)
     } else {
         TcpStream::connect_timeout(&remote, timeout).map_err(|e| e.to_string())?
@@ -214,7 +246,10 @@ pub fn measure_effective_mss_via_tcp(
     if rc == 0 && mss > 0 {
         Ok(mss as usize)
     } else {
-        Err(format!("getsockopt(TCP_MAXSEG) failed: {}", std::io::Error::last_os_error()))
+        Err(format!(
+            "getsockopt(TCP_MAXSEG) failed: {}",
+            std::io::Error::last_os_error()
+        ))
     }
 }
 
@@ -222,7 +257,10 @@ pub fn measure_effective_mss_via_tcp(
 /// a fact about the interface, not a measurement of what actually survives
 /// the path -- kept as a separate field from `measured_effective_mtu`.
 pub fn interface_mtu_hint(interface: &str) -> Option<usize> {
-    let out = std::process::Command::new("ifconfig").arg(interface).output().ok()?;
+    let out = std::process::Command::new("ifconfig")
+        .arg(interface)
+        .output()
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -297,7 +335,10 @@ mod tests {
             51820,
             Duration::from_millis(200),
         );
-        assert!(!matches!(result.outcome, ReachabilityOutcome::LocalError { .. }));
+        assert!(!matches!(
+            result.outcome,
+            ReachabilityOutcome::LocalError { .. }
+        ));
     }
 
     #[test]
@@ -315,7 +356,9 @@ mod tests {
         // fields a caller can compare, not one computed from the other.
         assert_ne!(
             result.measured_effective_mtu,
-            result.interface_mtu_reported.map(|m| m - result.overhead_hint_bytes.unwrap())
+            result
+                .interface_mtu_reported
+                .map(|m| m - result.overhead_hint_bytes.unwrap())
         );
     }
 
@@ -342,7 +385,10 @@ mod tests {
 
     #[test]
     fn rekey_result_never_coerces_unobserved_idle_survival_to_a_value() {
-        let r = RekeySurvivalResult { sessions_observed: 1, idle_survival_secs: None };
+        let r = RekeySurvivalResult {
+            sessions_observed: 1,
+            idle_survival_secs: None,
+        };
         assert_eq!(r.idle_survival_secs, None);
     }
 }

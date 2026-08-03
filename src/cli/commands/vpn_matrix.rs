@@ -5,7 +5,8 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use fraggle_packet::network_tests::vpn_matrix::{
-    interface_mtu_hint, measure_effective_mss_via_tcp, probe_protocol_reachability, EffectiveMtuResult, VpnProtocol,
+    interface_mtu_hint, measure_effective_mss_via_tcp, probe_protocol_reachability,
+    EffectiveMtuResult, VpnProtocol,
 };
 
 #[derive(clap::Args, Debug)]
@@ -52,11 +53,19 @@ pub fn run(args: &VpnMatrixArgs) {
         .collect();
 
     let interface_mtu = args.interface.as_deref().and_then(interface_mtu_hint);
-    let bind_ip = if args.show_local_ip { local_bind_ip(args.interface.as_deref()) } else { None };
-    let effective_mss = measure_effective_mss_via_tcp(args.target, args.mss_probe_port, bind_ip, timeout);
+    let bind_ip = if args.show_local_ip {
+        local_bind_ip(args.interface.as_deref())
+    } else {
+        None
+    };
+    let effective_mss =
+        measure_effective_mss_via_tcp(args.target, args.mss_probe_port, bind_ip, timeout);
 
     let effective_mtu = EffectiveMtuResult {
-        interface: args.interface.clone().unwrap_or_else(|| "unspecified".to_string()),
+        interface: args
+            .interface
+            .clone()
+            .unwrap_or_else(|| "unspecified".to_string()),
         interface_mtu_reported: interface_mtu,
         measured_effective_mtu: effective_mss.as_ref().ok().map(|mss| mss + 40),
         overhead_hint_bytes: None,
@@ -74,8 +83,14 @@ pub fn run(args: &VpnMatrixArgs) {
         return;
     }
 
-    println!("{}", "== VPN/Encapsulation Compatibility Matrix ==".cyan().bold());
-    println!("  {}", "(never requests, reads, or logs a VPN credential)".dimmed());
+    println!(
+        "{}",
+        "== VPN/Encapsulation Compatibility Matrix ==".cyan().bold()
+    );
+    println!(
+        "  {}",
+        "(never requests, reads, or logs a VPN credential)".dimmed()
+    );
     for probe in &probes {
         println!(
             "  {} port {}: {:?} ({}ms)",
@@ -89,17 +104,28 @@ pub fn run(args: &VpnMatrixArgs) {
     println!("  interface: {}", effective_mtu.interface);
     println!(
         "  interface-reported MTU: {}",
-        interface_mtu.map(|m| m.to_string()).unwrap_or_else(|| "unavailable".to_string())
+        interface_mtu
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     match &effective_mss {
-        Ok(mss) => println!("  measured effective TCP MSS (real handshake): {} bytes", mss),
-        Err(e) => println!("  {}", format!("measured effective TCP MSS: unavailable ({})", e).yellow()),
+        Ok(mss) => println!(
+            "  measured effective TCP MSS (real handshake): {} bytes",
+            mss
+        ),
+        Err(e) => println!(
+            "  {}",
+            format!("measured effective TCP MSS: unavailable ({})", e).yellow()
+        ),
     }
 }
 
 fn local_bind_ip(interface: Option<&str>) -> Option<IpAddr> {
     let iface = interface?;
-    let out = std::process::Command::new("ifconfig").arg(iface).output().ok()?;
+    let out = std::process::Command::new("ifconfig")
+        .arg(iface)
+        .output()
+        .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     for line in text.lines() {
         let line = line.trim();

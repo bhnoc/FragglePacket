@@ -1,14 +1,15 @@
+#![allow(dead_code, unused_variables)]
 //! Application state management for FragglePacket Desktop
 
 pub mod test_runner;
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use dioxus::prelude::*;
-use tokio::sync::mpsc;
-use fraggle_packet::framework::{TestCategory, TestResult, TestOrchestrator, TestStatus};
 use chrono::{DateTime, Local};
+use dioxus::prelude::*;
+use fraggle_packet::framework::{TestCategory, TestOrchestrator, TestResult, TestStatus};
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 use crate::test_registration::register_all_tests;
 use test_runner::{TestRunner, TestUpdate};
@@ -165,7 +166,6 @@ pub fn get_preset_targets() -> Vec<Target> {
         Target::new("208.67.222.222", "OpenDNS", 443)
             .with_category(TargetCategory::Dns)
             .with_tests(all_tests.clone()),
-
         // Cloud Providers
         Target::new("aws.amazon.com", "AWS", 443)
             .with_category(TargetCategory::CloudProviders)
@@ -185,7 +185,6 @@ pub fn get_preset_targets() -> Vec<Target> {
         Target::new("console.cloud.google.com", "GCP Console", 443)
             .with_category(TargetCategory::CloudProviders)
             .with_tests(all_tests.clone()),
-
         // Microsoft 365
         Target::new("outlook.office365.com", "M365 Outlook", 443)
             .with_category(TargetCategory::Microsoft365)
@@ -202,7 +201,6 @@ pub fn get_preset_targets() -> Vec<Target> {
         Target::new("onedrive.live.com", "OneDrive", 443)
             .with_category(TargetCategory::Microsoft365)
             .with_tests(all_tests.clone()),
-
         // Collaboration
         Target::new("slack.com", "Slack", 443)
             .with_category(TargetCategory::Collaboration)
@@ -219,7 +217,6 @@ pub fn get_preset_targets() -> Vec<Target> {
         Target::new("discord.com", "Discord", 443)
             .with_category(TargetCategory::Collaboration)
             .with_tests(all_tests.clone()),
-
         // Dev Tools
         Target::new("github.com", "GitHub", 443)
             .with_category(TargetCategory::DevTools)
@@ -239,7 +236,6 @@ pub fn get_preset_targets() -> Vec<Target> {
         Target::new("crates.io", "crates.io", 443)
             .with_category(TargetCategory::DevTools)
             .with_tests(all_tests.clone()),
-
         // CDN / Edge
         Target::new("cloudflare.com", "Cloudflare", 443)
             .with_category(TargetCategory::Cdn)
@@ -411,11 +407,7 @@ pub struct AppState {
 /// Features that require root or admin on Unix. Used to build the startup
 /// banner and button pre-checks. Wire-sending tests and capture-dependent
 /// probes live here.
-pub const ROOT_REQUIRED_FEATURES: &[&str] = &[
-    "PCAP Replay",
-    "Active PMTU Probe",
-    "Packet Capture",
-];
+pub const ROOT_REQUIRED_FEATURES: &[&str] = &["PCAP Replay", "Active PMTU Probe", "Packet Capture"];
 
 /// Detect whether the current process can open raw sockets without failing
 /// on EPERM. On Unix this checks euid. On Windows we assume true because
@@ -557,18 +549,17 @@ impl AppState {
 
     /// Get all results for a target
     pub fn get_target_results(&self, target: &str) -> Vec<TestResult> {
-        self.results.read()
-            .get(target)
-            .cloned()
-            .unwrap_or_default()
+        self.results.read().get(target).cloned().unwrap_or_default()
     }
 
     /// Get results filtered by category
     pub fn get_category_results(&self, target: &str, category: TestCategory) -> Vec<TestResult> {
-        self.results.read()
+        self.results
+            .read()
             .get(target)
             .map(|results| {
-                results.iter()
+                results
+                    .iter()
                     .filter(|r| r.category == category)
                     .cloned()
                     .collect()
@@ -583,7 +574,8 @@ impl AppState {
 
     /// Count successful tests
     pub fn success_count(&self) -> usize {
-        self.results.read()
+        self.results
+            .read()
             .values()
             .flat_map(|v| v.iter())
             .filter(|r| r.status == TestStatus::Success)
@@ -592,10 +584,7 @@ impl AppState {
 
     /// Count total tests run
     pub fn total_tests(&self) -> usize {
-        self.results.read()
-            .values()
-            .map(|v| v.len())
-            .sum()
+        self.results.read().values().map(|v| v.len()).sum()
     }
 
     /// Add a log entry
@@ -622,10 +611,7 @@ impl AppState {
 
     /// Save current results to history
     pub fn save_to_history(&mut self, target: &str, categories: HashSet<TestCategory>) {
-        let results = self.results.read()
-            .get(target)
-            .cloned()
-            .unwrap_or_default();
+        let results = self.results.read().get(target).cloned().unwrap_or_default();
 
         if results.is_empty() {
             return;
@@ -657,14 +643,20 @@ impl AppState {
     }
 
     /// Get results filtered by multiple categories
-    pub fn get_categories_results(&self, target: &str, categories: &HashSet<TestCategory>) -> Vec<TestResult> {
-        self.results.read()
+    pub fn get_categories_results(
+        &self,
+        target: &str,
+        categories: &HashSet<TestCategory>,
+    ) -> Vec<TestResult> {
+        self.results
+            .read()
             .get(target)
             .map(|results| {
                 if categories.is_empty() {
                     results.clone()
                 } else {
-                    results.iter()
+                    results
+                        .iter()
                         .filter(|r| categories.contains(&r.category))
                         .cloned()
                         .collect()

@@ -11,13 +11,30 @@ pub struct MultiArgs {
 }
 
 pub fn run(args: &MultiArgs, global: &GlobalArgs) {
-    run_multi_target(&args.targets, global.timeout_ms, global.min, global.max, global.retries);
+    run_multi_target(
+        &args.targets,
+        global.timeout_ms,
+        global.min,
+        global.max,
+        global.retries,
+    );
 }
 
-fn run_multi_target(targets: &str, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
+fn run_multi_target(
+    targets: &str,
+    timeout_ms: u64,
+    min_mtu: usize,
+    max_mtu: usize,
+    retries: usize,
+) {
     let target_list: Vec<&str> = targets.split(',').map(|s| s.trim()).collect();
 
-    println!("{}", format!("Comparing MTU across {} targets", target_list.len()).cyan().bold());
+    println!(
+        "{}",
+        format!("Comparing MTU across {} targets", target_list.len())
+            .cyan()
+            .bold()
+    );
     println!();
 
     let mut results: Vec<(String, Option<usize>)> = Vec::new();
@@ -68,7 +85,11 @@ fn run_multi_target(targets: &str, timeout_ms: u64, min_mtu: usize, max_mtu: usi
 
     if min_observed < usize::MAX {
         println!();
-        println!("{}: {} bytes", "Lowest common MTU".cyan().bold(), min_observed);
+        println!(
+            "{}: {} bytes",
+            "Lowest common MTU".cyan().bold(),
+            min_observed
+        );
         println!("{}: {} bytes", "Safe TCP MSS".cyan(), min_observed - 40);
     }
 }

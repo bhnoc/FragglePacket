@@ -1,11 +1,12 @@
 //! RTT and Latency Testing
-//! 
+//!
 //! 100-packet ping statistics with jitter detection
 
-use crate::framework::{NetworkTest, TestCategory, TestResult, TestStatus, Diagnosis, DiagnosisSeverity};
+use crate::framework::{
+    Diagnosis, DiagnosisSeverity, NetworkTest, TestCategory, TestResult, TestStatus,
+};
 use std::error::Error;
 use std::process::Command;
-use std::time::Duration;
 
 /// RTT and latency measurements
 pub struct RttTest {
@@ -20,7 +21,7 @@ impl RttTest {
             timeout_secs: 10,
         }
     }
-    
+
     pub fn with_count(mut self, count: usize) -> Self {
         self.count = count;
         self
@@ -37,17 +38,14 @@ impl NetworkTest for RttTest {
     fn name(&self) -> &str {
         "RTT/Latency Test"
     }
-    
+
     fn category(&self) -> TestCategory {
         TestCategory::RTT
     }
-    
+
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
 
         // Add CLI equivalent commands for transparency
         result.add_metadata("cli_command", format!("ping -c {} {}", self.count, target));
@@ -61,13 +59,13 @@ impl NetworkTest for RttTest {
             .arg(self.timeout_secs.to_string())
             .arg(target)
             .output()?;
-        
+
         if !output.status.success() {
             result.set_status(TestStatus::Failed);
             result.add_metadata("error", "Ping command failed");
             return Ok(result);
         }
-        
+
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Parse ping output. Fields are Option<f64>: a missing/unrecognized
@@ -75,12 +73,28 @@ impl NetworkTest for RttTest {
         let stats = parse_ping_stats(&stdout);
 
         let mut latency_available = false;
-        if let Some(v) = stats.min { result.add_metric("min_ms", v); latency_available = true; }
-        if let Some(v) = stats.avg { result.add_metric("avg_ms", v); latency_available = true; }
-        if let Some(v) = stats.max { result.add_metric("max_ms", v); latency_available = true; }
-        if let Some(v) = stats.stddev { result.add_metric("stddev_ms", v); latency_available = true; }
-        if let Some(v) = stats.jitter { result.add_metric("jitter_ms", v); }
-        if let Some(v) = stats.loss_percent { result.add_metric("loss_percent", v); }
+        if let Some(v) = stats.min {
+            result.add_metric("min_ms", v);
+            latency_available = true;
+        }
+        if let Some(v) = stats.avg {
+            result.add_metric("avg_ms", v);
+            latency_available = true;
+        }
+        if let Some(v) = stats.max {
+            result.add_metric("max_ms", v);
+            latency_available = true;
+        }
+        if let Some(v) = stats.stddev {
+            result.add_metric("stddev_ms", v);
+            latency_available = true;
+        }
+        if let Some(v) = stats.jitter {
+            result.add_metric("jitter_ms", v);
+        }
+        if let Some(v) = stats.loss_percent {
+            result.add_metric("loss_percent", v);
+        }
 
         if !latency_available {
             result.add_metadata(
@@ -88,13 +102,21 @@ impl NetworkTest for RttTest {
                 "no round-trip/rtt summary line was found or recognized in ping output; \
                  min/avg/max/stddev/jitter are unavailable, not zero",
             );
-            result.add_diagnosis(Diagnosis::new(
-                DiagnosisSeverity::Warning,
-                "Latency Unavailable".to_string(),
-                "Ping produced no parseable round-trip summary (total loss or unrecognized \
-                 platform format). Latency is unknown, not zero.".to_string(),
-            ).with_recommendation("Check packet loss below; total loss commonly means no summary line exists")
-             .with_recommendation("If loss is low, this may be an unrecognized ping output format"));
+            result.add_diagnosis(
+                Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "Latency Unavailable".to_string(),
+                    "Ping produced no parseable round-trip summary (total loss or unrecognized \
+                 platform format). Latency is unknown, not zero."
+                        .to_string(),
+                )
+                .with_recommendation(
+                    "Check packet loss below; total loss commonly means no summary line exists",
+                )
+                .with_recommendation(
+                    "If loss is low, this may be an unrecognized ping output format",
+                ),
+            );
         }
 
         // Bufferbloat detection (RTT variance under load) -- only meaningful
@@ -115,27 +137,36 @@ impl NetworkTest for RttTest {
         let loss = stats.loss_percent;
         if loss.map(|l| l > 10.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
-            result.add_diagnosis(Diagnosis::new(
-                DiagnosisSeverity::Warning,
-                "High Packet Loss".to_string(),
-                format!("Packet loss: {:.1}%", loss.unwrap()),
-            ).with_recommendation("Investigate network congestion")
-             .with_recommendation("Check for routing issues"));
+            result.add_diagnosis(
+                Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "High Packet Loss".to_string(),
+                    format!("Packet loss: {:.1}%", loss.unwrap()),
+                )
+                .with_recommendation("Investigate network congestion")
+                .with_recommendation("Check for routing issues"),
+            );
         } else if stats.jitter.map(|j| j > 50.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
-            result.add_diagnosis(Diagnosis::new(
-                DiagnosisSeverity::Warning,
-                "High Jitter Detected".to_string(),
-                format!("Jitter: {:.1}ms (stddev/avg ratio)", stats.jitter.unwrap()),
-            ).with_recommendation("May affect real-time applications (VoIP, gaming)"));
+            result.add_diagnosis(
+                Diagnosis::new(
+                    DiagnosisSeverity::Warning,
+                    "High Jitter Detected".to_string(),
+                    format!("Jitter: {:.1}ms (stddev/avg ratio)", stats.jitter.unwrap()),
+                )
+                .with_recommendation("May affect real-time applications (VoIP, gaming)"),
+            );
         } else if stats.avg.map(|a| a > 200.0).unwrap_or(false) {
             result.set_status(TestStatus::Warning);
-            result.add_diagnosis(Diagnosis::new(
-                DiagnosisSeverity::Info,
-                "High Latency".to_string(),
-                format!("Average RTT: {:.1}ms", stats.avg.unwrap()),
-            ).with_recommendation("Check routing path")
-             .with_related_test("Path Analysis"));
+            result.add_diagnosis(
+                Diagnosis::new(
+                    DiagnosisSeverity::Info,
+                    "High Latency".to_string(),
+                    format!("Average RTT: {:.1}ms", stats.avg.unwrap()),
+                )
+                .with_recommendation("Check routing path")
+                .with_related_test("Path Analysis"),
+            );
         } else if !latency_available {
             // No round-trip summary and loss wasn't reported as high either
             // (e.g. loss line itself missing/unrecognized): can't call this
@@ -147,7 +178,7 @@ impl NetworkTest for RttTest {
 
         Ok(result)
     }
-    
+
     fn estimated_duration(&self) -> u64 {
         // ping rate ~1/sec, plus overhead
         (self.count as u64) / 10 + 2
@@ -177,7 +208,8 @@ pub fn parse_ping_stats(output: &str) -> PingStats {
     let mut stats = PingStats::default();
 
     for line in output.lines() {
-        let is_summary_line = line.contains("rtt min/avg/max") || line.contains("round-trip min/avg/max");
+        let is_summary_line =
+            line.contains("rtt min/avg/max") || line.contains("round-trip min/avg/max");
         if is_summary_line {
             if let Some(stats_part) = line.split('=').nth(1) {
                 let nums: Vec<f64> = stats_part
@@ -221,7 +253,7 @@ pub fn parse_ping_stats(output: &str) -> PingStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_rtt_struct() {
         let test = RttTest::new();
@@ -229,7 +261,7 @@ mod tests {
         assert_eq!(test.category(), TestCategory::RTT);
         assert_eq!(test.count, 100);
     }
-    
+
     #[test]
     fn test_parse_ping_output() {
         let output = r#"
@@ -299,4 +331,3 @@ rtt min/avg/max/mdev = 14.200/14.650/15.100/0.450 ms
         assert_eq!(stats.loss_percent, None);
     }
 }
-

@@ -15,9 +15,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fraggle_packet::load_guard::{CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource};
+use fraggle_packet::load_guard::{
+    CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource,
+};
 use fraggle_packet::network_tests::size_rate_matrix::{
-    classify_pressure, max_safe_payload, DirectionMode, IpFamily, PressureVerdict, SizePoint, SizeRateMatrix,
+    classify_pressure, max_safe_payload, DirectionMode, IpFamily, PressureVerdict, SizePoint,
+    SizeRateMatrix,
 };
 
 const IP_HEADER_LEN: usize = 20;
@@ -73,7 +76,10 @@ fn interface_mtu(interface: &str) -> Option<usize> {
     let out = Command::new("ifconfig").arg(interface).output().ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let tokens: Vec<&str> = text.split_whitespace().collect();
-    tokens.windows(2).find(|w| w[0] == "mtu").and_then(|w| w[1].parse().ok())
+    tokens
+        .windows(2)
+        .find(|w| w[0] == "mtu")
+        .and_then(|w| w[1].parse().ok())
 }
 
 fn run_udp_size_point(
@@ -91,15 +97,25 @@ fn run_udp_size_point(
     } else {
         LoadBudget::maintenance(1.0, (duration_secs.max(1) * 2).max(2), 1)
     };
-    let radio = RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
+    let radio =
+        RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
     let iface_for_counters = interface.to_string();
     let counters = CounterSource::new(move || {
-        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters).or_else(|_| Ok(InterfaceCounters::zero()))
+        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters)
+            .or_else(|_| Ok(InterfaceCounters::zero()))
     });
-    let guard = LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
+    let guard =
+        LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
 
-    let socket = UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).map_err(|e| e.to_string())?;
-    socket.set_read_timeout(Some(Duration::from_millis(200))).ok();
+    let socket = UdpSocket::bind(if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .map_err(|e| e.to_string())?;
+    socket
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .ok();
     let dest = SocketAddr::new(target, port);
     let observed_family = match socket.local_addr() {
         Ok(a) if a.is_ipv4() => Some(IpFamily::V4),
@@ -131,7 +147,10 @@ fn run_udp_size_point(
                 }
                 *current += 1;
             }
-            PhaseTick { bytes_sent_delta: bytes_sent, ..Default::default() }
+            PhaseTick {
+                bytes_sent_delta: bytes_sent,
+                ..Default::default()
+            }
         },
         cancel,
     );
@@ -181,7 +200,10 @@ fn build_sweep(
 
 pub fn run(args: &SizeRateMatrixArgs) {
     if args.live_event == args.maintenance {
-        eprintln!("{} pass exactly one of --live-event or --maintenance.", "✗".red());
+        eprintln!(
+            "{} pass exactly one of --live-event or --maintenance.",
+            "✗".red()
+        );
         std::process::exit(2);
     }
 
@@ -190,7 +212,9 @@ pub fn run(args: &SizeRateMatrixArgs) {
         println!(
             "Size/rate pressure matrix: interface={} mtu={} target={}:{} sizes={:?}",
             args.interface,
-            measured_mtu.map(|m| m.to_string()).unwrap_or_else(|| "unknown".to_string()),
+            measured_mtu
+                .map(|m| m.to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
             args.target,
             args.port,
             args.sizes
@@ -222,7 +246,11 @@ pub fn run(args: &SizeRateMatrixArgs) {
     );
 
     let matrix = SizeRateMatrix {
-        mode: if args.bidirectional { DirectionMode::Bidirectional } else { DirectionMode::Directional },
+        mode: if args.bidirectional {
+            DirectionMode::Bidirectional
+        } else {
+            DirectionMode::Directional
+        },
         constant_byte_rate,
         constant_packet_rate,
     };
@@ -243,7 +271,8 @@ pub fn run(args: &SizeRateMatrixArgs) {
 }
 
 fn fmt_opt(v: Option<f64>) -> String {
-    v.map(|x| format!("{:.2}", x)).unwrap_or_else(|| "unavailable".dimmed().to_string())
+    v.map(|x| format!("{:.2}", x))
+        .unwrap_or_else(|| "unavailable".dimmed().to_string())
 }
 
 fn print_sweep(label: &str, points: &[SizePoint]) {
@@ -263,15 +292,29 @@ fn print_sweep(label: &str, points: &[SizePoint]) {
 
 fn print_human(matrix: &SizeRateMatrix, verdict: &PressureVerdict) {
     println!();
-    print_sweep("constant byte rate (packet rate rises as size shrinks)", &matrix.constant_byte_rate);
-    print_sweep("constant packet rate (byte rate rises as size grows)", &matrix.constant_packet_rate);
+    print_sweep(
+        "constant byte rate (packet rate rises as size shrinks)",
+        &matrix.constant_byte_rate,
+    );
+    print_sweep(
+        "constant packet rate (byte rate rises as size grows)",
+        &matrix.constant_packet_rate,
+    );
     println!();
     match verdict {
         PressureVerdict::PacketRateCeiling { evidence } => {
-            println!("{} {}", "VERDICT: packet-rate ceiling".red().bold(), evidence);
+            println!(
+                "{} {}",
+                "VERDICT: packet-rate ceiling".red().bold(),
+                evidence
+            );
         }
         PressureVerdict::ByteRatePolicing { evidence } => {
-            println!("{} {}", "VERDICT: byte-rate policing".red().bold(), evidence);
+            println!(
+                "{} {}",
+                "VERDICT: byte-rate policing".red().bold(),
+                evidence
+            );
         }
         PressureVerdict::Inconclusive { reason } => {
             println!("{} {}", "VERDICT: inconclusive".yellow().bold(), reason);

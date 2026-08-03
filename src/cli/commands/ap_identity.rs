@@ -1,7 +1,9 @@
 //! GAP-024: stable, privacy-safe AP/radio identity (`ap-identity`).
 
 use colored::*;
-use fraggle_packet::load_guard::ap_identity::{compare, label_for_bssid, load_or_create_salt, ApIdentity};
+use fraggle_packet::load_guard::ap_identity::{
+    compare, label_for_bssid, load_or_create_salt, ApIdentity,
+};
 use fraggle_packet::load_guard::wdutil::{self, WdutilError};
 
 #[derive(clap::Args, Debug)]
@@ -28,32 +30,60 @@ pub struct ApIdentityArgs {
     pub json: bool,
 }
 
-fn sample_once(fixture_bssid: Option<&str>, fixture_band: Option<&str>, fixture_channel: Option<u32>) -> (Option<ApIdentity>, Option<String>) {
+fn sample_once(
+    fixture_bssid: Option<&str>,
+    fixture_band: Option<&str>,
+    fixture_channel: Option<u32>,
+) -> (Option<ApIdentity>, Option<String>) {
     let salt = match load_or_create_salt() {
         Ok(s) => s,
-        Err(e) => return (None, Some(format!("could not load/create AP-identity salt: {e}"))),
+        Err(e) => {
+            return (
+                None,
+                Some(format!("could not load/create AP-identity salt: {e}")),
+            )
+        }
     };
 
     let (bssid, band, channel) = if let Some(b) = fixture_bssid {
-        (Some(b.to_string()), fixture_band.map(|s| s.to_string()), fixture_channel)
+        (
+            Some(b.to_string()),
+            fixture_band.map(|s| s.to_string()),
+            fixture_channel,
+        )
     } else {
         match wdutil::snapshot_live() {
             Ok(fields) => (fields.bssid, fields.band, fields.channel),
             Err(WdutilError::PrivilegeRequired { command }) => {
-                return (None, Some(format!("AP identity requires elevated wdutil access; re-run as: {command}")));
+                return (
+                    None,
+                    Some(format!(
+                        "AP identity requires elevated wdutil access; re-run as: {command}"
+                    )),
+                );
             }
             Err(e) => return (None, Some(e.to_string())),
         }
     };
 
     let Some(bssid) = bssid else {
-        return (None, Some("wdutil info did not report a BSSID for the current association".to_string()));
+        return (
+            None,
+            Some("wdutil info did not report a BSSID for the current association".to_string()),
+        );
     };
     // label_for_bssid is called and `bssid` (the local variable) is dropped
     // at the end of this function's scope -- it is never passed to println!,
     // serde_json, or any logging call anywhere in this file.
     let label = label_for_bssid(&bssid, &salt);
-    (Some(ApIdentity { label, band, channel }), None)
+    (
+        Some(ApIdentity {
+            label,
+            band,
+            channel,
+        }),
+        None,
+    )
 }
 
 pub fn run(args: &ApIdentityArgs) {
@@ -67,13 +97,18 @@ pub fn run(args: &ApIdentityArgs) {
         // Give the operator a window to physically move/roam between the
         // two samples in a real (non-fixture) run.
         if !args.inject_fixture {
-            eprintln!("{} sampling again in 2 seconds -- move now to test roam detection", "i".cyan());
+            eprintln!(
+                "{} sampling again in 2 seconds -- move now to test roam detection",
+                "i".cyan()
+            );
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
 
         let (after, after_err) = if args.inject_fixture {
             match args.inject_second_sample.as_str() {
-                "same-radio-change" => sample_once(Some("02:00:00:00:00:01"), Some("2GHz"), Some(6)),
+                "same-radio-change" => {
+                    sample_once(Some("02:00:00:00:00:01"), Some("2GHz"), Some(6))
+                }
                 "different-ap" => sample_once(Some("02:00:00:00:00:02"), Some("6GHz"), Some(37)),
                 _ => sample_once(Some("02:00:00:00:00:01"), Some("6GHz"), Some(37)),
             }
@@ -114,7 +149,11 @@ pub fn run(args: &ApIdentityArgs) {
     };
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"identity": identity, "error": err})).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({"identity": identity, "error": err}))
+                .unwrap()
+        );
         return;
     }
     println!();
@@ -129,7 +168,9 @@ fn print_identity(label: &str, identity: &Option<ApIdentity>, err: &Option<Strin
             "  {label}: label={} band={} channel={}",
             id.label,
             id.band.as_deref().unwrap_or("unavailable"),
-            id.channel.map(|c| c.to_string()).unwrap_or_else(|| "unavailable".to_string())
+            id.channel
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unavailable".to_string())
         ),
         None => println!(
             "  {label}: {} {}",
@@ -138,4 +179,3 @@ fn print_identity(label: &str, identity: &Option<ApIdentity>, err: &Option<Strin
         ),
     }
 }
-

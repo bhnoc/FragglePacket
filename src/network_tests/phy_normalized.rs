@@ -128,9 +128,14 @@ pub struct CohortStratum {
 /// original fixed-100 comparison hid the capacity confound.
 pub fn stratify(measurements: &[NormalizedMeasurement]) -> Vec<CohortStratum> {
     use std::collections::BTreeMap;
-    let mut groups: BTreeMap<(String, String, String), Vec<&NormalizedMeasurement>> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, String, String), Vec<&NormalizedMeasurement>> =
+        BTreeMap::new();
     for m in measurements {
-        let key = (format!("{:?}", m.phy_generation), m.driver.clone(), m.kernel.clone());
+        let key = (
+            format!("{:?}", m.phy_generation),
+            m.driver.clone(),
+            m.kernel.clone(),
+        );
         groups.entry(key).or_default().push(m);
     }
 
@@ -138,7 +143,12 @@ pub fn stratify(measurements: &[NormalizedMeasurement]) -> Vec<CohortStratum> {
         .into_iter()
         .map(|((gen_str, driver, kernel), items)| {
             let n = items.len() as f64;
-            let mean_fraction = items.iter().filter(|m| m.offered_phy_fraction.is_finite()).map(|m| m.offered_phy_fraction).sum::<f64>() / n;
+            let mean_fraction = items
+                .iter()
+                .filter(|m| m.offered_phy_fraction.is_finite())
+                .map(|m| m.offered_phy_fraction)
+                .sum::<f64>()
+                / n;
             let mean_loss = items.iter().map(|m| m.loss_percent).sum::<f64>() / n;
             let phy_generation = items[0].phy_generation;
             let _ = gen_str;
@@ -199,12 +209,19 @@ pub fn attribute_cohort_difference(
         };
     }
 
-    if (cohort_a.mean_offered_phy_fraction - cohort_b.mean_offered_phy_fraction).abs() > COMPARABLE_FRACTION_TOLERANCE {
+    if (cohort_a.mean_offered_phy_fraction - cohort_b.mean_offered_phy_fraction).abs()
+        > COMPARABLE_FRACTION_TOLERANCE
+    {
         let explanation = format!(
             "cohorts were measured at different offered PHY fractions ({:.2} vs {:.2}); a loss difference at incomparable fractions cannot be attributed to AP generation handling rather than capacity/airtime saturation",
             cohort_a.mean_offered_phy_fraction, cohort_b.mean_offered_phy_fraction
         );
-        return CohortAttribution { cohort_a, cohort_b, verdict: AttributionVerdict::WithheldIncomparableTargets, explanation };
+        return CohortAttribution {
+            cohort_a,
+            cohort_b,
+            verdict: AttributionVerdict::WithheldIncomparableTargets,
+            explanation,
+        };
     }
 
     CohortAttribution {
@@ -219,7 +236,13 @@ pub fn attribute_cohort_difference(
 mod tests {
     use super::*;
 
-    fn node(id: &str, gen: PhyGeneration, capacity: f64, rf: RfQuality, directional: bool) -> NodeProfile {
+    fn node(
+        id: &str,
+        gen: PhyGeneration,
+        capacity: f64,
+        rf: RfQuality,
+        directional: bool,
+    ) -> NodeProfile {
         NodeProfile {
             node_id: id.to_string(),
             phy_generation: gen,
@@ -285,7 +308,10 @@ mod tests {
             sample_count: 5,
         };
         let attribution = attribute_cohort_difference(a, b, true, false);
-        assert_eq!(attribution.verdict, AttributionVerdict::WithheldMissingControls);
+        assert_eq!(
+            attribution.verdict,
+            AttributionVerdict::WithheldMissingControls
+        );
     }
 
     #[test]
@@ -307,7 +333,10 @@ mod tests {
             sample_count: 5,
         };
         let attribution = attribute_cohort_difference(a, b, true, true);
-        assert_eq!(attribution.verdict, AttributionVerdict::WithheldIncomparableTargets);
+        assert_eq!(
+            attribution.verdict,
+            AttributionVerdict::WithheldIncomparableTargets
+        );
     }
 
     #[test]
@@ -335,9 +364,21 @@ mod tests {
     #[test]
     fn stratify_groups_by_generation_driver_kernel() {
         let measurements = vec![
-            normalize(&PhaseMeasurement { node: node("a", PhyGeneration::Vht, 130.0, RfQuality::Strong, true), offered_mbps: 50.0, loss_percent: 5.0 }),
-            normalize(&PhaseMeasurement { node: node("b", PhyGeneration::Vht, 130.0, RfQuality::Strong, true), offered_mbps: 60.0, loss_percent: 6.0 }),
-            normalize(&PhaseMeasurement { node: node("c", PhyGeneration::He, 866.0, RfQuality::Strong, true), offered_mbps: 400.0, loss_percent: 1.0 }),
+            normalize(&PhaseMeasurement {
+                node: node("a", PhyGeneration::Vht, 130.0, RfQuality::Strong, true),
+                offered_mbps: 50.0,
+                loss_percent: 5.0,
+            }),
+            normalize(&PhaseMeasurement {
+                node: node("b", PhyGeneration::Vht, 130.0, RfQuality::Strong, true),
+                offered_mbps: 60.0,
+                loss_percent: 6.0,
+            }),
+            normalize(&PhaseMeasurement {
+                node: node("c", PhyGeneration::He, 866.0, RfQuality::Strong, true),
+                offered_mbps: 400.0,
+                loss_percent: 1.0,
+            }),
         ];
         let strata = stratify(&measurements);
         assert_eq!(strata.len(), 2);

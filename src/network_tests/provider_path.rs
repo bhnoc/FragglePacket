@@ -87,7 +87,12 @@ pub fn parse_traceroute(output: &str) -> Vec<TraceHop> {
 
         let rest: Vec<&str> = parts.collect();
         if rest.iter().all(|t| t.chars().all(|c| c == '*')) {
-            hops.push(TraceHop { hop_number, outcome: HopOutcome::NoResponse, addr: None, rtt_ms: None });
+            hops.push(TraceHop {
+                hop_number,
+                outcome: HopOutcome::NoResponse,
+                addr: None,
+                rtt_ms: None,
+            });
             continue;
         }
 
@@ -103,31 +108,62 @@ pub fn parse_traceroute(output: &str) -> Vec<TraceHop> {
         }
 
         if addr.is_some() || rtt_ms.is_some() {
-            hops.push(TraceHop { hop_number, outcome: HopOutcome::Responded, addr, rtt_ms });
+            hops.push(TraceHop {
+                hop_number,
+                outcome: HopOutcome::Responded,
+                addr,
+                rtt_ms,
+            });
         } else {
             // A line with a hop number but nothing parseable is treated as
             // non-response rather than silently dropped -- dropping would
             // desync every subsequent hop's number from its real position.
-            hops.push(TraceHop { hop_number, outcome: HopOutcome::NoResponse, addr: None, rtt_ms: None });
+            hops.push(TraceHop {
+                hop_number,
+                outcome: HopOutcome::NoResponse,
+                addr: None,
+                rtt_ms: None,
+            });
         }
     }
     hops
 }
 
-pub fn run_traceroute(target: &str, max_hops: u8, wait_secs: u8, interface: Option<&str>) -> Result<TraceRun, String> {
+pub fn run_traceroute(
+    target: &str,
+    max_hops: u8,
+    wait_secs: u8,
+    interface: Option<&str>,
+) -> Result<TraceRun, String> {
     let mut cmd = Command::new("traceroute");
-    cmd.args(["-q", "1", "-w", &wait_secs.to_string(), "-m", &max_hops.to_string()]);
+    cmd.args([
+        "-q",
+        "1",
+        "-w",
+        &wait_secs.to_string(),
+        "-m",
+        &max_hops.to_string(),
+    ]);
     if let Some(iface) = interface {
         cmd.args(["-i", iface]);
     }
     cmd.arg(target);
-    let output = cmd.output().map_err(|e| format!("failed to run traceroute: {e}"))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("failed to run traceroute: {e}"))?;
 
     let text = String::from_utf8_lossy(&output.stdout);
     let hops = parse_traceroute(&text);
-    let reached_target = hops.last().map(|h| h.outcome == HopOutcome::Responded).unwrap_or(false);
+    let reached_target = hops
+        .last()
+        .map(|h| h.outcome == HopOutcome::Responded)
+        .unwrap_or(false);
 
-    Ok(TraceRun { target: target.to_string(), hops, reached_target })
+    Ok(TraceRun {
+        target: target.to_string(),
+        hops,
+        reached_target,
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,12 +215,16 @@ pub fn assess_path_stability(target: &str, runs: &[TraceRun]) -> PathStability {
         .into_iter()
         .map(|(hop_number, samples)| {
             let total = samples.len() as u32;
-            let responded_samples: Vec<&&TraceHop> =
-                samples.iter().filter(|h| h.outcome == HopOutcome::Responded).collect();
+            let responded_samples: Vec<&&TraceHop> = samples
+                .iter()
+                .filter(|h| h.outcome == HopOutcome::Responded)
+                .collect();
             let responded = responded_samples.len() as u32;
 
-            let mut addresses_seen: Vec<String> =
-                responded_samples.iter().filter_map(|h| h.addr.clone()).collect();
+            let mut addresses_seen: Vec<String> = responded_samples
+                .iter()
+                .filter_map(|h| h.addr.clone())
+                .collect();
             addresses_seen.sort();
             addresses_seen.dedup();
 
@@ -198,12 +238,20 @@ pub fn assess_path_stability(target: &str, runs: &[TraceRun]) -> PathStability {
                 HopStabilityVerdict::Changed
             };
 
-            HopStability { hop_number, verdict, addresses_seen }
+            HopStability {
+                hop_number,
+                verdict,
+                addresses_seen,
+            }
         })
         .collect();
     per_hop.sort_by_key(|h| h.hop_number);
 
-    PathStability { target: target.to_string(), sample_count: runs.len() as u32, per_hop }
+    PathStability {
+        target: target.to_string(),
+        sample_count: runs.len() as u32,
+        per_hop,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,7 +280,11 @@ pub fn reverse_dns_region_hint(ip: &str) -> GeoInfo {
     };
 
     if ptr.is_empty() {
-        return GeoInfo { asn: None, region_hint: None, source: GeoSource::Unavailable };
+        return GeoInfo {
+            asn: None,
+            region_hint: None,
+            source: GeoSource::Unavailable,
+        };
     }
 
     // Airport-code-shaped hints commonly appear as a hyphen-delimited
@@ -241,15 +293,31 @@ pub fn reverse_dns_region_hint(ip: &str) -> GeoInfo {
     // lookup -- always presented as a hint, never a confirmed region.
     let region_hint = ptr
         .split(|c: char| c == '.' || c == '-')
-        .find(|tok| tok.len() == 3 && tok.chars().all(|c| c.is_ascii_alphabetic()) && tok.to_uppercase() == *tok)
+        .find(|tok| {
+            tok.len() == 3
+                && tok.chars().all(|c| c.is_ascii_alphabetic())
+                && tok.to_uppercase() == *tok
+        })
         .map(|s| s.to_string());
 
-    let source = if region_hint.is_some() { GeoSource::ReverseDnsHint } else { GeoSource::Unavailable };
-    GeoInfo { asn: None, region_hint, source }
+    let source = if region_hint.is_some() {
+        GeoSource::ReverseDnsHint
+    } else {
+        GeoSource::Unavailable
+    };
+    GeoInfo {
+        asn: None,
+        region_hint,
+        source,
+    }
 }
 
 pub fn operator_geo_override(asn: Option<String>, region: Option<String>) -> GeoInfo {
-    GeoInfo { asn, region_hint: region, source: GeoSource::OperatorSupplied }
+    GeoInfo {
+        asn,
+        region_hint: region,
+        source: GeoSource::OperatorSupplied,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,21 +343,39 @@ pub struct EndpointConnectResult {
 /// measure) so the connect result describes that path rather than
 /// whichever route the OS would pick by default -- on this class of
 /// machine, frequently a VPN tunnel.
-pub fn probe_connect(host: &str, port: u16, timeout: Duration, local_bind_ip: Option<&str>) -> EndpointConnectResult {
+pub fn probe_connect(
+    host: &str,
+    port: u16,
+    timeout: Duration,
+    local_bind_ip: Option<&str>,
+) -> EndpointConnectResult {
     use socket2::{Domain, Socket, Type};
     use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 
     let start = Instant::now();
-    let addr = format!("{host}:{port}").to_socket_addrs().ok().and_then(|mut a| a.next());
+    let addr = format!("{host}:{port}")
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut a| a.next());
     let addr = match addr {
         Some(a) => a,
-        None => return EndpointConnectResult { connect_ok: false, connect_ms: None },
+        None => {
+            return EndpointConnectResult {
+                connect_ok: false,
+                connect_ms: None,
+            }
+        }
     };
 
     let stream_result: std::io::Result<TcpStream> = match local_bind_ip {
         Some(ip) => (|| {
-            let bind_addr: SocketAddr = format!("{}:0", ip).parse().map_err(std::io::Error::other)?;
-            let domain = if addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
+            let bind_addr: SocketAddr =
+                format!("{}:0", ip).parse().map_err(std::io::Error::other)?;
+            let domain = if addr.is_ipv4() {
+                Domain::IPV4
+            } else {
+                Domain::IPV6
+            };
             let sock = Socket::new(domain, Type::STREAM, None)?;
             sock.set_nonblocking(false)?;
             sock.bind(&bind_addr.into())?;
@@ -300,8 +386,14 @@ pub fn probe_connect(host: &str, port: u16, timeout: Duration, local_bind_ip: Op
     };
 
     match stream_result {
-        Ok(_) => EndpointConnectResult { connect_ok: true, connect_ms: Some(start.elapsed().as_millis() as u64) },
-        Err(_) => EndpointConnectResult { connect_ok: false, connect_ms: None },
+        Ok(_) => EndpointConnectResult {
+            connect_ok: true,
+            connect_ms: Some(start.elapsed().as_millis() as u64),
+        },
+        Err(_) => EndpointConnectResult {
+            connect_ok: false,
+            connect_ms: None,
+        },
     }
 }
 
@@ -313,7 +405,11 @@ mod tests {
     fn bare_star_line_is_no_response_not_dropped() {
         let output = " 1  10.0.0.1 (10.0.0.1)  1.2 ms\n 2  *\n 3  10.0.0.3 (10.0.0.3)  5.6 ms\n";
         let hops = parse_traceroute(output);
-        assert_eq!(hops.len(), 3, "the non-responsive hop must not be silently dropped");
+        assert_eq!(
+            hops.len(),
+            3,
+            "the non-responsive hop must not be silently dropped"
+        );
         assert_eq!(hops[1].hop_number, 2);
         assert_eq!(hops[1].outcome, HopOutcome::NoResponse);
     }
@@ -322,9 +418,13 @@ mod tests {
     fn central_regression_no_response_never_becomes_loss() {
         // A single trace with several non-responsive hops must never
         // surface a "loss" figure from this trace alone.
-        let output = " 1  10.0.0.1 (10.0.0.1)  1.2 ms\n 2  *\n 3  *\n 4  10.0.0.4 (10.0.0.4)  9.0 ms\n";
+        let output =
+            " 1  10.0.0.1 (10.0.0.1)  1.2 ms\n 2  *\n 3  *\n 4  10.0.0.4 (10.0.0.4)  9.0 ms\n";
         let hops = parse_traceroute(output);
-        let non_responsive = hops.iter().filter(|h| h.outcome == HopOutcome::NoResponse).count();
+        let non_responsive = hops
+            .iter()
+            .filter(|h| h.outcome == HopOutcome::NoResponse)
+            .count();
         assert_eq!(non_responsive, 2);
         // There is no loss_percent field anywhere on TraceHop/TraceRun --
         // structurally, a single trace cannot produce one.
@@ -337,17 +437,35 @@ mod tests {
             reached_target: true,
             hops: hops
                 .into_iter()
-                .map(|(n, o, a)| TraceHop { hop_number: n, outcome: o, addr: a.map(|s| s.to_string()), rtt_ms: None })
+                .map(|(n, o, a)| TraceHop {
+                    hop_number: n,
+                    outcome: o,
+                    addr: a.map(|s| s.to_string()),
+                    rtt_ms: None,
+                })
                 .collect(),
         };
 
         let runs = vec![
-            make_run(vec![(1, HopOutcome::Responded, Some("10.0.0.1")), (2, HopOutcome::NoResponse, None)]),
-            make_run(vec![(1, HopOutcome::Responded, Some("10.0.0.1")), (2, HopOutcome::NoResponse, None)]),
-            make_run(vec![(1, HopOutcome::Responded, Some("10.0.0.1")), (2, HopOutcome::Responded, Some("10.0.0.2"))]),
+            make_run(vec![
+                (1, HopOutcome::Responded, Some("10.0.0.1")),
+                (2, HopOutcome::NoResponse, None),
+            ]),
+            make_run(vec![
+                (1, HopOutcome::Responded, Some("10.0.0.1")),
+                (2, HopOutcome::NoResponse, None),
+            ]),
+            make_run(vec![
+                (1, HopOutcome::Responded, Some("10.0.0.1")),
+                (2, HopOutcome::Responded, Some("10.0.0.2")),
+            ]),
         ];
         let stability = assess_path_stability("x", &runs);
-        let hop2 = stability.per_hop.iter().find(|h| h.hop_number == 2).unwrap();
+        let hop2 = stability
+            .per_hop
+            .iter()
+            .find(|h| h.hop_number == 2)
+            .unwrap();
         match hop2.verdict {
             HopStabilityVerdict::IntermittentResponse { responded, total } => {
                 assert_eq!(responded, 1);
@@ -362,11 +480,19 @@ mod tests {
         let make_run = || TraceRun {
             target: "x".to_string(),
             reached_target: false,
-            hops: vec![TraceHop { hop_number: 3, outcome: HopOutcome::NoResponse, addr: None, rtt_ms: None }],
+            hops: vec![TraceHop {
+                hop_number: 3,
+                outcome: HopOutcome::NoResponse,
+                addr: None,
+                rtt_ms: None,
+            }],
         };
         let runs = vec![make_run(), make_run(), make_run()];
         let stability = assess_path_stability("x", &runs);
-        assert_eq!(stability.per_hop[0].verdict, HopStabilityVerdict::ConsistentlyNonResponsive);
+        assert_eq!(
+            stability.per_hop[0].verdict,
+            HopStabilityVerdict::ConsistentlyNonResponsive
+        );
     }
 
     #[test]
@@ -388,14 +514,19 @@ mod tests {
 
     #[test]
     fn missing_asn_reports_unavailable_not_guessed() {
-        let geo = GeoInfo { asn: None, region_hint: None, source: GeoSource::Unavailable };
+        let geo = GeoInfo {
+            asn: None,
+            region_hint: None,
+            source: GeoSource::Unavailable,
+        };
         assert!(geo.asn.is_none());
         assert_eq!(geo.source, GeoSource::Unavailable);
     }
 
     #[test]
     fn operator_override_is_labeled_distinctly_from_a_hint() {
-        let geo = operator_geo_override(Some("AS15169".to_string()), Some("us-central1".to_string()));
+        let geo =
+            operator_geo_override(Some("AS15169".to_string()), Some("us-central1".to_string()));
         assert_eq!(geo.source, GeoSource::OperatorSupplied);
     }
 }

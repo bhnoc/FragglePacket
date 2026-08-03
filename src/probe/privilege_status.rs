@@ -22,7 +22,10 @@ pub enum PrivilegeStatus {
     /// The privileged path failed for a permission reason. `detail` is the
     /// underlying signal preserved verbatim; `required_command` is the
     /// exact, copy-pasteable command to re-run elevated.
-    Denied { detail: String, required_command: String },
+    Denied {
+        detail: String,
+        required_command: String,
+    },
 }
 
 impl PrivilegeStatus {
@@ -67,7 +70,10 @@ pub fn classify_privilege_failure(
 ) -> Option<PrivilegeStatus> {
     let trimmed = stderr_text.trim();
     if stderr_names_a_permission_problem(trimmed) {
-        return Some(PrivilegeStatus::Denied { detail: trimmed.to_string(), required_command });
+        return Some(PrivilegeStatus::Denied {
+            detail: trimmed.to_string(),
+            required_command,
+        });
     }
     if let Some(e) = os_error {
         if errno_is_privilege_denial(e) {
@@ -79,7 +85,10 @@ pub fn classify_privilege_failure(
             } else {
                 trimmed.to_string()
             };
-            return Some(PrivilegeStatus::Denied { detail, required_command });
+            return Some(PrivilegeStatus::Denied {
+                detail,
+                required_command,
+            });
         }
     }
     None
@@ -110,7 +119,11 @@ mod tests {
         // Reproduces the field bug: pcap_activate() gave nothing in text,
         // but the syscall-level signal (EPERM here) was available.
         let e = std::io::Error::from_raw_os_error(libc::EPERM);
-        let status = classify_privilege_failure("", Some(&e), "sudo fraggle-packet trace 1.1.1.1".to_string());
+        let status = classify_privilege_failure(
+            "",
+            Some(&e),
+            "sudo fraggle-packet trace 1.1.1.1".to_string(),
+        );
         match status {
             Some(PrivilegeStatus::Denied { detail, .. }) => {
                 assert!(!detail.is_empty());
@@ -124,7 +137,10 @@ mod tests {
     fn empty_stderr_with_no_errno_signal_is_not_misclassified_as_denied() {
         // No wording, no errno -- there is genuinely no privilege signal
         // here, so this must not be reported as a denial.
-        assert_eq!(classify_privilege_failure("", None, "sudo x".to_string()), None);
+        assert_eq!(
+            classify_privilege_failure("", None, "sudo x".to_string()),
+            None
+        );
     }
 
     #[test]
@@ -137,7 +153,10 @@ mod tests {
     fn a_non_privilege_errno_is_not_flagged() {
         let e = std::io::Error::from_raw_os_error(libc::ENOENT);
         assert!(!errno_is_privilege_denial(&e));
-        assert_eq!(classify_privilege_failure("", Some(&e), "sudo x".to_string()), None);
+        assert_eq!(
+            classify_privilege_failure("", Some(&e), "sudo x".to_string()),
+            None
+        );
     }
 
     #[test]
@@ -200,7 +219,11 @@ mod op_inventory_tests {
     #[test]
     fn every_declared_op_names_a_command_and_an_unprivileged_path() {
         for op in all_ops() {
-            assert!(!op.required_command.is_empty(), "{} has no command", op.what);
+            assert!(
+                !op.required_command.is_empty(),
+                "{} has no command",
+                op.what
+            );
             assert!(
                 op.unprivileged_alternative.is_some(),
                 "{} offers no unprivileged path, so a denial would leave the operator stuck",

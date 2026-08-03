@@ -80,10 +80,16 @@ pub struct SecondNetworkComparison {
 
 fn describe_relationship(cmp: ApComparison) -> &'static str {
     match cmp {
-        ApComparison::SameApSameRadio => "same physical AP, same radio -- this is not actually a second network",
-        ApComparison::SameApDifferentRadio => "same physical AP, different radio -- band changed but not the AP",
+        ApComparison::SameApSameRadio => {
+            "same physical AP, same radio -- this is not actually a second network"
+        }
+        ApComparison::SameApDifferentRadio => {
+            "same physical AP, different radio -- band changed but not the AP"
+        }
         ApComparison::DifferentAp => "different AP -- genuine second-network control",
-        ApComparison::Unavailable => "AP identity unavailable on at least one side; network relationship not determined",
+        ApComparison::Unavailable => {
+            "AP identity unavailable on at least one side; network relationship not determined"
+        }
     }
 }
 
@@ -91,7 +97,10 @@ fn describe_relationship(cmp: ApComparison) -> &'static str {
 /// either bundle is reported, matched by name; a metric missing on one
 /// side reports `delta: None` rather than treating the absent side as 0.
 pub fn compare_bundles(before: &TestBundle, after: &TestBundle) -> SecondNetworkComparison {
-    let relationship = describe_relationship(compare_ap_identity(&before.fingerprint.ap_identity, &after.fingerprint.ap_identity));
+    let relationship = describe_relationship(compare_ap_identity(
+        &before.fingerprint.ap_identity,
+        &after.fingerprint.ap_identity,
+    ));
 
     let mut names: Vec<String> = before.metrics.iter().map(|m| m.name.clone()).collect();
     for m in &after.metrics {
@@ -103,17 +112,33 @@ pub fn compare_bundles(before: &TestBundle, after: &TestBundle) -> SecondNetwork
     let metrics = names
         .into_iter()
         .map(|name| {
-            let b = before.metrics.iter().find(|m| m.name == name).and_then(|m| m.value);
-            let a = after.metrics.iter().find(|m| m.name == name).and_then(|m| m.value);
+            let b = before
+                .metrics
+                .iter()
+                .find(|m| m.name == name)
+                .and_then(|m| m.value);
+            let a = after
+                .metrics
+                .iter()
+                .find(|m| m.name == name)
+                .and_then(|m| m.value);
             let delta = match (b, a) {
                 (Some(bv), Some(av)) => Some(av - bv),
                 _ => None,
             };
-            MetricComparison { name, before: b, after: a, delta }
+            MetricComparison {
+                name,
+                before: b,
+                after: a,
+                delta,
+            }
         })
         .collect();
 
-    SecondNetworkComparison { network_relationship: relationship.to_string(), metrics }
+    SecondNetworkComparison {
+        network_relationship: relationship.to_string(),
+        metrics,
+    }
 }
 
 #[cfg(test)]
@@ -123,12 +148,20 @@ mod tests {
     fn bundle(label: Option<&str>, ap_label: Option<&str>, metric: Option<f64>) -> TestBundle {
         TestBundle {
             fingerprint: NetworkFingerprint {
-                ap_identity: ap_label.map(|l| ApIdentity { label: l.to_string(), band: Some("6GHz".to_string()), channel: Some(37) }),
+                ap_identity: ap_label.map(|l| ApIdentity {
+                    label: l.to_string(),
+                    band: Some("6GHz".to_string()),
+                    channel: Some(37),
+                }),
                 interface: Some("en0".to_string()),
                 interface_is_tunnel: false,
                 operator_label: label.map(|s| s.to_string()),
             },
-            metrics: vec![BundleMetric { name: "download_mbps".to_string(), value: metric, unit: "Mbps".to_string() }],
+            metrics: vec![BundleMetric {
+                name: "download_mbps".to_string(),
+                value: metric,
+                unit: "Mbps".to_string(),
+            }],
             capture_tag: "test-run".to_string(),
         }
     }
@@ -136,14 +169,23 @@ mod tests {
     #[test]
     fn a_saved_bundle_round_trips_without_storing_ssid_or_bssid() {
         let b = bundle(None, Some("ap-aaaa1111"), Some(320.5));
-        let path = std::env::temp_dir().join(format!("fp-second-network-test-{}.json", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "fp-second-network-test-{}.json",
+            std::process::id()
+        ));
         let path_str = path.to_string_lossy().to_string();
         save_bundle(&path_str, &b).unwrap();
         let text = std::fs::read_to_string(&path_str).unwrap();
         // No MAC-shaped token anywhere in the saved JSON.
         assert!(!text.split(' ').any(|w| {
-            let parts: Vec<&str> = w.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != ':').split(':').collect();
-            parts.len() == 6 && parts.iter().all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
+            let parts: Vec<&str> = w
+                .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != ':')
+                .split(':')
+                .collect();
+            parts.len() == 6
+                && parts
+                    .iter()
+                    .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
         }));
         let loaded = load_bundle(&path_str).unwrap();
         assert_eq!(loaded.fingerprint.ap_identity.unwrap().label, "ap-aaaa1111");
@@ -156,7 +198,10 @@ mod tests {
         let default_bundle = bundle(None, Some("ap-aaaa1111"), Some(1.0));
         assert_eq!(default_bundle.fingerprint.operator_label, None);
         let explicit_bundle = bundle(Some("Hotel Guest WiFi"), Some("ap-aaaa1111"), Some(1.0));
-        assert_eq!(explicit_bundle.fingerprint.operator_label, Some("Hotel Guest WiFi".to_string()));
+        assert_eq!(
+            explicit_bundle.fingerprint.operator_label,
+            Some("Hotel Guest WiFi".to_string())
+        );
     }
 
     #[test]
@@ -164,7 +209,9 @@ mod tests {
         let before = bundle(None, Some("ap-aaaa1111"), Some(300.0));
         let after = bundle(None, Some("ap-bbbb2222"), Some(50.0));
         let cmp = compare_bundles(&before, &after);
-        assert!(cmp.network_relationship.contains("genuine second-network control"));
+        assert!(cmp
+            .network_relationship
+            .contains("genuine second-network control"));
     }
 
     #[test]
@@ -172,16 +219,26 @@ mod tests {
         let before = bundle(None, Some("ap-aaaa1111"), Some(300.0));
         let after = bundle(None, Some("ap-aaaa1111"), Some(290.0));
         let cmp = compare_bundles(&before, &after);
-        assert!(cmp.network_relationship.contains("not actually a second network"));
+        assert!(cmp
+            .network_relationship
+            .contains("not actually a second network"));
     }
 
     #[test]
     fn a_metric_missing_on_one_side_reports_delta_as_none_never_a_fabricated_swing() {
         let mut before = bundle(None, Some("ap-aaaa1111"), Some(300.0));
-        before.metrics.push(BundleMetric { name: "only_on_before".to_string(), value: Some(5.0), unit: "ms".to_string() });
+        before.metrics.push(BundleMetric {
+            name: "only_on_before".to_string(),
+            value: Some(5.0),
+            unit: "ms".to_string(),
+        });
         let after = bundle(None, Some("ap-bbbb2222"), Some(50.0));
         let cmp = compare_bundles(&before, &after);
-        let m = cmp.metrics.iter().find(|m| m.name == "only_on_before").unwrap();
+        let m = cmp
+            .metrics
+            .iter()
+            .find(|m| m.name == "only_on_before")
+            .unwrap();
         assert_eq!(m.delta, None);
         assert_eq!(m.after, None);
     }
@@ -191,7 +248,11 @@ mod tests {
         let before = bundle(None, Some("ap-aaaa1111"), Some(300.0));
         let after = bundle(None, Some("ap-bbbb2222"), Some(50.0));
         let cmp = compare_bundles(&before, &after);
-        let m = cmp.metrics.iter().find(|m| m.name == "download_mbps").unwrap();
+        let m = cmp
+            .metrics
+            .iter()
+            .find(|m| m.name == "download_mbps")
+            .unwrap();
         assert_eq!(m.delta, Some(-250.0));
     }
 

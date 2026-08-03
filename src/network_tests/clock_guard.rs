@@ -19,7 +19,9 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::network_tests::dependency_health::{measure_ntp_offset, NtpOffsetResult, Verdict as DependencyVerdict};
+use crate::network_tests::dependency_health::{
+    measure_ntp_offset, NtpOffsetResult, Verdict as DependencyVerdict,
+};
 
 /// Default maximum tolerated clock skew, in milliseconds, before a one-way
 /// metric is refused rather than qualified. 50ms is chosen because it is
@@ -53,7 +55,10 @@ impl DualTimestamp {
         let start = *PROCESS_START.get_or_init(Instant::now);
         let now = Instant::now();
         DualTimestamp {
-            wall_clock_unix_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis(),
+            wall_clock_unix_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis(),
             monotonic_nanos_since_process_start: now.saturating_duration_since(start).as_nanos(),
             monotonic: Some(now),
         }
@@ -109,18 +114,30 @@ impl ClockVerdict {
 /// `media-quality`/`burst-analysis` should call before setting their
 /// `clock_offset_verified: bool` input:
 /// `clock_guard::verify(node_label, ntp_server, max_skew_ms, timeout).permits_one_way_claim()`.
-pub fn verify(node_label: &str, ntp_server: &str, max_skew_ms: f64, timeout: Duration) -> ClockVerdict {
+pub fn verify(
+    node_label: &str,
+    ntp_server: &str,
+    max_skew_ms: f64,
+    timeout: Duration,
+) -> ClockVerdict {
     let ntp_result = measure_ntp_offset(ntp_server, timeout);
     from_ntp_result(node_label, max_skew_ms, ntp_result)
 }
 
 /// Pure decision logic, factored out of `verify` so the skew-gating
 /// behavior is testable without shelling out to `sntp`.
-fn from_ntp_result(node_label: &str, max_skew_ms: f64, ntp_result: NtpOffsetResult) -> ClockVerdict {
+fn from_ntp_result(
+    node_label: &str,
+    max_skew_ms: f64,
+    ntp_result: NtpOffsetResult,
+) -> ClockVerdict {
     let timestamp = DualTimestamp::now();
 
     let offset = match (ntp_result.offset_ms, ntp_result.round_trip_delay_ms) {
-        (Some(offset_ms), Some(delay_ms)) => Some(OffsetWithBound { offset_ms, uncertainty_ms: delay_ms }),
+        (Some(offset_ms), Some(delay_ms)) => Some(OffsetWithBound {
+            offset_ms,
+            uncertainty_ms: delay_ms,
+        }),
         _ => None,
     };
 
@@ -221,7 +238,9 @@ pub fn merge_events(
             (Some(a), Some(b)) if a.permits_one_way_claim() && b.permits_one_way_claim() => {
                 let ua = a.offset.map(|o| o.uncertainty_ms).unwrap_or(f64::INFINITY);
                 let ub = b.offset.map(|o| o.uncertainty_ms).unwrap_or(f64::INFINITY);
-                CorrelationConfidence::CrossNodeVerified { combined_uncertainty_ms: ua + ub }
+                CorrelationConfidence::CrossNodeVerified {
+                    combined_uncertainty_ms: ua + ub,
+                }
             }
             _ => CorrelationConfidence::CrossNodeUnverified,
         }
@@ -249,7 +268,9 @@ mod tests {
             server: "time.example.test".to_string(),
             offset_ms: None,
             round_trip_delay_ms: None,
-            verdict: DependencyVerdict::Unhealthy { detail_kind: DetailKind::TimedOut },
+            verdict: DependencyVerdict::Unhealthy {
+                detail_kind: DetailKind::TimedOut,
+            },
         }
     }
 
@@ -324,7 +345,10 @@ mod tests {
         }];
         let bad_verdict = from_ntp_result("server", 50.0, failed_ntp());
         let merged = merge_events(a, b, None, Some(&bad_verdict));
-        assert_eq!(merged.confidence, CorrelationConfidence::CrossNodeUnverified);
+        assert_eq!(
+            merged.confidence,
+            CorrelationConfidence::CrossNodeUnverified
+        );
     }
 
     #[test]
@@ -343,7 +367,9 @@ mod tests {
         let vb = from_ntp_result("server", 50.0, ok_ntp(-4.0, 2.0));
         let merged = merge_events(a, b, Some(&va), Some(&vb));
         match merged.confidence {
-            CorrelationConfidence::CrossNodeVerified { combined_uncertainty_ms } => {
+            CorrelationConfidence::CrossNodeVerified {
+                combined_uncertainty_ms,
+            } => {
                 assert!((combined_uncertainty_ms - 5.0).abs() < 1e-9);
             }
             other => panic!("expected CrossNodeVerified, got {:?}", other),

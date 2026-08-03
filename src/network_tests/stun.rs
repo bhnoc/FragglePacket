@@ -58,7 +58,8 @@ impl AttrBuilder {
     }
     fn push(&mut self, attr_type: u16, value: &[u8]) {
         self.0.extend_from_slice(&attr_type.to_be_bytes());
-        self.0.extend_from_slice(&(value.len() as u16).to_be_bytes());
+        self.0
+            .extend_from_slice(&(value.len() as u16).to_be_bytes());
         self.0.extend_from_slice(value);
         for _ in 0..pad4(value.len()) {
             self.0.push(0);
@@ -97,11 +98,21 @@ impl std::fmt::Display for StunError {
         match self {
             StunError::TooShort => write!(f, "response shorter than a STUN header"),
             StunError::BadMagicCookie => write!(f, "response magic cookie does not match RFC 5389"),
-            StunError::TransactionIdMismatch => write!(f, "response transaction ID does not match the request"),
-            StunError::UnexpectedMessageType(t) => write!(f, "unexpected STUN message type 0x{t:04x}"),
-            StunError::ErrorResponse { class, number } => write!(f, "STUN error response {}{:02}", class, number),
-            StunError::MissingMappedAddress => write!(f, "success response carried no (XOR-)MAPPED-ADDRESS"),
-            StunError::MalformedAddressAttribute => write!(f, "(XOR-)MAPPED-ADDRESS attribute was malformed"),
+            StunError::TransactionIdMismatch => {
+                write!(f, "response transaction ID does not match the request")
+            }
+            StunError::UnexpectedMessageType(t) => {
+                write!(f, "unexpected STUN message type 0x{t:04x}")
+            }
+            StunError::ErrorResponse { class, number } => {
+                write!(f, "STUN error response {}{:02}", class, number)
+            }
+            StunError::MissingMappedAddress => {
+                write!(f, "success response carried no (XOR-)MAPPED-ADDRESS")
+            }
+            StunError::MalformedAddressAttribute => {
+                write!(f, "(XOR-)MAPPED-ADDRESS attribute was malformed")
+            }
         }
     }
 }
@@ -140,7 +151,11 @@ fn parse_message(bytes: &[u8]) -> Result<ParsedMessage, StunError> {
         attrs.push((attr_type, body[val_start..val_end].to_vec()));
         i = val_end + pad4(attr_len);
     }
-    Ok(ParsedMessage { msg_type, transaction_id, attrs })
+    Ok(ParsedMessage {
+        msg_type,
+        transaction_id,
+        attrs,
+    })
 }
 
 fn decode_xor_mapped_address(value: &[u8], txn: &[u8; 12]) -> Result<SocketAddr, StunError> {
@@ -170,7 +185,10 @@ fn decode_xor_mapped_address(value: &[u8], txn: &[u8; 12]) -> Result<SocketAddr,
             for i in 0..16 {
                 addr_bytes[i] = value[4 + i] ^ mask[i];
             }
-            Ok(SocketAddr::new(IpAddr::V6(Ipv6Addr::from(addr_bytes)), port))
+            Ok(SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::from(addr_bytes)),
+                port,
+            ))
         }
         _ => Err(StunError::MalformedAddressAttribute),
     }
@@ -209,7 +227,10 @@ fn decode_mapped_address(value: &[u8]) -> Result<SocketAddr, StunError> {
 /// attribute all have to hold before this counts as a successful binding.
 /// A response failing any of these is `Err`, never silently treated as a
 /// weaker form of success (the acceptance criteria's "with validation").
-pub fn parse_binding_response(bytes: &[u8], expected_txn: [u8; 12]) -> Result<SocketAddr, StunError> {
+pub fn parse_binding_response(
+    bytes: &[u8],
+    expected_txn: [u8; 12],
+) -> Result<SocketAddr, StunError> {
     let parsed = parse_message(bytes)?;
     if parsed.transaction_id != expected_txn {
         return Err(StunError::TransactionIdMismatch);
@@ -262,23 +283,39 @@ pub struct BindingAttempt {
     pub rtt_ms: Option<f64>,
 }
 
-pub fn binding_request_once(socket: &UdpSocket, server: SocketAddr, timeout: Duration) -> BindingAttempt {
+pub fn binding_request_once(
+    socket: &UdpSocket,
+    server: SocketAddr,
+    timeout: Duration,
+) -> BindingAttempt {
     let (request, txn) = build_binding_request();
     socket.set_read_timeout(Some(timeout)).ok();
     let start = Instant::now();
     if socket.send_to(&request, server).is_err() {
-        return BindingAttempt { outcome: BindingOutcome::Unreachable, rtt_ms: None };
+        return BindingAttempt {
+            outcome: BindingOutcome::Unreachable,
+            rtt_ms: None,
+        };
     }
     let mut buf = [0u8; 512];
     match socket.recv_from(&mut buf) {
         Ok((n, _from)) => {
             let rtt_ms = start.elapsed().as_secs_f64() * 1000.0;
             match parse_binding_response(&buf[..n], txn) {
-                Ok(addr) => BindingAttempt { outcome: BindingOutcome::Mapped(addr), rtt_ms: Some(rtt_ms) },
-                Err(e) => BindingAttempt { outcome: BindingOutcome::Invalid(e), rtt_ms: Some(rtt_ms) },
+                Ok(addr) => BindingAttempt {
+                    outcome: BindingOutcome::Mapped(addr),
+                    rtt_ms: Some(rtt_ms),
+                },
+                Err(e) => BindingAttempt {
+                    outcome: BindingOutcome::Invalid(e),
+                    rtt_ms: Some(rtt_ms),
+                },
             }
         }
-        Err(_) => BindingAttempt { outcome: BindingOutcome::Unreachable, rtt_ms: None },
+        Err(_) => BindingAttempt {
+            outcome: BindingOutcome::Unreachable,
+            rtt_ms: None,
+        },
     }
 }
 
@@ -293,7 +330,10 @@ pub struct TurnCredentials {
 
 #[derive(Debug, Clone)]
 pub enum TurnOutcome {
-    Allocated { lifetime_secs: u32, relayed: SocketAddr },
+    Allocated {
+        lifetime_secs: u32,
+        relayed: SocketAddr,
+    },
     Unauthorized,
     CredentialsRejected,
     NoCredentialsSupplied,
@@ -376,7 +416,10 @@ fn parse_allocate_response(bytes: &[u8], expected_txn: [u8; 12]) -> Result<TurnO
                 }
             }
             match (lifetime, relayed) {
-                (Some(l), Some(r)) => Ok(TurnOutcome::Allocated { lifetime_secs: l, relayed: r }),
+                (Some(l), Some(r)) => Ok(TurnOutcome::Allocated {
+                    lifetime_secs: l,
+                    relayed: r,
+                }),
                 _ => Err("ALLOCATE success carried no LIFETIME/XOR-RELAYED-ADDRESS".to_string()),
             }
         }
@@ -525,7 +568,9 @@ mod tests {
 
     fn success_response_bytes(txn: [u8; 12], mapped: SocketAddr) -> Vec<u8> {
         let mut attrs = AttrBuilder::new();
-        let SocketAddr::V4(v4) = mapped else { panic!("test only builds IPv4") };
+        let SocketAddr::V4(v4) = mapped else {
+            panic!("test only builds IPv4")
+        };
         let port = v4.port() ^ ((MAGIC_COOKIE >> 16) as u16);
         let addr_u32 = u32::from_be_bytes(v4.ip().octets()) ^ MAGIC_COOKIE;
         let mut val = vec![0u8, FAMILY_IPV4];
@@ -549,7 +594,10 @@ mod tests {
         let mapped: SocketAddr = "203.0.113.7:54321".parse().unwrap();
         let resp = success_response_bytes(txn, mapped);
         let (_, other_txn) = build_binding_request();
-        assert_eq!(parse_binding_response(&resp, other_txn), Err(StunError::TransactionIdMismatch));
+        assert_eq!(
+            parse_binding_response(&resp, other_txn),
+            Err(StunError::TransactionIdMismatch)
+        );
     }
 
     #[test]
@@ -558,7 +606,10 @@ mod tests {
         let mapped: SocketAddr = "203.0.113.7:54321".parse().unwrap();
         let mut resp = success_response_bytes(txn, mapped);
         resp[4] = 0xff;
-        assert_eq!(parse_binding_response(&resp, txn), Err(StunError::BadMagicCookie));
+        assert_eq!(
+            parse_binding_response(&resp, txn),
+            Err(StunError::BadMagicCookie)
+        );
     }
 
     #[test]
@@ -574,13 +625,19 @@ mod tests {
     fn a_success_response_missing_the_mapped_address_attribute_is_rejected() {
         let (_, txn) = build_binding_request();
         let resp = build_message(BINDING_SUCCESS, txn, &[]);
-        assert_eq!(parse_binding_response(&resp, txn), Err(StunError::MissingMappedAddress));
+        assert_eq!(
+            parse_binding_response(&resp, txn),
+            Err(StunError::MissingMappedAddress)
+        );
     }
 
     #[test]
     fn a_truncated_response_is_rejected_not_panicking() {
         let bytes = [0u8; 10];
-        assert_eq!(parse_binding_response(&bytes, [0u8; 12]), Err(StunError::TooShort));
+        assert_eq!(
+            parse_binding_response(&bytes, [0u8; 12]),
+            Err(StunError::TooShort)
+        );
     }
 
     #[test]
@@ -597,7 +654,12 @@ mod tests {
         // No live server needed: the credential-less path returns before
         // any I/O happens.
         assert!(matches!(
-            turn_allocate_udp(&UdpSocket::bind("127.0.0.1:0").unwrap(), "127.0.0.1:1".parse().unwrap(), None, Duration::from_millis(10)),
+            turn_allocate_udp(
+                &UdpSocket::bind("127.0.0.1:0").unwrap(),
+                "127.0.0.1:1".parse().unwrap(),
+                None,
+                Duration::from_millis(10)
+            ),
             TurnOutcome::NoCredentialsSupplied
         ));
     }

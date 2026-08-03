@@ -179,11 +179,19 @@ impl ReceivePathCounters {
     /// value -- the state this host must always report itself in, and the
     /// central regression this gap locks.
     pub fn is_fully_platform_limited(&self) -> bool {
-        matches!(self.tcp_rcv_collapsed.obtainability, Obtainability::PlatformLimited)
-            && self.tcp_rcv_collapsed.value.is_none()
-            && matches!(self.softnet_drops.obtainability, Obtainability::PlatformLimited)
+        matches!(
+            self.tcp_rcv_collapsed.obtainability,
+            Obtainability::PlatformLimited
+        ) && self.tcp_rcv_collapsed.value.is_none()
+            && matches!(
+                self.softnet_drops.obtainability,
+                Obtainability::PlatformLimited
+            )
             && self.softnet_drops.value.is_none()
-            && matches!(self.qdisc_drops.obtainability, Obtainability::PlatformLimited)
+            && matches!(
+                self.qdisc_drops.obtainability,
+                Obtainability::PlatformLimited
+            )
             && self.qdisc_drops.value.is_none()
     }
 }
@@ -200,7 +208,10 @@ pub fn parse_linux_tcp_rcv_collapsed(netstat_s_output: &str) -> Option<u64> {
         if let Some(rest) = trimmed.strip_prefix("TcpExtTCPRcvCollapsed") {
             return rest.split_whitespace().next()?.parse::<u64>().ok();
         }
-        if trimmed.to_ascii_lowercase().contains("collapsed in receive queue") {
+        if trimmed
+            .to_ascii_lowercase()
+            .contains("collapsed in receive queue")
+        {
             let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(v) = digits.parse::<u64>() {
                 return Some(v);
@@ -339,7 +350,10 @@ pub enum CollapseVerdict {
 /// This is the acceptance criterion's literal deliverable: "do not attribute
 /// a directional collapse to the network unless it reproduces across process
 /// models or in an application-representative method."
-pub fn judge_collapse(native: Option<&ProcessModelTrial>, paired: Option<&ProcessModelTrial>) -> CollapseVerdict {
+pub fn judge_collapse(
+    native: Option<&ProcessModelTrial>,
+    paired: Option<&ProcessModelTrial>,
+) -> CollapseVerdict {
     let (Some(native), Some(paired)) = (native, paired) else {
         let mut missing = Vec::new();
         if native.is_none() {
@@ -355,7 +369,10 @@ pub fn judge_collapse(native: Option<&ProcessModelTrial>, paired: Option<&Proces
         (native.directional_balance(), paired.directional_balance())
     else {
         return CollapseVerdict::Withheld {
-            missing: vec!["both directions must be measured in both process models to compute balance".to_string()],
+            missing: vec![
+                "both directions must be measured in both process models to compute balance"
+                    .to_string(),
+            ],
         };
     };
 
@@ -400,9 +417,19 @@ pub fn judge_collapse(native: Option<&ProcessModelTrial>, paired: Option<&Proces
 
     // Exactly one model shows the imbalance: this is the PV10 finding.
     let (collapsed_model, collapsed_balance, clean_model, clean_balance) = if paired_collapsed {
-        ("paired_process", paired_balance, "native_bidir", native_balance)
+        (
+            "paired_process",
+            paired_balance,
+            "native_bidir",
+            native_balance,
+        )
     } else {
-        ("native_bidir", native_balance, "paired_process", paired_balance)
+        (
+            "native_bidir",
+            native_balance,
+            "paired_process",
+            paired_balance,
+        )
     };
     let mut detail = format!(
         "{collapsed_model} showed a directional collapse (balance={collapsed_balance:.2}) that did not \
@@ -419,7 +446,12 @@ pub fn judge_collapse(native: Option<&ProcessModelTrial>, paired: Option<&Proces
 mod tests {
     use super::*;
 
-    fn trial(model: ProcessModel, target: f64, up: Option<f64>, down: Option<f64>) -> ProcessModelTrial {
+    fn trial(
+        model: ProcessModel,
+        target: f64,
+        up: Option<f64>,
+        down: Option<f64>,
+    ) -> ProcessModelTrial {
         ProcessModelTrial {
             model,
             target_mbps_per_direction: target,
@@ -436,7 +468,10 @@ mod tests {
     fn platform_limited_counters_never_report_a_bare_zero() {
         let c = ReceivePathCounters::platform_limited();
         assert_eq!(c.tcp_rcv_collapsed.value, None);
-        assert_eq!(c.tcp_rcv_collapsed.obtainability, Obtainability::PlatformLimited);
+        assert_eq!(
+            c.tcp_rcv_collapsed.obtainability,
+            Obtainability::PlatformLimited
+        );
         assert!(c.is_fully_platform_limited());
     }
 
@@ -484,7 +519,10 @@ mod tests {
         };
         let c = from_external(&ext);
         assert_eq!(c.tcp_rcv_collapsed.value, Some(85));
-        assert_eq!(c.tcp_rcv_collapsed.obtainability, Obtainability::OperatorSupplied);
+        assert_eq!(
+            c.tcp_rcv_collapsed.obtainability,
+            Obtainability::OperatorSupplied
+        );
         assert_eq!(c.softnet_drops.value, Some(12));
         // The field the source JSON did not carry stays platform_limited --
         // ingest never invents it as a measured/operator-supplied zero.
@@ -589,7 +627,10 @@ mod tests {
     fn balanced_in_both_models_reports_no_collapse() {
         let native = trial(ProcessModel::NativeBidir, 250.0, Some(160.0), Some(155.0));
         let paired = trial(ProcessModel::PairedProcess, 250.0, Some(158.0), Some(152.0));
-        assert_eq!(judge_collapse(Some(&native), Some(&paired)), CollapseVerdict::NoCollapseObserved);
+        assert_eq!(
+            judge_collapse(Some(&native), Some(&paired)),
+            CollapseVerdict::NoCollapseObserved
+        );
     }
 
     #[test]

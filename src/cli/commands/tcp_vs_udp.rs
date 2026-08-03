@@ -45,11 +45,34 @@ pub struct TcpVsUdpArgs {
     pub json: bool,
 }
 
-fn run_iperf(server: &str, port: u16, local_ip: &str, interface: &str, rate_mbps: f64, duration_secs: u64, udp: bool) -> Result<IperfResult, IperfParseError> {
+fn run_iperf(
+    server: &str,
+    port: u16,
+    local_ip: &str,
+    interface: &str,
+    rate_mbps: f64,
+    duration_secs: u64,
+    udp: bool,
+) -> Result<IperfResult, IperfParseError> {
     let bind = format!("{local_ip}%{interface}");
     let rate_arg = format!("{rate_mbps}M");
     let mut cmd = Command::new("iperf3");
-    cmd.args(["-c", server, "-p", &port.to_string(), "-4", "-B", &bind, "-b", &rate_arg, "-t", &duration_secs.to_string(), "-J", "--connect-timeout", "3000"]);
+    cmd.args([
+        "-c",
+        server,
+        "-p",
+        &port.to_string(),
+        "-4",
+        "-B",
+        &bind,
+        "-b",
+        &rate_arg,
+        "-t",
+        &duration_secs.to_string(),
+        "-J",
+        "--connect-timeout",
+        "3000",
+    ]);
     if udp {
         cmd.arg("-u");
     }
@@ -60,11 +83,18 @@ fn run_iperf(server: &str, port: u16, local_ip: &str, interface: &str, rate_mbps
 /// hang this process indefinitely -- iperf3 has no default connect
 /// deadline. `--connect-timeout` (set by the caller) bounds admission; this
 /// wall-clock kill is the unconditional backstop behind it.
-fn run_with_hard_timeout(mut cmd: Command, hard_timeout: Duration) -> Result<IperfResult, IperfParseError> {
+fn run_with_hard_timeout(
+    mut cmd: Command,
+    hard_timeout: Duration,
+) -> Result<IperfResult, IperfParseError> {
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
-        Err(e) => return Err(IperfParseError::InvalidJson(format!("failed to run iperf3: {e}"))),
+        Err(e) => {
+            return Err(IperfParseError::InvalidJson(format!(
+                "failed to run iperf3: {e}"
+            )))
+        }
     };
 
     let start = Instant::now();
@@ -75,23 +105,37 @@ fn run_with_hard_timeout(mut cmd: Command, hard_timeout: Duration) -> Result<Ipe
                 if start.elapsed() >= hard_timeout {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return Err(IperfParseError::InvalidJson(format!("iperf3 did not exit within {hard_timeout:?}; killed")));
+                    return Err(IperfParseError::InvalidJson(format!(
+                        "iperf3 did not exit within {hard_timeout:?}; killed"
+                    )));
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
-            Err(e) => return Err(IperfParseError::InvalidJson(format!("failed to poll iperf3: {e}"))),
+            Err(e) => {
+                return Err(IperfParseError::InvalidJson(format!(
+                    "failed to poll iperf3: {e}"
+                )))
+            }
         }
     }
 
     let output = match child.wait_with_output() {
         Ok(o) => o,
-        Err(e) => return Err(IperfParseError::InvalidJson(format!("failed to collect iperf3 output: {e}"))),
+        Err(e) => {
+            return Err(IperfParseError::InvalidJson(format!(
+                "failed to collect iperf3 output: {e}"
+            )))
+        }
     };
     parse_iperf_json(&String::from_utf8_lossy(&output.stdout))
 }
 
 fn load_fixture(name: &str) -> Result<IperfResult, IperfParseError> {
-    let path = format!("{}/harness/fixtures/iperf/{}", env!("CARGO_MANIFEST_DIR"), name);
+    let path = format!(
+        "{}/harness/fixtures/iperf/{}",
+        env!("CARGO_MANIFEST_DIR"),
+        name
+    );
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| {
         eprintln!("fixture {path} unreadable: {e}");
         std::process::exit(2);
@@ -112,7 +156,10 @@ pub fn run(args: &TcpVsUdpArgs) {
         let server = match &args.server {
             Some(s) => s.clone(),
             None => {
-                eprintln!("{} --server is required; there is no hardcoded default endpoint.", "✗".red());
+                eprintln!(
+                    "{} --server is required; there is no hardcoded default endpoint.",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
@@ -130,7 +177,10 @@ pub fn run(args: &TcpVsUdpArgs) {
         let local_ip = match &args.local_ip {
             Some(ip) => ip.clone(),
             None => {
-                eprintln!("{} --local-ip is required to bind sessions to --interface explicitly.", "✗".red());
+                eprintln!(
+                    "{} --local-ip is required to bind sessions to --interface explicitly.",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
@@ -138,11 +188,33 @@ pub fn run(args: &TcpVsUdpArgs) {
         // Neither iperf3 call runs through LoadGuard (they're bare
         // subprocess calls, not a LoadPhase), so this command brackets them
         // directly rather than silently skipping radio coverage.
-        let before_radio = fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
-        let tcp = run_iperf(&server, args.tcp_port, &local_ip, &interface, args.rate_mbps, args.duration_secs, false);
-        let udp = run_iperf(&server, args.udp_port, &local_ip, &interface, args.rate_mbps, args.duration_secs, true);
-        let after_radio = fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
-        radio_timeline = Some(RadioTimeline { before: before_radio, during: Vec::new(), after: after_radio });
+        let before_radio = fraggle_packet::load_guard::radio::snapshot_live()
+            .unwrap_or_else(|_| RadioSnapshot::unavailable());
+        let tcp = run_iperf(
+            &server,
+            args.tcp_port,
+            &local_ip,
+            &interface,
+            args.rate_mbps,
+            args.duration_secs,
+            false,
+        );
+        let udp = run_iperf(
+            &server,
+            args.udp_port,
+            &local_ip,
+            &interface,
+            args.rate_mbps,
+            args.duration_secs,
+            true,
+        );
+        let after_radio = fraggle_packet::load_guard::radio::snapshot_live()
+            .unwrap_or_else(|_| RadioSnapshot::unavailable());
+        radio_timeline = Some(RadioTimeline {
+            before: before_radio,
+            during: Vec::new(),
+            after: after_radio,
+        });
         (tcp, udp, server, "live")
     };
 
@@ -189,11 +261,13 @@ fn radio_validity_for(timeline: &Option<RadioTimeline>) -> String {
 }
 
 fn fmt_mbps(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.1} Mbps")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.1} Mbps"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn fmt_pct(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.3}%")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.3}%"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn print_human(comparison: &TcpVsUdpComparison, data_source: &str, radio_validity: &str) {
@@ -205,14 +279,24 @@ fn print_human(comparison: &TcpVsUdpComparison, data_source: &str, radio_validit
         "  TCP: usable={} achieved={} {}",
         comparison.tcp.usable,
         fmt_mbps(comparison.tcp.achieved_mbps),
-        comparison.tcp.unusable_reason.as_deref().map(|r| format!("({r})")).unwrap_or_default()
+        comparison
+            .tcp
+            .unusable_reason
+            .as_deref()
+            .map(|r| format!("({r})"))
+            .unwrap_or_default()
     );
     println!(
         "  UDP: usable={} achieved={} loss={} {}",
         comparison.udp.usable,
         fmt_mbps(comparison.udp.achieved_mbps),
         fmt_pct(comparison.udp.loss_percent),
-        comparison.udp.unusable_reason.as_deref().map(|r| format!("({r})")).unwrap_or_default()
+        comparison
+            .udp
+            .unusable_reason
+            .as_deref()
+            .map(|r| format!("({r})"))
+            .unwrap_or_default()
     );
     match comparison.achieved_mbps_delta() {
         Some(d) => println!("  achieved_mbps_delta (TCP - UDP): {d:.2}"),

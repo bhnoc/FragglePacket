@@ -1,6 +1,5 @@
 //! GAP-014: DNS steering comparison (`dns-steering`).
 
-use colored::*;
 
 use fraggle_packet::network_tests::dns_steering::{compare_steering, SteeringVerdict};
 use fraggle_packet::redact::RedactionPolicy;
@@ -37,7 +36,10 @@ pub fn run(args: &DnsSteeringArgs) {
     }
 
     let mut buf = String::new();
-    buf.push_str(&format!("== DNS steering comparison: {} ==\n", comparison.name));
+    buf.push_str(&format!(
+        "== DNS steering comparison: {} ==\n",
+        comparison.name
+    ));
     for (resolver, results) in args.resolvers.iter().zip(comparison.per_resolver.iter()) {
         buf.push_str(&format!("  resolver {}:\n", resolver));
         for r in results {
@@ -52,7 +54,9 @@ pub fn run(args: &DnsSteeringArgs) {
                                 "    {:?} {} ttl={}\n",
                                 a.record_type,
                                 a.value,
-                                a.ttl_secs.map(|t| t.to_string()).unwrap_or_else(|| "unavailable".to_string())
+                                a.ttl_secs
+                                    .map(|t| t.to_string())
+                                    .unwrap_or_else(|| "unavailable".to_string())
                             ));
                         }
                     }
@@ -60,7 +64,10 @@ pub fn run(args: &DnsSteeringArgs) {
             }
         }
         if let Some(t) = results.iter().find_map(|r| r.query_time_ms) {
-            buf.push_str(&format!("    query_time_ms (per-resolver, not averaged): {}\n", t));
+            buf.push_str(&format!(
+                "    query_time_ms (per-resolver, not averaged): {}\n",
+                t
+            ));
         }
     }
 

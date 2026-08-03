@@ -14,9 +14,9 @@ pub fn run_tracepath(target: &str) -> Vec<HopInfo> {
 
     // Try tracepath first (Linux)
     let output = Command::new("tracepath")
-        .arg("-n")  // No DNS lookups (faster)
+        .arg("-n") // No DNS lookups (faster)
         .arg("-m")
-        .arg("15")  // Max 15 hops
+        .arg("15") // Max 15 hops
         .arg(target)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -50,7 +50,10 @@ pub fn run(args: &PreflightArgs) {
     endpoints.dedup();
 
     if endpoints.is_empty() {
-        eprintln!("{} no endpoints to test (pass --endpoint or drop --no-defaults)", "✗".red());
+        eprintln!(
+            "{} no endpoints to test (pass --endpoint or drop --no-defaults)",
+            "✗".red()
+        );
         return;
     }
 
@@ -86,7 +89,11 @@ pub fn run(args: &PreflightArgs) {
     let control_ok_hosts: Vec<String> = per_protocol_results
         .iter()
         .find(|(p, _)| *p == Protocol::Http2)
-        .or_else(|| per_protocol_results.iter().find(|(p, _)| *p == Protocol::Http1))
+        .or_else(|| {
+            per_protocol_results
+                .iter()
+                .find(|(p, _)| *p == Protocol::Http1)
+        })
         .map(|(_, results)| {
             results
                 .iter()
@@ -138,17 +145,26 @@ fn print_human_report(report: &PreflightReport) {
                 "  {:32} ip={:<16} advertised={:<14} negotiated_alpn={:<8} verdict={}",
                 ep.host,
                 ep.resolved_ip.clone().unwrap_or_else(|| "?".to_string()),
-                ep.advertised.map(|a| a.as_str().to_string()).unwrap_or_else(|| "n/a".to_string()),
-                ep.negotiated_alpn.clone().unwrap_or_else(|| "-".to_string()),
+                ep.advertised
+                    .map(|a| a.as_str().to_string())
+                    .unwrap_or_else(|| "n/a".to_string()),
+                ep.negotiated_alpn
+                    .clone()
+                    .unwrap_or_else(|| "-".to_string()),
                 verdict_str
             );
             println!("      {}", ep.detail.dimmed());
         }
         match &proto.network_verdict {
             NetworkVerdict::Usable => {
-                println!("  {} protocol appears usable on this network", "network verdict:".bold());
+                println!(
+                    "  {} protocol appears usable on this network",
+                    "network verdict:".bold()
+                );
             }
-            NetworkVerdict::Filtered { corroborating_endpoints } => {
+            NetworkVerdict::Filtered {
+                corroborating_endpoints,
+            } => {
                 println!(
                     "  {} {} (corroborated by: {})",
                     "network verdict:".bold(),

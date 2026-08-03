@@ -32,18 +32,30 @@ pub enum PreflightOutcome {
     Healthy,
     /// Terminal until `confirm_host_key_rotation` succeeds. No other path
     /// clears this state.
-    HostKeyChanged { observed_fingerprint_hint: Option<String> },
+    HostKeyChanged {
+        observed_fingerprint_hint: Option<String>,
+    },
     ConnectionTimedOut,
     ConnectionRefused,
     /// A binary/library dependency is broken on the remote node -- e.g.
     /// `iperf3: error while loading shared libraries: libiperf.so.0`.
     /// Distinct from a network failure: the SSH hop itself succeeded.
-    DependencyBroken { detail: String },
-    ClockSkewExceeded { skew_secs: f64 },
-    RouteUnhealthy { detail: String },
+    DependencyBroken {
+        detail: String,
+    },
+    ClockSkewExceeded {
+        skew_secs: f64,
+    },
+    RouteUnhealthy {
+        detail: String,
+    },
     RadioUnassociated,
-    ResourceConstrained { detail: String },
-    EndpointUnreachable { detail: String },
+    ResourceConstrained {
+        detail: String,
+    },
+    EndpointUnreachable {
+        detail: String,
+    },
 }
 
 impl PreflightOutcome {
@@ -55,16 +67,23 @@ impl PreflightOutcome {
         match self {
             PreflightOutcome::Healthy => "healthy".to_string(),
             PreflightOutcome::HostKeyChanged { .. } => {
-                "SSH host key changed; quarantined pending independently verified rotation".to_string()
+                "SSH host key changed; quarantined pending independently verified rotation"
+                    .to_string()
             }
             PreflightOutcome::ConnectionTimedOut => "connection timed out".to_string(),
             PreflightOutcome::ConnectionRefused => "connection refused".to_string(),
             PreflightOutcome::DependencyBroken { detail } => format!("dependency broken: {detail}"),
-            PreflightOutcome::ClockSkewExceeded { skew_secs } => format!("clock skew {skew_secs:.1}s exceeds threshold"),
+            PreflightOutcome::ClockSkewExceeded { skew_secs } => {
+                format!("clock skew {skew_secs:.1}s exceeds threshold")
+            }
             PreflightOutcome::RouteUnhealthy { detail } => format!("route unhealthy: {detail}"),
             PreflightOutcome::RadioUnassociated => "radio not associated".to_string(),
-            PreflightOutcome::ResourceConstrained { detail } => format!("resource constrained: {detail}"),
-            PreflightOutcome::EndpointUnreachable { detail } => format!("endpoint unreachable: {detail}"),
+            PreflightOutcome::ResourceConstrained { detail } => {
+                format!("resource constrained: {detail}")
+            }
+            PreflightOutcome::EndpointUnreachable { detail } => {
+                format!("endpoint unreachable: {detail}")
+            }
         }
     }
 }
@@ -77,12 +96,16 @@ impl PreflightOutcome {
 /// or, far worse, let a changed-key node slip through as a plain refusal.
 pub fn classify_ssh_error(stderr: &str, exit_code: Option<i32>) -> PreflightOutcome {
     let lower = stderr.to_lowercase();
-    if lower.contains("remote host identification has changed") || lower.contains("host key verification failed") {
+    if lower.contains("remote host identification has changed")
+        || lower.contains("host key verification failed")
+    {
         let hint = stderr
             .lines()
             .find(|l| l.to_lowercase().contains("fingerprint"))
             .map(|l| l.trim().to_string());
-        return PreflightOutcome::HostKeyChanged { observed_fingerprint_hint: hint };
+        return PreflightOutcome::HostKeyChanged {
+            observed_fingerprint_hint: hint,
+        };
     }
     if lower.contains("connection timed out") || lower.contains("operation timed out") {
         return PreflightOutcome::ConnectionTimedOut;
@@ -90,7 +113,9 @@ pub fn classify_ssh_error(stderr: &str, exit_code: Option<i32>) -> PreflightOutc
     if lower.contains("connection refused") {
         return PreflightOutcome::ConnectionRefused;
     }
-    PreflightOutcome::EndpointUnreachable { detail: format!("ssh exit={exit_code:?}: {}", stderr.trim()) }
+    PreflightOutcome::EndpointUnreachable {
+        detail: format!("ssh exit={exit_code:?}: {}", stderr.trim()),
+    }
 }
 
 /// Classifies a remote executable's own failure output (e.g. `iperf3
@@ -99,16 +124,24 @@ pub fn classify_ssh_error(stderr: &str, exit_code: Option<i32>) -> PreflightOutc
 /// connection that never happened.
 pub fn classify_dependency_check(stderr: &str, exit_code: Option<i32>) -> PreflightOutcome {
     let lower = stderr.to_lowercase();
-    if lower.contains("error while loading shared libraries") || lower.contains("cannot open shared object file") {
-        return PreflightOutcome::DependencyBroken { detail: stderr.trim().to_string() };
+    if lower.contains("error while loading shared libraries")
+        || lower.contains("cannot open shared object file")
+    {
+        return PreflightOutcome::DependencyBroken {
+            detail: stderr.trim().to_string(),
+        };
     }
     if exit_code == Some(127) {
-        return PreflightOutcome::DependencyBroken { detail: "command not found (exit 127)".to_string() };
+        return PreflightOutcome::DependencyBroken {
+            detail: "command not found (exit 127)".to_string(),
+        };
     }
     if exit_code == Some(0) {
         PreflightOutcome::Healthy
     } else {
-        PreflightOutcome::DependencyBroken { detail: format!("exit={exit_code:?}: {}", stderr.trim()) }
+        PreflightOutcome::DependencyBroken {
+            detail: format!("exit={exit_code:?}: {}", stderr.trim()),
+        }
     }
 }
 
@@ -141,12 +174,17 @@ pub fn confirm_host_key_rotation(
     operator_confirmed_fingerprint: &str,
 ) -> Result<(), String> {
     if observed_fingerprint.trim().is_empty() || operator_confirmed_fingerprint.trim().is_empty() {
-        return Err("both observed and operator-confirmed fingerprints must be non-empty".to_string());
+        return Err(
+            "both observed and operator-confirmed fingerprints must be non-empty".to_string(),
+        );
     }
     if observed_fingerprint.trim() == operator_confirmed_fingerprint.trim() {
         Ok(())
     } else {
-        Err("operator-confirmed fingerprint does not match the observed one; rotation not verified".to_string())
+        Err(
+            "operator-confirmed fingerprint does not match the observed one; rotation not verified"
+                .to_string(),
+        )
     }
 }
 
@@ -173,7 +211,11 @@ pub fn summarize_preflight(results: &[NodePreflightResult]) -> PreflightSummary 
             excluded.push((r.label.clone(), r.outcome.reason()));
         }
     }
-    PreflightSummary { total: results.len(), healthy_labels: healthy, excluded_with_reason: excluded }
+    PreflightSummary {
+        total: results.len(),
+        healthy_labels: healthy,
+        excluded_with_reason: excluded,
+    }
 }
 
 #[cfg(test)]
@@ -233,44 +275,78 @@ Host key verification failed.";
 
     #[test]
     fn connection_timeout_is_distinguished_from_refusal() {
-        let timeout = classify_ssh_error("ssh: connect to host 10.0.0.1 port 22: Operation timed out", None);
+        let timeout = classify_ssh_error(
+            "ssh: connect to host 10.0.0.1 port 22: Operation timed out",
+            None,
+        );
         assert_eq!(timeout, PreflightOutcome::ConnectionTimedOut);
-        let refused = classify_ssh_error("ssh: connect to host 10.0.0.1 port 22: Connection refused", None);
+        let refused = classify_ssh_error(
+            "ssh: connect to host 10.0.0.1 port 22: Connection refused",
+            None,
+        );
         assert_eq!(refused, PreflightOutcome::ConnectionRefused);
     }
 
     #[test]
     fn clock_skew_within_threshold_is_healthy() {
-        let check = ClockCheck { remote_unix_secs: 1000.0, local_unix_secs: 1002.0 };
+        let check = ClockCheck {
+            remote_unix_secs: 1000.0,
+            local_unix_secs: 1002.0,
+        };
         assert_eq!(evaluate_clock_skew(&check), PreflightOutcome::Healthy);
     }
 
     #[test]
     fn clock_skew_beyond_threshold_is_flagged() {
-        let check = ClockCheck { remote_unix_secs: 1000.0, local_unix_secs: 1020.0 };
-        assert!(matches!(evaluate_clock_skew(&check), PreflightOutcome::ClockSkewExceeded { .. }));
+        let check = ClockCheck {
+            remote_unix_secs: 1000.0,
+            local_unix_secs: 1020.0,
+        };
+        assert!(matches!(
+            evaluate_clock_skew(&check),
+            PreflightOutcome::ClockSkewExceeded { .. }
+        ));
     }
 
     #[test]
     fn summary_excludes_unhealthy_nodes_with_named_reasons_never_as_zero() {
         let results = vec![
-            NodePreflightResult { label: "node-ok000001".to_string(), outcome: PreflightOutcome::Healthy },
+            NodePreflightResult {
+                label: "node-ok000001".to_string(),
+                outcome: PreflightOutcome::Healthy,
+            },
             NodePreflightResult {
                 label: "node-bad000001".to_string(),
-                outcome: PreflightOutcome::HostKeyChanged { observed_fingerprint_hint: None },
+                outcome: PreflightOutcome::HostKeyChanged {
+                    observed_fingerprint_hint: None,
+                },
             },
             NodePreflightResult {
                 label: "node-bad000002".to_string(),
-                outcome: PreflightOutcome::DependencyBroken { detail: "missing libiperf.so.0".to_string() },
+                outcome: PreflightOutcome::DependencyBroken {
+                    detail: "missing libiperf.so.0".to_string(),
+                },
             },
-            NodePreflightResult { label: "node-bad000003".to_string(), outcome: PreflightOutcome::ConnectionTimedOut },
+            NodePreflightResult {
+                label: "node-bad000003".to_string(),
+                outcome: PreflightOutcome::ConnectionTimedOut,
+            },
         ];
         let summary = summarize_preflight(&results);
         assert_eq!(summary.total, 4);
         assert_eq!(summary.healthy_labels, vec!["node-ok000001".to_string()]);
         assert_eq!(summary.excluded_with_reason.len(), 3);
-        assert!(summary.excluded_with_reason.iter().any(|(_, r)| r.contains("host key changed")));
-        assert!(summary.excluded_with_reason.iter().any(|(_, r)| r.contains("missing libiperf.so.0")));
-        assert!(summary.excluded_with_reason.iter().any(|(_, r)| r.contains("timed out")));
+        assert!(summary
+            .excluded_with_reason
+            .iter()
+            .any(|(_, r)| r.contains("host key changed")));
+        assert!(summary
+            .excluded_with_reason
+            .iter()
+            .any(|(_, r)| r.contains("missing libiperf.so.0")));
+        assert!(summary
+            .excluded_with_reason
+            .iter()
+            .any(|(_, r)| r.contains("timed out")));
     }
 }

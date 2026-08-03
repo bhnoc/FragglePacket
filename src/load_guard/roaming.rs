@@ -66,7 +66,10 @@ pub struct RoamTransition {
     pub identity_continuity: IdentityContinuity,
 }
 
-pub fn classify_transition(before: &Option<ApIdentity>, after: &Option<ApIdentity>) -> TransitionKind {
+pub fn classify_transition(
+    before: &Option<ApIdentity>,
+    after: &Option<ApIdentity>,
+) -> TransitionKind {
     match compare_ap_identity(before, after) {
         ApComparison::SameApSameRadio => TransitionKind::SameApSameRadio,
         ApComparison::SameApDifferentRadio => TransitionKind::SameApDifferentRadio,
@@ -116,7 +119,11 @@ mod tests {
     use super::*;
 
     fn identity(label: &str, band: &str) -> ApIdentity {
-        ApIdentity { label: label.to_string(), band: Some(band.to_string()), channel: Some(1) }
+        ApIdentity {
+            label: label.to_string(),
+            band: Some(band.to_string()),
+            channel: Some(1),
+        }
     }
 
     #[test]
@@ -138,34 +145,52 @@ mod tests {
     fn regex_lite_check(s: &str) -> bool {
         // hand-rolled MAC-shape check without pulling in `regex`
         let parts: Vec<&str> = s.split(':').collect();
-        parts.len() == 6 && parts.iter().all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
+        parts.len() == 6
+            && parts
+                .iter()
+                .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
     }
 
     #[test]
     fn same_bssid_same_band_is_same_ap_same_radio() {
         let before = Some(identity("ap-aaaa1111", "6GHz"));
         let after = Some(identity("ap-aaaa1111", "6GHz"));
-        assert_eq!(classify_transition(&before, &after), TransitionKind::SameApSameRadio);
+        assert_eq!(
+            classify_transition(&before, &after),
+            TransitionKind::SameApSameRadio
+        );
     }
 
     #[test]
     fn same_label_different_band_is_same_ap_different_radio() {
         let before = Some(identity("ap-aaaa1111", "6GHz"));
         let after = Some(identity("ap-aaaa1111", "2GHz"));
-        assert_eq!(classify_transition(&before, &after), TransitionKind::SameApDifferentRadio);
+        assert_eq!(
+            classify_transition(&before, &after),
+            TransitionKind::SameApDifferentRadio
+        );
     }
 
     #[test]
     fn different_label_is_different_ap() {
         let before = Some(identity("ap-aaaa1111", "6GHz"));
         let after = Some(identity("ap-bbbb2222", "6GHz"));
-        assert_eq!(classify_transition(&before, &after), TransitionKind::DifferentAp);
+        assert_eq!(
+            classify_transition(&before, &after),
+            TransitionKind::DifferentAp
+        );
     }
 
     #[test]
     fn missing_either_side_is_undetermined_not_guessed() {
-        assert_eq!(classify_transition(&None, &Some(identity("ap-aaaa1111", "6GHz"))), TransitionKind::Undetermined);
-        assert_eq!(classify_transition(&None, &None), TransitionKind::Undetermined);
+        assert_eq!(
+            classify_transition(&None, &Some(identity("ap-aaaa1111", "6GHz"))),
+            TransitionKind::Undetermined
+        );
+        assert_eq!(
+            classify_transition(&None, &None),
+            TransitionKind::Undetermined
+        );
     }
 
     #[test]
@@ -216,6 +241,9 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(unavailable.identity_continuity, IdentityContinuity::Unavailable);
+        assert_eq!(
+            unavailable.identity_continuity,
+            IdentityContinuity::Unavailable
+        );
     }
 }

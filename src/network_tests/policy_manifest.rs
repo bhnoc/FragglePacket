@@ -153,7 +153,9 @@ impl PolicyManifest {
     }
 
     pub fn run_all(&self, timeout: Duration) -> Vec<ProbeResult> {
-        (0..self.entries.len()).filter_map(|i| self.probe_entry(i, timeout)).collect()
+        (0..self.entries.len())
+            .filter_map(|i| self.probe_entry(i, timeout))
+            .collect()
     }
 
     pub fn report(&self, results: &[ProbeResult], mode: ReportMode) -> Vec<EntryReport> {
@@ -187,10 +189,11 @@ impl PolicyManifest {
 
 fn probe_one(index: usize, entry: &PolicyEntry, timeout: Duration) -> ProbeResult {
     let start = Instant::now();
-    let addr = match format!("{}:{}", entry.destination_host, entry.destination_port).to_socket_addrs() {
-        Ok(mut addrs) => addrs.next(),
-        Err(_) => None,
-    };
+    let addr =
+        match format!("{}:{}", entry.destination_host, entry.destination_port).to_socket_addrs() {
+            Ok(mut addrs) => addrs.next(),
+            Err(_) => None,
+        };
 
     let addr = match addr {
         Some(a) => a,
@@ -253,7 +256,12 @@ fn classify_connect_error(e: &std::io::Error) -> ObservedOutcome {
     }
 }
 
-fn http_get_status(mut stream: TcpStream, host: &str, path: &str, timeout: Duration) -> Option<u16> {
+fn http_get_status(
+    mut stream: TcpStream,
+    host: &str,
+    path: &str,
+    timeout: Duration,
+) -> Option<u16> {
     use std::io::{Read, Write};
     stream.set_read_timeout(Some(timeout)).ok();
     stream.set_write_timeout(Some(timeout)).ok();
@@ -288,38 +296,61 @@ mod tests {
         // The manifest is constructed with exactly one entry; probe_entry
         // for any other index must return None, never synthesize a probe.
         let manifest = PolicyManifest::new(vec![entry(ExpectedOutcome::Deny)]);
-        assert!(manifest.probe_entry(1, Duration::from_millis(100)).is_none());
-        assert!(manifest.probe_entry(0, Duration::from_millis(100)).is_some());
+        assert!(manifest
+            .probe_entry(1, Duration::from_millis(100))
+            .is_none());
+        assert!(manifest
+            .probe_entry(0, Duration::from_millis(100))
+            .is_some());
     }
 
     #[test]
     fn expected_deny_reachable_is_unexpectedly_allowed() {
-        assert_eq!(judge_drift(ExpectedOutcome::Deny, ObservedOutcome::Reachable), DriftVerdict::UnexpectedlyAllowed);
+        assert_eq!(
+            judge_drift(ExpectedOutcome::Deny, ObservedOutcome::Reachable),
+            DriftVerdict::UnexpectedlyAllowed
+        );
     }
 
     #[test]
     fn expected_allow_rejected_is_unexpectedly_blocked() {
-        assert_eq!(judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Rejected), DriftVerdict::UnexpectedlyBlocked);
+        assert_eq!(
+            judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Rejected),
+            DriftVerdict::UnexpectedlyBlocked
+        );
     }
 
     #[test]
     fn expected_deny_timed_out_matches_expectation() {
-        assert_eq!(judge_drift(ExpectedOutcome::Deny, ObservedOutcome::TimedOut), DriftVerdict::MatchesExpectation);
+        assert_eq!(
+            judge_drift(ExpectedOutcome::Deny, ObservedOutcome::TimedOut),
+            DriftVerdict::MatchesExpectation
+        );
     }
 
     #[test]
     fn expected_allow_reachable_matches_expectation() {
-        assert_eq!(judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Reachable), DriftVerdict::MatchesExpectation);
+        assert_eq!(
+            judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Reachable),
+            DriftVerdict::MatchesExpectation
+        );
     }
 
     #[test]
     fn redirect_on_expected_allow_is_intercepted_not_a_clean_match() {
-        assert_eq!(judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Redirected), DriftVerdict::InterceptedByPortal);
+        assert_eq!(
+            judge_drift(ExpectedOutcome::Allow, ObservedOutcome::Redirected),
+            DriftVerdict::InterceptedByPortal
+        );
     }
 
     #[test]
     fn timeout_reject_redirect_are_three_distinct_variants() {
-        let variants = [ObservedOutcome::TimedOut, ObservedOutcome::Rejected, ObservedOutcome::Redirected];
+        let variants = [
+            ObservedOutcome::TimedOut,
+            ObservedOutcome::Rejected,
+            ObservedOutcome::Redirected,
+        ];
         for i in 0..variants.len() {
             for j in 0..variants.len() {
                 if i != j {

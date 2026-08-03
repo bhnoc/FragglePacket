@@ -64,7 +64,11 @@ impl RunStats {
     /// variance 0.0" shape this module exists to prevent.
     pub fn new(sample_count: u32, variance: Option<f64>, warm_up: WarmUpState) -> Self {
         let variance = if sample_count <= 1 { None } else { variance };
-        RunStats { sample_count, variance, warm_up }
+        RunStats {
+            sample_count,
+            variance,
+            warm_up,
+        }
     }
 
     pub fn single_sample(warm_up: WarmUpState) -> Self {
@@ -101,7 +105,8 @@ pub fn confidence_from_stats(stats: &RunStats) -> (Confidence, Vec<String>) {
     }
 
     if stats.warm_up == WarmUpState::Skipped {
-        reasons.push("warm-up phase was skipped; early-sample transients may be included".to_string());
+        reasons
+            .push("warm-up phase was skipped; early-sample transients may be included".to_string());
     }
 
     if stats.variance.is_none() {
@@ -127,10 +132,16 @@ pub struct EndpointMismatchWarning {
 /// flags when any two legs resolved to different IPs for what the
 /// operator intended as "the same endpoint" comparison.
 pub fn detect_endpoint_mismatch(endpoints: &[EndpointIdentity]) -> EndpointMismatchWarning {
-    let ips: Vec<&str> = endpoints.iter().filter_map(|e| e.resolved_ip.as_deref()).collect();
+    let ips: Vec<&str> = endpoints
+        .iter()
+        .filter_map(|e| e.resolved_ip.as_deref())
+        .collect();
     let unique: BTreeSet<&str> = ips.iter().copied().collect();
     if unique.len() <= 1 {
-        return EndpointMismatchWarning { mismatched: false, detail: None };
+        return EndpointMismatchWarning {
+            mismatched: false,
+            detail: None,
+        };
     }
     let detail = format!(
         "legs resolved to different endpoint IPs ({}); a comparison across these legs measures different endpoints, not the same one under different conditions",
@@ -140,7 +151,10 @@ pub fn detect_endpoint_mismatch(endpoints: &[EndpointIdentity]) -> EndpointMisma
             .collect::<Vec<_>>()
             .join(", ")
     );
-    EndpointMismatchWarning { mismatched: true, detail: Some(detail) }
+    EndpointMismatchWarning {
+        mismatched: true,
+        detail: Some(detail),
+    }
 }
 
 #[cfg(test)]
@@ -187,8 +201,16 @@ mod tests {
     #[test]
     fn matching_endpoints_report_no_mismatch() {
         let endpoints = vec![
-            EndpointIdentity { label: "h2".into(), resolved_ip: Some("1.2.3.4".into()), requested_name: "x".into() },
-            EndpointIdentity { label: "h3".into(), resolved_ip: Some("1.2.3.4".into()), requested_name: "x".into() },
+            EndpointIdentity {
+                label: "h2".into(),
+                resolved_ip: Some("1.2.3.4".into()),
+                requested_name: "x".into(),
+            },
+            EndpointIdentity {
+                label: "h3".into(),
+                resolved_ip: Some("1.2.3.4".into()),
+                requested_name: "x".into(),
+            },
         ];
         let warning = detect_endpoint_mismatch(&endpoints);
         assert!(!warning.mismatched);
@@ -197,8 +219,16 @@ mod tests {
     #[test]
     fn differing_endpoints_report_mismatch_with_detail() {
         let endpoints = vec![
-            EndpointIdentity { label: "h2".into(), resolved_ip: Some("1.2.3.4".into()), requested_name: "x".into() },
-            EndpointIdentity { label: "h3".into(), resolved_ip: Some("5.6.7.8".into()), requested_name: "x".into() },
+            EndpointIdentity {
+                label: "h2".into(),
+                resolved_ip: Some("1.2.3.4".into()),
+                requested_name: "x".into(),
+            },
+            EndpointIdentity {
+                label: "h3".into(),
+                resolved_ip: Some("5.6.7.8".into()),
+                requested_name: "x".into(),
+            },
         ];
         let warning = detect_endpoint_mismatch(&endpoints);
         assert!(warning.mismatched);
@@ -207,7 +237,10 @@ mod tests {
 
     #[test]
     fn variance_computed_via_welford_matches_manual_calc() {
-        let stats = stats_from_samples(&[2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0], WarmUpState::NotApplicable);
+        let stats = stats_from_samples(
+            &[2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0],
+            WarmUpState::NotApplicable,
+        );
         // Sample variance (n-1 denominator) of this classic example is 4.571428...
         let v = stats.variance.unwrap();
         assert!((v - 4.5714285714).abs() < 1e-6);

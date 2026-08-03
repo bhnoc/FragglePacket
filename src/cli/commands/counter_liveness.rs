@@ -3,7 +3,8 @@
 use colored::*;
 
 use fraggle_packet::network_tests::counter_liveness::{
-    classify_delta, qualify_zero_drop_claim, read_rx_packets, send_loopback_stimulus, LivenessVerdict,
+    classify_delta, qualify_zero_drop_claim, read_rx_packets, send_loopback_stimulus,
+    LivenessVerdict,
 };
 
 #[derive(clap::Args, Debug)]
@@ -43,33 +44,44 @@ pub struct CounterLivenessArgs {
 }
 
 pub fn run(args: &CounterLivenessArgs) {
-    let (before, after, stimulus) = if let (Some(b), Some(a)) = (args.inject_before, args.inject_after) {
-        (b, a, args.stimulus_packets)
-    } else {
-        let before = match read_rx_packets(&args.interface) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{} could not read counters for {}: {}", "✗".red(), args.interface, e);
-                std::process::exit(1);
-            }
+    let (before, after, stimulus) =
+        if let (Some(b), Some(a)) = (args.inject_before, args.inject_after) {
+            (b, a, args.stimulus_packets)
+        } else {
+            let before = match read_rx_packets(&args.interface) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!(
+                        "{} could not read counters for {}: {}",
+                        "✗".red(),
+                        args.interface,
+                        e
+                    );
+                    std::process::exit(1);
+                }
+            };
+            let sent = match send_loopback_stimulus(args.stimulus_packets, 64) {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("{} stimulus generation failed: {}", "✗".red(), e);
+                    std::process::exit(1);
+                }
+            };
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let after = match read_rx_packets(&args.interface) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!(
+                        "{} could not re-read counters for {}: {}",
+                        "✗".red(),
+                        args.interface,
+                        e
+                    );
+                    std::process::exit(1);
+                }
+            };
+            (before, after, sent)
         };
-        let sent = match send_loopback_stimulus(args.stimulus_packets, 64) {
-            Ok(n) => n,
-            Err(e) => {
-                eprintln!("{} stimulus generation failed: {}", "✗".red(), e);
-                std::process::exit(1);
-            }
-        };
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        let after = match read_rx_packets(&args.interface) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{} could not re-read counters for {}: {}", "✗".red(), args.interface, e);
-                std::process::exit(1);
-            }
-        };
-        (before, after, sent)
-    };
 
     let bracket = classify_delta(&args.interface, stimulus, before, after);
 
@@ -81,7 +93,12 @@ pub fn run(args: &CounterLivenessArgs) {
             Some((name.to_string(), drops.parse().ok()?))
         })
         .collect();
-    let zero_drop = qualify_zero_drop_claim(&args.interface, &bracket, args.primary_drops, &corroborating);
+    let zero_drop = qualify_zero_drop_claim(
+        &args.interface,
+        &bracket,
+        args.primary_drops,
+        &corroborating,
+    );
 
     if args.json {
         let payload = serde_json::json!({"bracket": bracket, "zero_drop_verdict": zero_drop});
@@ -89,9 +106,17 @@ pub fn run(args: &CounterLivenessArgs) {
         return;
     }
 
-    println!("{}", format!("== Counter liveness: {} ==", args.interface).cyan().bold());
+    println!(
+        "{}",
+        format!("== Counter liveness: {} ==", args.interface)
+            .cyan()
+            .bold()
+    );
     println!("  stimulus packets: {}", bracket.stimulus_packets_sent);
-    println!("  counter before/after: {} -> {}", bracket.counter_before, bracket.counter_after);
+    println!(
+        "  counter before/after: {} -> {}",
+        bracket.counter_before, bracket.counter_after
+    );
     let verdict_str = match bracket.verdict {
         LivenessVerdict::Live => "Live".green(),
         LivenessVerdict::Frozen => "Frozen".red().bold(),
@@ -104,10 +129,16 @@ pub fn run(args: &CounterLivenessArgs) {
 
     println!("{}", "-- Zero-drop verdict --".white().bold());
     println!("  primary live: {}", zero_drop.primary_live);
-    println!("  corroborating sources: {:?}", zero_drop.corroborating_sources);
+    println!(
+        "  corroborating sources: {:?}",
+        zero_drop.corroborating_sources
+    );
     match zero_drop.verdict {
         Some(true) => println!("  {}", "zero drops: CORROBORATED".green().bold()),
-        Some(false) => println!("  {}", "zero drops: DISAGREEMENT/NONZERO -- not clean".red()),
+        Some(false) => println!(
+            "  {}",
+            "zero drops: DISAGREEMENT/NONZERO -- not clean".red()
+        ),
         None => println!("  {}", "zero drops: WITHHELD (no verdict)".yellow().bold()),
     }
     println!("  {}", zero_drop.explanation.dimmed());

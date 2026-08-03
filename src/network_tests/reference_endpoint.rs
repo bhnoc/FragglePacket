@@ -84,10 +84,14 @@ impl ResourceLimits {
 pub enum ResultAcceptance {
     Accepted,
     /// The endpoint itself was the bottleneck or the timing was inconsistent.
-    RejectedServerSide { reasons: Vec<String> },
+    RejectedServerSide {
+        reasons: Vec<String>,
+    },
     /// Required health telemetry was absent, so acceptance cannot be decided.
     /// Distinct from rejection: this is unknown, not bad.
-    Undetermined { missing: Vec<String> },
+    Undetermined {
+        missing: Vec<String>,
+    },
 }
 
 /// CPU above this during a run means the endpoint, not the path, set the limit.
@@ -142,7 +146,10 @@ pub fn evaluate(h: &ServerHealth) -> ResultAcceptance {
     }
     if let Some(d) = h.queue_drops {
         if d > 0 {
-            reasons.push(format!("endpoint queue dropped {} packets during the run", d));
+            reasons.push(format!(
+                "endpoint queue dropped {} packets during the run",
+                d
+            ));
         }
     }
     if let Some(e) = h.nic_errors {
@@ -185,7 +192,11 @@ pub struct CalibrationReport {
     pub notes: Vec<String>,
 }
 
-pub fn calibrate(health: ServerHealth, limits: ResourceLimits, max_skew_ms: f64) -> CalibrationReport {
+pub fn calibrate(
+    health: ServerHealth,
+    limits: ResourceLimits,
+    max_skew_ms: f64,
+) -> CalibrationReport {
     let acceptance = evaluate(&health);
     let clock_verified = match health.clock_offset_ms {
         Some(o) => o.abs() <= max_skew_ms,
@@ -296,7 +307,10 @@ mod tests {
     fn missing_telemetry_never_reads_as_a_healthy_zero() {
         // An unread drop counter must not be treated as "zero drops".
         let h = ServerHealth::default();
-        assert!(matches!(evaluate(&h), ResultAcceptance::Undetermined { .. }));
+        assert!(matches!(
+            evaluate(&h),
+            ResultAcceptance::Undetermined { .. }
+        ));
     }
 
     #[test]

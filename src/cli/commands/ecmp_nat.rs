@@ -1,13 +1,13 @@
 //! GAP-028: multi-uplink ECMP/LAG hash and NAT-affinity diagnostic (`ecmp-nat`).
 
 use colored::*;
-use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use fraggle_packet::load_guard::route::is_tunnel_interface;
 use fraggle_packet::network_tests::ecmp_nat::{
-    classify_bimodality, run_tcp_bucket, run_udp_bucket, run_udp_bucket_with_stun_bracket, BimodalityVerdict,
-    BucketOutcome, BucketResult, TUNNEL_INTERFACE_WARNING,
+    classify_bimodality, run_tcp_bucket, run_udp_bucket, run_udp_bucket_with_stun_bracket,
+    BimodalityVerdict, BucketOutcome, BucketResult, TUNNEL_INTERFACE_WARNING,
 };
 
 #[derive(clap::Args, Debug)]
@@ -112,7 +112,11 @@ fn synthetic_buckets(seed: &str, ports: &[u16]) -> Vec<BucketResult> {
 }
 
 pub fn run(args: &EcmpNatArgs) {
-    let interface_is_tunnel = args.interface.as_deref().map(is_tunnel_interface).unwrap_or(false);
+    let interface_is_tunnel = args
+        .interface
+        .as_deref()
+        .map(is_tunnel_interface)
+        .unwrap_or(false);
     if interface_is_tunnel {
         eprintln!("{} {}", "⚠".yellow().bold(), TUNNEL_INTERFACE_WARNING);
     }
@@ -123,7 +127,10 @@ pub fn run(args: &EcmpNatArgs) {
         let target_str = match &args.target {
             Some(t) => t.clone(),
             None => {
-                eprintln!("{} --target is required; there is no hardcoded default endpoint.", "✗".red());
+                eprintln!(
+                    "{} --target is required; there is no hardcoded default endpoint.",
+                    "✗".red()
+                );
                 std::process::exit(1);
             }
         };
@@ -142,7 +149,13 @@ pub fn run(args: &EcmpNatArgs) {
             .map(|&port| match args.transport {
                 Transport::Tcp => run_tcp_bucket(port, target, args.payload_bytes, timeout),
                 Transport::Udp => match stun_server {
-                    Some(stun) => run_udp_bucket_with_stun_bracket(port, target, stun, args.payload_bytes, timeout),
+                    Some(stun) => run_udp_bucket_with_stun_bracket(
+                        port,
+                        target,
+                        stun,
+                        args.payload_bytes,
+                        timeout,
+                    ),
                     None => run_udp_bucket(port, target, args.payload_bytes, timeout),
                 },
             })
@@ -166,7 +179,10 @@ pub fn run(args: &EcmpNatArgs) {
     }
 
     println!();
-    println!("{}", "== ECMP/LAG Hash and NAT-Affinity Sweep ==".cyan().bold());
+    println!(
+        "{}",
+        "== ECMP/LAG Hash and NAT-Affinity Sweep ==".cyan().bold()
+    );
     if interface_is_tunnel {
         println!("  {} {}", "⚠".yellow(), TUNNEL_INTERFACE_WARNING);
     }

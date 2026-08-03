@@ -25,16 +25,29 @@ pub struct ClockGuardArgs {
 }
 
 pub fn run(args: &ClockGuardArgs) {
-    let verdict = verify(&args.node_label, &args.ntp_server, args.max_skew_ms, Duration::from_secs(args.timeout_secs));
+    let verdict = verify(
+        &args.node_label,
+        &args.ntp_server,
+        args.max_skew_ms,
+        Duration::from_secs(args.timeout_secs),
+    );
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&verdict).unwrap());
         return;
     }
 
-    println!("{}", format!("== Clock guard: {} ==", verdict.node_label).cyan().bold());
+    println!(
+        "{}",
+        format!("== Clock guard: {} ==", verdict.node_label)
+            .cyan()
+            .bold()
+    );
     match &verdict.offset {
-        Some(o) => println!("  offset: {:.3}ms +/- {:.3}ms (against {})", o.offset_ms, o.uncertainty_ms, verdict.ntp_server),
+        Some(o) => println!(
+            "  offset: {:.3}ms +/- {:.3}ms (against {})",
+            o.offset_ms, o.uncertainty_ms, verdict.ntp_server
+        ),
         None => println!("  offset: {}", "unavailable".yellow()),
     }
     println!("  max skew threshold: {:.1}ms", verdict.max_skew_ms);
@@ -43,8 +56,17 @@ pub fn run(args: &ClockGuardArgs) {
         SkewOutcome::ExceedsTolerance => "ExceedsTolerance".red().bold(),
     };
     println!("  outcome: {}", outcome_str);
-    println!("  permits one-way claim: {}", verdict.permits_one_way_claim());
-    println!("  wall_clock_unix_ms: {}", verdict.timestamp.wall_clock_unix_ms);
-    println!("  monotonic_nanos_since_process_start: {}", verdict.timestamp.monotonic_nanos_since_process_start);
+    println!(
+        "  permits one-way claim: {}",
+        verdict.permits_one_way_claim()
+    );
+    println!(
+        "  wall_clock_unix_ms: {}",
+        verdict.timestamp.wall_clock_unix_ms
+    );
+    println!(
+        "  monotonic_nanos_since_process_start: {}",
+        verdict.timestamp.monotonic_nanos_since_process_start
+    );
     println!("  {}", verdict.explanation.dimmed());
 }

@@ -15,9 +15,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fraggle_packet::load_guard::{CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource};
+use fraggle_packet::load_guard::{
+    CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource,
+};
 use fraggle_packet::network_tests::burst_analysis::{Arrival, BoundedSample};
-use fraggle_packet::network_tests::media_quality::{build_report, IceCandidateResult, MediaProfile, PathKind, SetupOutcome};
+use fraggle_packet::network_tests::media_quality::{
+    build_report, IceCandidateResult, MediaProfile, PathKind, SetupOutcome,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct MediaQualityArgs {
@@ -75,41 +79,87 @@ impl From<ProfileArg> for MediaProfile {
 
 fn probe_direct_udp(target: IpAddr, port: u16, timeout_ms: u64) -> IceCandidateResult {
     let start = Instant::now();
-    let socket = match UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }) {
+    let socket = match UdpSocket::bind(if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    }) {
         Ok(s) => s,
         Err(e) => {
-            return IceCandidateResult { path: PathKind::DirectUdp, setup: SetupOutcome::Refused { detail: e.to_string() }, setup_rtt_ms: None }
+            return IceCandidateResult {
+                path: PathKind::DirectUdp,
+                setup: SetupOutcome::Refused {
+                    detail: e.to_string(),
+                },
+                setup_rtt_ms: None,
+            }
         }
     };
-    socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).ok();
+    socket
+        .set_read_timeout(Some(Duration::from_millis(timeout_ms)))
+        .ok();
     let dest = SocketAddr::new(target, port);
     let probe = b"media-quality-setup-probe";
     if socket.send_to(probe, dest).is_err() {
-        return IceCandidateResult { path: PathKind::DirectUdp, setup: SetupOutcome::TimedOut, setup_rtt_ms: None };
+        return IceCandidateResult {
+            path: PathKind::DirectUdp,
+            setup: SetupOutcome::TimedOut,
+            setup_rtt_ms: None,
+        };
     }
     let mut buf = [0u8; 64];
     match socket.recv_from(&mut buf) {
-        Ok(_) => IceCandidateResult { path: PathKind::DirectUdp, setup: SetupOutcome::Established, setup_rtt_ms: Some(start.elapsed().as_secs_f64() * 1000.0) },
-        Err(_) => IceCandidateResult { path: PathKind::DirectUdp, setup: SetupOutcome::TimedOut, setup_rtt_ms: None },
+        Ok(_) => IceCandidateResult {
+            path: PathKind::DirectUdp,
+            setup: SetupOutcome::Established,
+            setup_rtt_ms: Some(start.elapsed().as_secs_f64() * 1000.0),
+        },
+        Err(_) => IceCandidateResult {
+            path: PathKind::DirectUdp,
+            setup: SetupOutcome::TimedOut,
+            setup_rtt_ms: None,
+        },
     }
 }
 
 fn probe_turn_tcp(relay: &str, timeout_ms: u64, tls: bool) -> IceCandidateResult {
-    let path = if tls { PathKind::TurnTls } else { PathKind::TurnTcp };
+    let path = if tls {
+        PathKind::TurnTls
+    } else {
+        PathKind::TurnTcp
+    };
     let addr: SocketAddr = match relay.parse() {
         Ok(a) => a,
         Err(_) => {
             // Allow "host:port" via to_socket_addrs.
             match relay.to_socket_addrs_first() {
                 Some(a) => a,
-                None => return IceCandidateResult { path, setup: SetupOutcome::Refused { detail: format!("could not resolve '{}'", relay) }, setup_rtt_ms: None },
+                None => {
+                    return IceCandidateResult {
+                        path,
+                        setup: SetupOutcome::Refused {
+                            detail: format!("could not resolve '{}'", relay),
+                        },
+                        setup_rtt_ms: None,
+                    }
+                }
             }
         }
     };
     let start = Instant::now();
     match TcpStream::connect_timeout(&addr, Duration::from_millis(timeout_ms)) {
-        Ok(_) => IceCandidateResult { path, setup: SetupOutcome::Established, setup_rtt_ms: Some(start.elapsed().as_secs_f64() * 1000.0) },
-        Err(e) => IceCandidateResult { path, setup: SetupOutcome::Refused { detail: e.to_string() }, setup_rtt_ms: None },
+        Ok(_) => IceCandidateResult {
+            path,
+            setup: SetupOutcome::Established,
+            setup_rtt_ms: Some(start.elapsed().as_secs_f64() * 1000.0),
+        },
+        Err(e) => IceCandidateResult {
+            path,
+            setup: SetupOutcome::Refused {
+                detail: e.to_string(),
+            },
+            setup_rtt_ms: None,
+        },
     }
 }
 
@@ -125,7 +175,10 @@ impl ToSocketAddrFirst for str {
 
 pub fn run(args: &MediaQualityArgs) {
     if args.live_event == args.maintenance {
-        eprintln!("{} pass exactly one of --live-event or --maintenance.", "✗".red());
+        eprintln!(
+            "{} pass exactly one of --live-event or --maintenance.",
+            "✗".red()
+        );
         std::process::exit(2);
     }
 
@@ -159,7 +212,16 @@ pub fn run(args: &MediaQualityArgs) {
         }
     }
 
-    let sample = match run_media_sequence(&args.interface, args.target, args.port, rate_pps, payload_size, args.count, args.timeout_ms, args.live_event) {
+    let sample = match run_media_sequence(
+        &args.interface,
+        args.target,
+        args.port,
+        rate_pps,
+        payload_size,
+        args.count,
+        args.timeout_ms,
+        args.live_event,
+    ) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("{} media sequence failed: {}", "✗".red(), e);
@@ -194,15 +256,25 @@ fn run_media_sequence(
     } else {
         LoadBudget::maintenance(1.0, duration_secs, 1)
     };
-    let radio = RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
+    let radio =
+        RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
     let iface_for_counters = interface.to_string();
     let counters = CounterSource::new(move || {
-        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters).or_else(|_| Ok(InterfaceCounters::zero()))
+        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters)
+            .or_else(|_| Ok(InterfaceCounters::zero()))
     });
-    let guard = LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
+    let guard =
+        LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
 
-    let socket = UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).map_err(|e| e.to_string())?;
-    socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).ok();
+    let socket = UdpSocket::bind(if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    })
+    .map_err(|e| e.to_string())?;
+    socket
+        .set_read_timeout(Some(Duration::from_millis(timeout_ms)))
+        .ok();
     let dest = SocketAddr::new(target, port);
     let socket_clone = socket.try_clone().map_err(|e| e.to_string())?;
 
@@ -234,19 +306,31 @@ fn run_media_sequence(
                         let echoed_seq = u64::from_be_bytes(buf[0..8].try_into().unwrap());
                         let echoed_sent_at = f64::from_be_bytes(buf[8..16].try_into().unwrap());
                         let received_at_ms = start.elapsed().as_secs_f64() * 1000.0;
-                        arrivals_writer.lock().unwrap().push(Arrival { seq: echoed_seq, sent_at_ms: echoed_sent_at, received_at_ms });
+                        arrivals_writer.lock().unwrap().push(Arrival {
+                            seq: echoed_seq,
+                            sent_at_ms: echoed_sent_at,
+                            received_at_ms,
+                        });
                     }
                 }
                 *current += 1;
             }
-            PhaseTick { bytes_sent_delta: bytes_sent, ..Default::default() }
+            PhaseTick {
+                bytes_sent_delta: bytes_sent,
+                ..Default::default()
+            }
         },
         cancel,
     );
 
     let sent_count = *seq.lock().unwrap();
-    let arrivals = Arc::try_unwrap(arrivals).map(|m| m.into_inner().unwrap()).unwrap_or_default();
-    Ok(BoundedSample { sent_count, arrivals })
+    let arrivals = Arc::try_unwrap(arrivals)
+        .map(|m| m.into_inner().unwrap())
+        .unwrap_or_default();
+    Ok(BoundedSample {
+        sent_count,
+        arrivals,
+    })
 }
 
 fn print_human(report: &fraggle_packet::network_tests::media_quality::MediaQualityReport) {
@@ -254,29 +338,67 @@ fn print_human(report: &fraggle_packet::network_tests::media_quality::MediaQuali
     println!("{}", "== ICE candidates ==".cyan().bold());
     for c in &report.ice_candidates {
         let status = match &c.setup {
-            fraggle_packet::network_tests::media_quality::SetupOutcome::Established => "ESTABLISHED".green().to_string(),
-            fraggle_packet::network_tests::media_quality::SetupOutcome::TimedOut => "TIMED OUT".yellow().to_string(),
-            fraggle_packet::network_tests::media_quality::SetupOutcome::Refused { detail } => format!("REFUSED ({})", detail).red().to_string(),
+            fraggle_packet::network_tests::media_quality::SetupOutcome::Established => {
+                "ESTABLISHED".green().to_string()
+            }
+            fraggle_packet::network_tests::media_quality::SetupOutcome::TimedOut => {
+                "TIMED OUT".yellow().to_string()
+            }
+            fraggle_packet::network_tests::media_quality::SetupOutcome::Refused { detail } => {
+                format!("REFUSED ({})", detail).red().to_string()
+            }
         };
-        println!("  {:?}: {} rtt={}", c.path, status, c.setup_rtt_ms.map(|v| format!("{:.1}ms", v)).unwrap_or_else(|| "n/a".to_string()));
+        println!(
+            "  {:?}: {} rtt={}",
+            c.path,
+            status,
+            c.setup_rtt_ms
+                .map(|v| format!("{:.1}ms", v))
+                .unwrap_or_else(|| "n/a".to_string())
+        );
     }
     println!();
-    println!("setup_success: {}", if report.setup_success { "yes".green().to_string() } else { "no".red().to_string() });
+    println!(
+        "setup_success: {}",
+        if report.setup_success {
+            "yes".green().to_string()
+        } else {
+            "no".red().to_string()
+        }
+    );
     match &report.one_way_delay {
-        fraggle_packet::network_tests::media_quality::OneWayDelay::Measured { delay_ms } => println!("one_way_delay_ms: {:.1}", delay_ms),
-        fraggle_packet::network_tests::media_quality::OneWayDelay::Unavailable { reason } => println!("one_way_delay: {} ({})", "unavailable".dimmed(), reason),
+        fraggle_packet::network_tests::media_quality::OneWayDelay::Measured { delay_ms } => {
+            println!("one_way_delay_ms: {:.1}", delay_ms)
+        }
+        fraggle_packet::network_tests::media_quality::OneWayDelay::Unavailable { reason } => {
+            println!("one_way_delay: {} ({})", "unavailable".dimmed(), reason)
+        }
     }
-    println!("rtt_ms: {}", report.rtt_ms.map(|v| format!("{:.1}", v)).unwrap_or_else(|| "unavailable".to_string()));
+    println!(
+        "rtt_ms: {}",
+        report
+            .rtt_ms
+            .map(|v| format!("{:.1}", v))
+            .unwrap_or_else(|| "unavailable".to_string())
+    );
     println!(
         "loss={:.1}% burst_count={} max_run_length={} jitter_mean={}",
         report.burst.loss_percent,
         report.burst.burst.burst_count,
         report.burst.burst.max_run_length,
-        report.burst.jitter.mean_ms.map(|v| format!("{:.2}ms", v)).unwrap_or_else(|| "unavailable".to_string())
+        report
+            .burst
+            .jitter
+            .mean_ms
+            .map(|v| format!("{:.2}ms", v))
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     println!("concealment: {:?}", report.concealment);
     println!("freeze_risk: {:?}", report.freeze_risk);
-    println!("mos: {:.2} ({})", report.mos.estimated_score, report.mos.label);
+    println!(
+        "mos: {:.2} ({})",
+        report.mos.estimated_score, report.mos.label
+    );
     for n in &report.notes {
         println!("  * {}", n);
     }

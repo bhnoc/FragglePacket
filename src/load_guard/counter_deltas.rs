@@ -146,8 +146,22 @@ pub fn compute_delta(
 mod tests {
     use super::*;
 
-    fn counters(rx_packets: u64, tx_packets: u64, rx_bytes: u64, tx_bytes: u64, rx_errors: u64, tx_errors: u64) -> InterfaceCounters {
-        InterfaceCounters { rx_packets, tx_packets, rx_bytes, tx_bytes, rx_errors, tx_errors }
+    fn counters(
+        rx_packets: u64,
+        tx_packets: u64,
+        rx_bytes: u64,
+        tx_bytes: u64,
+        rx_errors: u64,
+        tx_errors: u64,
+    ) -> InterfaceCounters {
+        InterfaceCounters {
+            rx_packets,
+            tx_packets,
+            rx_bytes,
+            tx_bytes,
+            rx_errors,
+            tx_errors,
+        }
     }
 
     #[test]
@@ -168,7 +182,10 @@ mod tests {
         let before = counters(2000, 1000, 100_000, 100_000, 0, 0);
         let after = counters(1000, 1000, 100_000, 100_000, 0, 0); // rx_packets went backwards
         let delta = compute_delta("lo0", before, after, 1.0, true);
-        assert_eq!(delta.qualification, DeltaQualification::CounterWrappedOrReset);
+        assert_eq!(
+            delta.qualification,
+            DeltaQualification::CounterWrappedOrReset
+        );
         assert!(delta.normalized.is_none());
         // Raw evidence is retained even though the derived rate is withheld.
         assert_eq!(delta.before.rx_packets, 2000);
@@ -180,7 +197,10 @@ mod tests {
         let before = counters(1000, 1000, 100_000, 100_000, 0, 0);
         let after = counters(2000, 2000, 200_000, 200_000, 0, 0);
         let delta = compute_delta("en0", before, after, 1.0, false);
-        assert_eq!(delta.qualification, DeltaQualification::SharedInterfaceUnrelatedTraffic);
+        assert_eq!(
+            delta.qualification,
+            DeltaQualification::SharedInterfaceUnrelatedTraffic
+        );
         assert!(delta.normalized.is_none());
     }
 

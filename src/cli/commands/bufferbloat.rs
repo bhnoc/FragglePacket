@@ -1,6 +1,8 @@
 use colored::*;
 
-use fraggle_packet::network_tests::bufferbloat::{run_bufferbloat, BufferbloatConfig, BufferbloatReport, PhaseLatency};
+use fraggle_packet::network_tests::bufferbloat::{
+    run_bufferbloat, BufferbloatConfig, BufferbloatReport, PhaseLatency,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct BufferbloatArgs {
@@ -22,7 +24,10 @@ pub fn run(args: &BufferbloatArgs) {
     let route = fraggle_packet::load_guard::detect_default_route().ok();
     let default_route_is_tunnel = route.as_ref().map(|r| r.is_tunnel).unwrap_or(false);
 
-    let interface = args.interface.clone().or_else(|| route.map(|r| r.interface));
+    let interface = args
+        .interface
+        .clone()
+        .or_else(|| route.map(|r| r.interface));
 
     if default_route_is_tunnel && args.interface.is_none() {
         eprintln!(
@@ -65,16 +70,33 @@ fn print_phase(label: &str, phase: &PhaseLatency) {
 fn print_human(report: &BufferbloatReport) {
     println!(
         "[{}] bufferbloat interface={} endpoint={} tool={}",
-        if report.tool_available { "OK".green().bold().to_string() } else { "UNAVAILABLE".red().bold().to_string() },
-        report.interface.clone().unwrap_or_else(|| "default".to_string()),
-        report.test_endpoint.clone().unwrap_or_else(|| "unavailable".to_string()),
+        if report.tool_available {
+            "OK".green().bold().to_string()
+        } else {
+            "UNAVAILABLE".red().bold().to_string()
+        },
+        report
+            .interface
+            .clone()
+            .unwrap_or_else(|| "default".to_string()),
+        report
+            .test_endpoint
+            .clone()
+            .unwrap_or_else(|| "unavailable".to_string()),
         report.measurement_tool,
     );
     if report.default_route_is_tunnel {
         println!("  {} default route is a VPN tunnel", "⚠".yellow());
     }
     if !report.tool_available {
-        println!("  {}", report.unavailable_reason.clone().unwrap_or_default().dimmed());
+        println!(
+            "  {}",
+            report
+                .unavailable_reason
+                .clone()
+                .unwrap_or_default()
+                .dimmed()
+        );
         return;
     }
     println!("  idle base_rtt={}", fmt_opt_f64(report.base_rtt_ms, "ms"));
@@ -86,6 +108,10 @@ fn print_human(report: &BufferbloatReport) {
         None => println!("  responsiveness grade: unavailable (not computable from this run)"),
     }
     if let Some(reason) = &report.unavailable_reason {
-        println!("  {} some phases did not complete: {}", "⚠".yellow(), reason);
+        println!(
+            "  {} some phases did not complete: {}",
+            "⚠".yellow(),
+            reason
+        );
     }
 }

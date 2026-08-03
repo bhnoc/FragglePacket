@@ -247,10 +247,20 @@ fn parse_channel(v: &str, snap: &mut RadioSnapshot) {
 fn parse_signal_noise(v: &str, snap: &mut RadioSnapshot) {
     let mut parts = v.split('/');
     if let Some(rssi) = parts.next() {
-        snap.rssi_dbm = rssi.trim().trim_end_matches("dBm").trim().parse::<i32>().ok();
+        snap.rssi_dbm = rssi
+            .trim()
+            .trim_end_matches("dBm")
+            .trim()
+            .parse::<i32>()
+            .ok();
     }
     if let Some(noise) = parts.next() {
-        snap.noise_dbm = noise.trim().trim_end_matches("dBm").trim().parse::<i32>().ok();
+        snap.noise_dbm = noise
+            .trim()
+            .trim_end_matches("dBm")
+            .trim()
+            .parse::<i32>()
+            .ok();
     }
 }
 

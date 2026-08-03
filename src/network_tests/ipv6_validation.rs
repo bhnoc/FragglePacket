@@ -266,7 +266,11 @@ pub fn validate(interface: &str, probe_host: &str, timeout: Duration) -> Ipv6Val
     let neighbor_discovery = match Command::new("ndp").args(["-an"]).output() {
         Ok(o) if o.status.success() => {
             let text = String::from_utf8_lossy(&o.stdout);
-            let entries = text.lines().skip(1).filter(|l| !l.trim().is_empty()).count();
+            let entries = text
+                .lines()
+                .skip(1)
+                .filter(|l| !l.trim().is_empty())
+                .count();
             if entries > 0 {
                 LayerState::Ok(format!("{} neighbor cache entries present", entries))
             } else {

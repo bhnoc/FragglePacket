@@ -48,7 +48,9 @@ pub fn test_https_fetch(host: &str, timeout_ms: u64) -> Result<(usize, u64), Str
 
     // For actual HTTPS, we'll just report TCP worked
     // A full impl would use rustls here
-    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| e.to_string())?;
 
     let mut response = Vec::new();
     let _ = stream.read_to_end(&mut response);
@@ -64,7 +66,12 @@ pub fn test_https_fetch(host: &str, timeout_ms: u64) -> Result<(usize, u64), Str
     }
 }
 
-pub fn binary_search_mtu_tcp(target: &str, min: usize, max: usize, timeout_ms: u64) -> Option<usize> {
+pub fn binary_search_mtu_tcp(
+    target: &str,
+    min: usize,
+    max: usize,
+    timeout_ms: u64,
+) -> Option<usize> {
     let addr: SocketAddr = target.to_socket_addrs().ok()?.next()?;
     let timeout = Duration::from_millis(timeout_ms);
 

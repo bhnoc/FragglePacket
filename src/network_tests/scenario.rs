@@ -16,11 +16,11 @@
 //! Each step may include `target: host` and `port: N`.
 
 use crate::framework::{NetworkTest, TestResult};
+use crate::network_tests::https::HttpsTest;
 use crate::network_tests::{
     DnsSecureCompareTest, QuicPmtudTest, Raw9100BulkTest, SshDataPathTest, TcpOptionsEchoTest,
     UploadSizeSweepTest,
 };
-use crate::network_tests::https::HttpsTest;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -51,7 +51,10 @@ impl Scenario {
                 continue;
             }
             if line.starts_with('#') {
-                if let Some(rest) = line.strip_prefix("# step:").or_else(|| line.strip_prefix("#step:")) {
+                if let Some(rest) = line
+                    .strip_prefix("# step:")
+                    .or_else(|| line.strip_prefix("#step:"))
+                {
                     if let Some(step) = current.take() {
                         scenario.steps.push(step);
                     }

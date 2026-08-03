@@ -154,7 +154,11 @@ impl CircuitManifest {
 pub fn judge_circuits(m: &CircuitManifest) -> CircuitVerdict {
     let mut missing: Vec<String> = Vec::new();
 
-    for required in [CircuitState::AOnly, CircuitState::BOnly, CircuitState::DualActive] {
+    for required in [
+        CircuitState::AOnly,
+        CircuitState::BOnly,
+        CircuitState::DualActive,
+    ] {
         match m.phase(required) {
             None => missing.push(format!("phase:{}", required.as_str())),
             Some(p) => {
@@ -178,10 +182,22 @@ pub fn judge_circuits(m: &CircuitManifest) -> CircuitVerdict {
         return CircuitVerdict::Refused { missing };
     }
 
-    let a = m.phase(CircuitState::AOnly).and_then(|p| p.achieved_mbps).unwrap_or(0.0);
-    let b = m.phase(CircuitState::BOnly).and_then(|p| p.achieved_mbps).unwrap_or(0.0);
-    let a_loss = m.phase(CircuitState::AOnly).and_then(|p| p.loss_pct).unwrap_or(0.0);
-    let b_loss = m.phase(CircuitState::BOnly).and_then(|p| p.loss_pct).unwrap_or(0.0);
+    let a = m
+        .phase(CircuitState::AOnly)
+        .and_then(|p| p.achieved_mbps)
+        .unwrap_or(0.0);
+    let b = m
+        .phase(CircuitState::BOnly)
+        .and_then(|p| p.achieved_mbps)
+        .unwrap_or(0.0);
+    let a_loss = m
+        .phase(CircuitState::AOnly)
+        .and_then(|p| p.loss_pct)
+        .unwrap_or(0.0);
+    let b_loss = m
+        .phase(CircuitState::BOnly)
+        .and_then(|p| p.loss_pct)
+        .unwrap_or(0.0);
 
     let worse = a.max(b);
     let throughput_ratio = if worse > 0.0 { a.min(b) / worse } else { 1.0 };

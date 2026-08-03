@@ -72,8 +72,12 @@ pub enum SessionOutcome {
     /// The local stack, not the remote firewall/NAT, was the limiting
     /// factor (EMFILE/ENFILE or equivalent). Never counted toward a
     /// concurrent-state-ceiling finding.
-    LocalResourceExhausted { detail: String },
-    OtherLocalError { detail: String },
+    LocalResourceExhausted {
+        detail: String,
+    },
+    OtherLocalError {
+        detail: String,
+    },
 }
 
 pub fn classify_connect_error(e: &std::io::Error) -> SessionOutcome {
@@ -86,9 +90,13 @@ pub fn classify_connect_error(e: &std::io::Error) -> SessionOutcome {
                 Some(code) if code == libc::EMFILE || code == libc::ENFILE || code == libc::ENOBUFS
             );
             if is_local_exhaustion {
-                SessionOutcome::LocalResourceExhausted { detail: e.to_string() }
+                SessionOutcome::LocalResourceExhausted {
+                    detail: e.to_string(),
+                }
             } else {
-                SessionOutcome::OtherLocalError { detail: e.to_string() }
+                SessionOutcome::OtherLocalError {
+                    detail: e.to_string(),
+                }
             }
         }
     }
@@ -139,7 +147,10 @@ impl LoadPhase for SessionCreationPhase {
             Ok(s) => {
                 r.created += 1;
                 self.open.push(s);
-                PhaseTick { bytes_sent_delta: 1, ..Default::default() }
+                PhaseTick {
+                    bytes_sent_delta: 1,
+                    ..Default::default()
+                }
             }
             Err(e) => {
                 let outcome = classify_connect_error(&e);
@@ -206,13 +217,14 @@ pub fn run_session_rate_probe(
     // (there is no radio state to invalidate this kind of run), so a no-op
     // source satisfies `LoadGuard::new`'s required arguments without
     // pretending to measure something this probe does not touch.
-    use crate::load_guard::guard::{CounterSource, RadioSource};
     use crate::load_guard::counters::InterfaceCounters;
+    use crate::load_guard::guard::{CounterSource, RadioSource};
     use crate::load_guard::radio::RadioSnapshot;
     let radio = RadioSource::new(|| Ok(RadioSnapshot::unavailable()));
     let counters = CounterSource::new(|| Ok(InterfaceCounters::zero()));
 
-    let guard = LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
+    let guard =
+        LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
 
     let cancel = Arc::new(AtomicBool::new(false));
     let stop_reader = stop.clone();
@@ -253,12 +265,20 @@ pub fn observe_idle_mapping_survival(
     timeout: Duration,
 ) -> Result<IdleMappingResult, String> {
     use std::net::UdpSocket;
-    let bind = if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
+    let bind = if target.is_ipv4() {
+        "0.0.0.0:0"
+    } else {
+        "[::]:0"
+    };
     let socket = UdpSocket::bind(bind).map_err(|e| e.to_string())?;
-    socket.set_read_timeout(Some(timeout)).map_err(|e| e.to_string())?;
+    socket
+        .set_read_timeout(Some(timeout))
+        .map_err(|e| e.to_string())?;
     let remote = SocketAddr::new(target, port);
 
-    socket.send_to(&[0u8; 8], remote).map_err(|e| e.to_string())?;
+    socket
+        .send_to(&[0u8; 8], remote)
+        .map_err(|e| e.to_string())?;
     std::thread::sleep(Duration::from_secs(idle_secs.min(5)));
 
     if send_keepalive {
@@ -294,10 +314,14 @@ pub struct FirewallTelemetry {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CorrelationVerdict {
-    Correlated { table_usage_pct: f64 },
+    Correlated {
+        table_usage_pct: f64,
+    },
     /// Named, not silently omitted -- the exact GAP-021/HANDOFF discipline
     /// applied to a firewall-side telemetry gap instead of a client-side one.
-    TelemetryAbsent { missing: Vec<String> },
+    TelemetryAbsent {
+        missing: Vec<String>,
+    },
 }
 
 pub fn correlate_with_telemetry(
@@ -320,7 +344,9 @@ pub fn correlate_with_telemetry(
         return CorrelationVerdict::TelemetryAbsent { missing };
     }
     let _ = session_result;
-    CorrelationVerdict::Correlated { table_usage_pct: t.table_usage_pct.unwrap() }
+    CorrelationVerdict::Correlated {
+        table_usage_pct: t.table_usage_pct.unwrap(),
+    }
 }
 
 #[cfg(test)]
@@ -345,7 +371,10 @@ mod tests {
     #[test]
     fn emfile_is_classified_as_local_resource_exhaustion() {
         let e = std::io::Error::from_raw_os_error(libc::EMFILE);
-        assert!(matches!(classify_connect_error(&e), SessionOutcome::LocalResourceExhausted { .. }));
+        assert!(matches!(
+            classify_connect_error(&e),
+            SessionOutcome::LocalResourceExhausted { .. }
+        ));
     }
 
     #[test]
@@ -424,7 +453,10 @@ mod tests {
             other_local_error: 0,
             elapsed_secs: 1.0,
         };
-        let t = FirewallTelemetry { owner_label: Some("edge-fw-1".to_string()), ..Default::default() };
+        let t = FirewallTelemetry {
+            owner_label: Some("edge-fw-1".to_string()),
+            ..Default::default()
+        };
         match correlate_with_telemetry(&r, &Some(t)) {
             CorrelationVerdict::TelemetryAbsent { missing } => {
                 assert!(missing.iter().any(|m| m == "table_usage_pct"));
@@ -449,7 +481,12 @@ mod tests {
             table_usage_pct: Some(72.5),
             ..Default::default()
         };
-        assert_eq!(correlate_with_telemetry(&r, &Some(t)), CorrelationVerdict::Correlated { table_usage_pct: 72.5 });
+        assert_eq!(
+            correlate_with_telemetry(&r, &Some(t)),
+            CorrelationVerdict::Correlated {
+                table_usage_pct: 72.5
+            }
+        );
     }
 
     #[test]

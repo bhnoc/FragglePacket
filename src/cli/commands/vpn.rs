@@ -15,10 +15,24 @@ pub struct VpnArgs {
 }
 
 pub fn run(args: &VpnArgs, global: &GlobalArgs) {
-    run_vpn_calculator(&args.vpn_type, args.base_mtu, global.timeout_ms, global.min, global.max, global.retries);
+    run_vpn_calculator(
+        &args.vpn_type,
+        args.base_mtu,
+        global.timeout_ms,
+        global.min,
+        global.max,
+        global.retries,
+    );
 }
 
-fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
+fn run_vpn_calculator(
+    vpn_type: &str,
+    base_mtu: Option<usize>,
+    timeout_ms: u64,
+    min_mtu: usize,
+    max_mtu: usize,
+    retries: usize,
+) {
     let (overhead, proto_desc) = match vpn_type.to_lowercase().as_str() {
         // Traditional VPNs
         "wireguard" | "wg" => (VPN_OVERHEAD_WIREGUARD, "WireGuard (UDP)"),
@@ -72,7 +86,11 @@ fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, 
         }
 
         _ => {
-            eprintln!("{}: Unknown VPN type '{}'. Run 'fraggle-packet vpn list' for options", "Error".red(), vpn_type);
+            eprintln!(
+                "{}: Unknown VPN type '{}'. Run 'fraggle-packet vpn list' for options",
+                "Error".red(),
+                vpn_type
+            );
             return;
         }
     };
@@ -84,7 +102,10 @@ fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, 
             println!("Auto-detecting base MTU via 8.8.8.8...");
             let ip: IpAddr = "8.8.8.8".parse().unwrap();
             if !probe_icmp(ip, 64, timeout_ms, 1) {
-                println!("{}: Cannot reach 8.8.8.8, using default 1500", "Warning".yellow());
+                println!(
+                    "{}: Cannot reach 8.8.8.8, using default 1500",
+                    "Warning".yellow()
+                );
                 1500
             } else {
                 binary_search_mtu_icmp(ip, min_mtu, max_mtu, timeout_ms, retries)
@@ -113,9 +134,18 @@ fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, 
     };
 
     println!("{}", "RECOMMENDATIONS:".cyan().bold());
-    println!("  Tunnel interface MTU: {} bytes", tunnel_mtu.to_string().green().bold());
-    println!("  Safe/conservative:    {} bytes", safe_tunnel_mtu.to_string().yellow());
-    println!("  Inner TCP MSS:        {} bytes", inner_mss.to_string().green());
+    println!(
+        "  Tunnel interface MTU: {} bytes",
+        tunnel_mtu.to_string().green().bold()
+    );
+    println!(
+        "  Safe/conservative:    {} bytes",
+        safe_tunnel_mtu.to_string().yellow()
+    );
+    println!(
+        "  Inner TCP MSS:        {} bytes",
+        inner_mss.to_string().green()
+    );
     println!();
 
     println!("{}", "CONFIGURATION:".cyan());
@@ -146,5 +176,4 @@ fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, 
             println!("  # Set interface MTU to {}", tunnel_mtu);
         }
     }
-
 }

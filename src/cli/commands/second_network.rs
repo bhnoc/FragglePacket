@@ -55,7 +55,11 @@ pub fn run(args: &SecondNetworkArgs) {
                 eprintln!("{} {}", "✗".red(), e);
                 std::process::exit(1);
             });
-            ApIdentity { label: label_for_bssid(bssid, &salt), band: args.band.clone(), channel: args.channel }
+            ApIdentity {
+                label: label_for_bssid(bssid, &salt),
+                band: args.band.clone(),
+                channel: args.channel,
+            }
         });
 
         let metrics: Vec<BundleMetric> = args
@@ -63,7 +67,11 @@ pub fn run(args: &SecondNetworkArgs) {
             .iter()
             .filter_map(|kv| {
                 let (name, value) = kv.split_once('=')?;
-                Some(BundleMetric { name: name.to_string(), value: value.parse().ok(), unit: "".to_string() })
+                Some(BundleMetric {
+                    name: name.to_string(),
+                    value: value.parse().ok(),
+                    unit: "".to_string(),
+                })
             })
             .collect();
 
@@ -75,7 +83,10 @@ pub fn run(args: &SecondNetworkArgs) {
                 operator_label: args.retain_network_label.clone(),
             },
             metrics,
-            capture_tag: args.capture_tag.clone().unwrap_or_else(|| "unlabeled".to_string()),
+            capture_tag: args
+                .capture_tag
+                .clone()
+                .unwrap_or_else(|| "unlabeled".to_string()),
         };
 
         if let Err(e) = save_bundle(path, &bundle) {
@@ -114,12 +125,18 @@ pub fn run(args: &SecondNetworkArgs) {
         println!("  relationship: {}", cmp.network_relationship);
         println!();
         for m in &cmp.metrics {
-            println!("  {:<20} before={:?} after={:?} delta={:?}", m.name, m.before, m.after, m.delta);
+            println!(
+                "  {:<20} before={:?} after={:?} delta={:?}",
+                m.name, m.before, m.after, m.delta
+            );
         }
         println!();
         return;
     }
 
-    eprintln!("{} pass either --save <path> or --compare <path1> <path2>", "✗".red());
+    eprintln!(
+        "{} pass either --save <path> or --compare <path1> <path2>",
+        "✗".red()
+    );
     std::process::exit(1);
 }

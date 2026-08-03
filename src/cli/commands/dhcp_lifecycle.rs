@@ -4,7 +4,8 @@ use colored::*;
 use std::time::Duration;
 
 use fraggle_packet::network_tests::dhcp_lifecycle::{
-    evaluate_pool_headroom, read_existing_lease, request_fresh_lease, PoolHeadroomVerdict, PoolTelemetry,
+    evaluate_pool_headroom, read_existing_lease, request_fresh_lease, PoolHeadroomVerdict,
+    PoolTelemetry,
 };
 
 #[derive(clap::Args, Debug)]
@@ -54,7 +55,9 @@ pub fn run(args: &DhcpLifecycleArgs) {
     };
 
     let pool_telemetry: Option<PoolTelemetry> = args.pool_telemetry.as_ref().and_then(|path| {
-        std::fs::read_to_string(path).ok().and_then(|text| serde_json::from_str(&text).ok())
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
     });
     let headroom = evaluate_pool_headroom(&pool_telemetry);
 
@@ -77,13 +80,32 @@ pub fn run(args: &DhcpLifecycleArgs) {
             println!("    message_type: {:?}", lease.message_type);
             println!(
                 "    lease_seconds: {}",
-                lease.lease_seconds.map(|s| s.to_string()).unwrap_or_else(|| "unavailable".to_string())
+                lease
+                    .lease_seconds
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "unavailable".to_string())
             );
-            println!("    server_identifier: {}", lease.server_identifier.as_deref().unwrap_or("unavailable"));
-            println!("    router: {}", lease.router.as_deref().unwrap_or("unavailable"));
-            println!("    dns: {}", if lease.domain_name_servers.is_empty() { "unavailable".to_string() } else { lease.domain_name_servers.join(", ") });
+            println!(
+                "    server_identifier: {}",
+                lease.server_identifier.as_deref().unwrap_or("unavailable")
+            );
+            println!(
+                "    router: {}",
+                lease.router.as_deref().unwrap_or("unavailable")
+            );
+            println!(
+                "    dns: {}",
+                if lease.domain_name_servers.is_empty() {
+                    "unavailable".to_string()
+                } else {
+                    lease.domain_name_servers.join(", ")
+                }
+            );
         }
-        Err(e) => println!("  existing lease: {}", format!("unavailable ({})", e).yellow()),
+        Err(e) => println!(
+            "  existing lease: {}",
+            format!("unavailable ({})", e).yellow()
+        ),
     }
 
     if !args.fresh_lease {
@@ -94,8 +116,17 @@ pub fn run(args: &DhcpLifecycleArgs) {
     } else {
         match fresh {
             Some(Ok(t)) => {
-                println!("  fresh lease: discover-to-address {}ms", t.discover_to_address_ms);
-                println!("    lease_seconds: {}", t.lease.lease_seconds.map(|s| s.to_string()).unwrap_or_else(|| "unavailable".to_string()));
+                println!(
+                    "  fresh lease: discover-to-address {}ms",
+                    t.discover_to_address_ms
+                );
+                println!(
+                    "    lease_seconds: {}",
+                    t.lease
+                        .lease_seconds
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "unavailable".to_string())
+                );
             }
             Some(Err(e)) => println!("  fresh lease error: {}", e),
             None => {}
@@ -103,9 +134,14 @@ pub fn run(args: &DhcpLifecycleArgs) {
     }
 
     match headroom {
-        PoolHeadroomVerdict::Headroom { free, total } => println!("  pool headroom: {}/{} free", free, total),
+        PoolHeadroomVerdict::Headroom { free, total } => {
+            println!("  pool headroom: {}/{} free", free, total)
+        }
         PoolHeadroomVerdict::Unavailable { reason } => {
-            println!("  {}", format!("pool headroom: unavailable ({})", reason).yellow())
+            println!(
+                "  {}",
+                format!("pool headroom: unavailable ({})", reason).yellow()
+            )
         }
     }
 }

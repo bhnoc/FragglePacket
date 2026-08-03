@@ -1,6 +1,6 @@
 //! Diagnosis Engine - Correlate test results and provide recommendations
 
-use crate::network_tests::{HttpsTestResult, HttpsDiagnosis};
+use crate::network_tests::{HttpsDiagnosis, HttpsTestResult};
 
 #[derive(Debug, Clone)]
 pub struct Diagnosis {
@@ -25,11 +25,11 @@ pub enum DiagnosisIssue {
 
 #[derive(Debug, Clone, PartialEq, Ord, PartialOrd, Eq)]
 pub enum Severity {
-    Critical,  // Service unusable
-    High,      // Major functionality broken
-    Medium,    // Performance degraded
-    Low,       // Minor issue
-    Info,      // Informational
+    Critical, // Service unusable
+    High,     // Major functionality broken
+    Medium,   // Performance degraded
+    Low,      // Minor issue
+    Info,     // Informational
 }
 
 pub trait DiagnosisRule {
@@ -66,21 +66,22 @@ impl DiagnosisRule for MtuBlackholeRule {
     fn name(&self) -> &str {
         "MTU Blackhole Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let https = evidence.https_result.as_ref()?;
-        
+
         // Signature: TCP OK + TLS timeout + high interface MTU
-        if https.tcp_success 
+        if https.tcp_success
             && https.diagnosis == HttpsDiagnosis::TlsTimeout
-            && evidence.interface_mtu.unwrap_or(0) >= 1500 {
-            
+            && evidence.interface_mtu.unwrap_or(0) >= 1500
+        {
             // Find suggested MTU
-            let suggested_mtu = evidence.tcp_mtu
+            let suggested_mtu = evidence
+                .tcp_mtu
                 .or(evidence.icmp_mtu)
-                .map(|m| m - 100)  // Safety margin
+                .map(|m| m - 100) // Safety margin
                 .unwrap_or(1400);
-            
+
             return Some(Diagnosis {
                 issue: DiagnosisIssue::MtuBlackhole,
                 severity: Severity::Critical,
@@ -103,7 +104,7 @@ impl DiagnosisRule for MtuBlackholeRule {
                 ],
             });
         }
-        
+
         None
     }
 }
@@ -115,11 +116,11 @@ impl DiagnosisRule for PathMtuMismatchRule {
     fn name(&self) -> &str {
         "Path MTU Mismatch Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let interface_mtu = evidence.interface_mtu?;
         let icmp_mtu = evidence.icmp_mtu?;
-        
+
         // Path MTU < Interface MTU = potential issue
         if icmp_mtu < interface_mtu && interface_mtu - icmp_mtu > 50 {
             return Some(Diagnosis {
@@ -137,7 +138,7 @@ impl DiagnosisRule for PathMtuMismatchRule {
                 related_tests: vec!["MTU Test".to_string()],
             });
         }
-        
+
         None
     }
 }
@@ -149,30 +150,33 @@ impl DiagnosisRule for PortBlockingRule {
     fn name(&self) -> &str {
         "Port Blocking Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let ping_ok = evidence.ping_success?;
         let tcp_fail = !evidence.tcp_connect_success.unwrap_or(true);
-        
+
         // ICMP works but TCP doesn't = port blocking
         if ping_ok && tcp_fail {
             return Some(Diagnosis {
                 issue: DiagnosisIssue::PortBlocking,
                 severity: Severity::High,
-                description: "Port blocking detected. ICMP (ping) succeeds but TCP connection fails. \
-                    This indicates a firewall is blocking TCP traffic while allowing ICMP.".to_string(),
+                description:
+                    "Port blocking detected. ICMP (ping) succeeds but TCP connection fails. \
+                    This indicates a firewall is blocking TCP traffic while allowing ICMP."
+                        .to_string(),
                 recommendation: "Check firewall rules:\n\
                     - Verify target firewall allows TCP on the tested port\n\
                     - Check intermediate firewalls/routers\n\
                     - Try different ports (80, 443, 8080)\n\
-                    - Contact network administrator if persistent".to_string(),
+                    - Contact network administrator if persistent"
+                    .to_string(),
                 related_tests: vec![
                     "Packet Loss Test".to_string(),
                     "TCP Health Test".to_string(),
                 ],
             });
         }
-        
+
         None
     }
 }
@@ -184,24 +188,26 @@ impl DiagnosisRule for DnsIssuesRule {
     fn name(&self) -> &str {
         "DNS Issues Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         // Check for DNS failure
         if let Some(false) = evidence.dns_success {
             return Some(Diagnosis {
                 issue: DiagnosisIssue::DnsFailure,
                 severity: Severity::Critical,
-                description: "DNS resolution failed. Unable to resolve hostname to IP address.".to_string(),
+                description: "DNS resolution failed. Unable to resolve hostname to IP address."
+                    .to_string(),
                 recommendation: "DNS troubleshooting steps:\n\
                     - Check /etc/resolv.conf (Linux/macOS) or DNS settings (Windows)\n\
                     - Try alternative DNS servers: 1.1.1.1 (Cloudflare), 8.8.8.8 (Google)\n\
                     - Verify network connectivity\n\
                     - Check if hostname is correct\n\
-                    - Test with: dig <hostname> or nslookup <hostname>".to_string(),
+                    - Test with: dig <hostname> or nslookup <hostname>"
+                    .to_string(),
                 related_tests: vec!["DNS Test".to_string()],
             });
         }
-        
+
         // Check for slow DNS
         if let Some(time_ms) = evidence.dns_resolution_time_ms {
             if time_ms > 1000.0 {
@@ -224,7 +230,7 @@ impl DiagnosisRule for DnsIssuesRule {
                 });
             }
         }
-        
+
         None
     }
 }
@@ -236,10 +242,10 @@ impl DiagnosisRule for TcpSegmentationLimitRule {
     fn name(&self) -> &str {
         "TCP Segmentation Limit Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let segment_limit = evidence.tcp_segment_limit?;
-        
+
         // Artificial limit detected (typically 100-500 bytes)
         if segment_limit < 1000 {
             return Some(Diagnosis {
@@ -264,7 +270,7 @@ impl DiagnosisRule for TcpSegmentationLimitRule {
                 ],
             });
         }
-        
+
         None
     }
 }
@@ -276,10 +282,10 @@ impl DiagnosisRule for HighPacketLossRule {
     fn name(&self) -> &str {
         "High Packet Loss Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let loss_percent = evidence.packet_loss_percent?;
-        
+
         if loss_percent >= 10.0 {
             return Some(Diagnosis {
                 issue: DiagnosisIssue::PacketLoss,
@@ -310,11 +316,12 @@ impl DiagnosisRule for HighPacketLossRule {
                 recommendation: "Monitor packet loss:\n\
                     - Continue monitoring\n\
                     - May affect VoIP, video conferencing\n\
-                    - Consider running path analysis".to_string(),
+                    - Consider running path analysis"
+                    .to_string(),
                 related_tests: vec!["Packet Loss Test".to_string()],
             });
         }
-        
+
         None
     }
 }
@@ -326,10 +333,10 @@ impl DiagnosisRule for HighLatencyRule {
     fn name(&self) -> &str {
         "High Latency Detector"
     }
-    
+
     fn check(&self, evidence: &DiagnosisEvidence) -> Option<Diagnosis> {
         let rtt_ms = evidence.rtt_ms?;
-        
+
         if rtt_ms > 200.0 {
             return Some(Diagnosis {
                 issue: DiagnosisIssue::HighLatency,
@@ -347,13 +354,10 @@ impl DiagnosisRule for HighLatencyRule {
                     - Current RTT: {:.1}ms (good: <50ms, acceptable: <150ms)",
                     rtt_ms
                 ),
-                related_tests: vec![
-                    "RTT Test".to_string(),
-                    "Path Analysis Test".to_string(),
-                ],
+                related_tests: vec!["RTT Test".to_string(), "Path Analysis Test".to_string()],
             });
         }
-        
+
         None
     }
 }
@@ -373,7 +377,8 @@ impl BlackholeScoreRule {
             }
             if mtu < 1400 {
                 score += 2;
-                findings.push("Path MTU low enough to strongly suspect tunnel overhead".to_string());
+                findings
+                    .push("Path MTU low enough to strongly suspect tunnel overhead".to_string());
             }
         }
 
@@ -384,9 +389,8 @@ impl BlackholeScoreRule {
                     || https.diagnosis == HttpsDiagnosis::MtuBlackhole)
             {
                 score += 3;
-                findings.push(
-                    "TCP connect succeeded but TLS/HTTP path looked unhealthy".to_string(),
-                );
+                findings
+                    .push("TCP connect succeeded but TLS/HTTP path looked unhealthy".to_string());
             }
         }
 
@@ -475,10 +479,7 @@ impl DiagnosisRule for BlackholeScoreRule {
 }
 
 /// Render a README_FIRST-style text report that mirrors the shell script.
-pub fn render_unified_report(
-    diagnoses: &[Diagnosis],
-    evidence: &DiagnosisEvidence,
-) -> String {
+pub fn render_unified_report(diagnoses: &[Diagnosis], evidence: &DiagnosisEvidence) -> String {
     let (score, findings) = BlackholeScoreRule::score(evidence);
     let verdict = if score >= 6 {
         "LIKELY_MTU_OR_MSS_BLACKHOLE=high"
@@ -510,7 +511,12 @@ pub fn render_unified_report(
     if !diagnoses.is_empty() {
         out.push_str("\n=== Ranked Diagnoses ===\n");
         for d in diagnoses {
-            out.push_str(&format!("- [{:?}] {:?}: {}\n", d.severity, d.issue, d.description.lines().next().unwrap_or("")));
+            out.push_str(&format!(
+                "- [{:?}] {:?}: {}\n",
+                d.severity,
+                d.issue,
+                d.description.lines().next().unwrap_or("")
+            ));
         }
     }
     out.push_str("\n=== Notes ===\n");
@@ -561,33 +567,37 @@ impl DiagnosisEngine {
 mod tests {
     use super::*;
     use crate::network_tests::HttpsTestResult;
-    
+
     #[test]
     fn test_mtu_blackhole_detection() {
         let mut https_result = HttpsTestResult::new("test.com".to_string());
         https_result.tcp_success = true;
         https_result.diagnosis = HttpsDiagnosis::TlsTimeout;
-        
+
         let evidence = DiagnosisEvidence {
             https_result: Some(https_result),
             interface_mtu: Some(1500),
             icmp_mtu: Some(1400),
             ..Default::default()
         };
-        
+
         let engine = DiagnosisEngine::new();
         let diagnoses = engine.diagnose(&evidence);
-        
+
         assert!(!diagnoses.is_empty());
         // MTU blackhole is Critical, so should be first after sorting
-        let has_blackhole = diagnoses.iter().any(|d| d.issue == DiagnosisIssue::MtuBlackhole);
+        let has_blackhole = diagnoses
+            .iter()
+            .any(|d| d.issue == DiagnosisIssue::MtuBlackhole);
         assert!(has_blackhole, "Should detect MTU blackhole");
-        
+
         // Also has path mismatch
-        let has_mismatch = diagnoses.iter().any(|d| d.issue == DiagnosisIssue::PathMtuMismatch);
+        let has_mismatch = diagnoses
+            .iter()
+            .any(|d| d.issue == DiagnosisIssue::PathMtuMismatch);
         assert!(has_mismatch, "Should also detect path MTU mismatch");
     }
-    
+
     #[test]
     fn test_path_mtu_mismatch() {
         let evidence = DiagnosisEvidence {
@@ -595,13 +605,13 @@ mod tests {
             icmp_mtu: Some(1400),
             ..Default::default()
         };
-        
+
         let engine = DiagnosisEngine::new();
         let diagnoses = engine.diagnose(&evidence);
-        
-        let has_mismatch = diagnoses.iter()
+
+        let has_mismatch = diagnoses
+            .iter()
             .any(|d| d.issue == DiagnosisIssue::PathMtuMismatch);
         assert!(has_mismatch);
     }
 }
-

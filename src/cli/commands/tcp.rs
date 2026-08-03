@@ -21,7 +21,10 @@ fn run_tcp_mtu_test(target: &str, timeout_ms: u64, min_mtu: usize, max_mtu: usiz
     match binary_search_mtu_tcp(target, min_mtu, max_mtu, timeout_ms) {
         Some(mtu) => {
             println!("{}", "RESULTS:".cyan().bold());
-            println!("  Effective TCP MTU: {} bytes", mtu.to_string().green().bold());
+            println!(
+                "  Effective TCP MTU: {} bytes",
+                mtu.to_string().green().bold()
+            );
             println!("  TCP MSS:           {} bytes", mtu - 40);
         }
         None => {

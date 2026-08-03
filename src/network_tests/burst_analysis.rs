@@ -171,7 +171,11 @@ fn compute_reordering(arrivals_in_receive_order: &[Arrival]) -> Vec<ReorderEvent
     events
 }
 
-fn compute_burst_distribution(sent_count: u64, present: &HashSet<u64>, seq_send_time: &dyn Fn(u64) -> Option<f64>) -> BurstDistribution {
+fn compute_burst_distribution(
+    sent_count: u64,
+    present: &HashSet<u64>,
+    seq_send_time: &dyn Fn(u64) -> Option<f64>,
+) -> BurstDistribution {
     let mut bursts = Vec::new();
     let mut run_start: Option<u64> = None;
     let mut run_len: u64 = 0;
@@ -183,7 +187,11 @@ fn compute_burst_distribution(sent_count: u64, present: &HashSet<u64>, seq_send_
                     (Some(t0), Some(t1)) => Some((t1 - t0).max(0.0)),
                     _ => None,
                 };
-                bursts.push(LossBurst { start_seq: start, run_length: len, gap_duration_ms });
+                bursts.push(LossBurst {
+                    start_seq: start,
+                    run_length: len,
+                    gap_duration_ms,
+                });
             }
         }
     };
@@ -222,7 +230,11 @@ fn compute_burst_distribution(sent_count: u64, present: &HashSet<u64>, seq_send_
 fn compute_jitter(arrivals: &[Arrival]) -> JitterStats {
     let delays: Vec<f64> = arrivals.iter().map(|a| a.one_way_delay_ms()).collect();
     if delays.len() < 2 {
-        return JitterStats { mean_ms: None, stddev_ms: None, max_ms: None };
+        return JitterStats {
+            mean_ms: None,
+            stddev_ms: None,
+            max_ms: None,
+        };
     }
     // Jitter here is inter-packet delay variation (successive |delta|), the
     // conventional definition for real-time-traffic impact, not the raw
@@ -236,17 +248,27 @@ fn compute_jitter(arrivals: &[Arrival]) -> JitterStats {
     JitterStats {
         mean_ms: Some(mean),
         stddev_ms: Some(variance.sqrt()),
-        max_ms: deltas.iter().cloned().fold(None, |acc, d| Some(acc.map_or(d, |m: f64| m.max(d)))),
+        max_ms: deltas
+            .iter()
+            .cloned()
+            .fold(None, |acc, d| Some(acc.map_or(d, |m: f64| m.max(d)))),
     }
 }
 
-fn compute_queue_delay_correlation(sample: &BoundedSample, bursts: &[LossBurst]) -> Vec<QueueDelayCorrelation> {
+fn compute_queue_delay_correlation(
+    sample: &BoundedSample,
+    bursts: &[LossBurst],
+) -> Vec<QueueDelayCorrelation> {
     if bursts.is_empty() {
         return Vec::new();
     }
     let by_seq: std::collections::HashMap<u64, &Arrival> =
         sample.arrivals.iter().map(|a| (a.seq, a)).collect();
-    let all_delays: Vec<f64> = sample.arrivals.iter().map(|a| a.one_way_delay_ms()).collect();
+    let all_delays: Vec<f64> = sample
+        .arrivals
+        .iter()
+        .map(|a| a.one_way_delay_ms())
+        .collect();
     let baseline_mean = if all_delays.is_empty() {
         None
     } else {
@@ -262,7 +284,9 @@ fn compute_queue_delay_correlation(sample: &BoundedSample, bursts: &[LossBurst])
                 .or_else(|| {
                     // Fall back to scanning backward for the nearest arrival
                     // before the burst if seq-1 itself is also missing.
-                    (0..b.start_seq).rev().find_map(|s| by_seq.get(&s).map(|a| a.sent_at_ms))
+                    (0..b.start_seq)
+                        .rev()
+                        .find_map(|s| by_seq.get(&s).map(|a| a.sent_at_ms))
                 });
 
             let pre_burst_delays: Vec<f64> = match burst_send_time {
@@ -301,7 +325,10 @@ fn compute_queue_delay_correlation(sample: &BoundedSample, bursts: &[LossBurst])
 /// this sample was derived from a packet capture rather than a direct
 /// client/server log, so the qualification travels with every downstream
 /// figure instead of being lost at the ingestion boundary.
-pub fn analyze(sample: &BoundedSample, capture_qualification: Option<String>) -> BurstAnalysisReport {
+pub fn analyze(
+    sample: &BoundedSample,
+    capture_qualification: Option<String>,
+) -> BurstAnalysisReport {
     let mut notes = Vec::new();
 
     let (distinct_in_receive_order, duplicate_count) = split_duplicates(&sample.arrivals);
@@ -320,9 +347,13 @@ pub fn analyze(sample: &BoundedSample, capture_qualification: Option<String>) ->
         ((sample.sent_count - received_count) as f64 / sample.sent_count as f64) * 100.0
     };
 
-    let send_time_by_seq: std::collections::HashMap<u64, f64> =
-        distinct_in_receive_order.iter().map(|a| (a.seq, a.sent_at_ms)).collect();
-    let burst = compute_burst_distribution(sample.sent_count, &present, &|seq| send_time_by_seq.get(&seq).copied());
+    let send_time_by_seq: std::collections::HashMap<u64, f64> = distinct_in_receive_order
+        .iter()
+        .map(|a| (a.seq, a.sent_at_ms))
+        .collect();
+    let burst = compute_burst_distribution(sample.sent_count, &present, &|seq| {
+        send_time_by_seq.get(&seq).copied()
+    });
 
     let reordering = compute_reordering(&distinct_in_receive_order);
     let max_reorder_depth = reordering.iter().map(|e| e.depth).max().unwrap_or(0);
@@ -352,7 +383,10 @@ pub fn analyze(sample: &BoundedSample, capture_qualification: Option<String>) ->
     }
 
     if let Some(q) = &capture_qualification {
-        notes.push(format!("capture-derived figures inherit qualification: {}", q));
+        notes.push(format!(
+            "capture-derived figures inherit qualification: {}",
+            q
+        ));
     }
 
     BurstAnalysisReport {
@@ -375,7 +409,11 @@ mod tests {
     use super::*;
 
     fn arr(seq: u64, sent: f64, received: f64) -> Arrival {
-        Arrival { seq, sent_at_ms: sent, received_at_ms: received }
+        Arrival {
+            seq,
+            sent_at_ms: sent,
+            received_at_ms: received,
+        }
     }
 
     #[test]
@@ -389,7 +427,10 @@ mod tests {
             arr(8, 80.0, 85.0),
             arr(9, 90.0, 95.0),
         ];
-        let sample = BoundedSample { sent_count: 10, arrivals };
+        let sample = BoundedSample {
+            sent_count: 10,
+            arrivals,
+        };
         let report = analyze(&sample, None);
 
         assert_eq!(report.burst.burst_count, 2);
@@ -406,8 +447,16 @@ mod tests {
     #[test]
     fn reordered_packet_is_not_counted_as_lost() {
         // All 4 sent, all 4 arrive, but seq 2 arrives before seq 1.
-        let arrivals = vec![arr(0, 0.0, 5.0), arr(2, 20.0, 22.0), arr(1, 10.0, 25.0), arr(3, 30.0, 35.0)];
-        let sample = BoundedSample { sent_count: 4, arrivals };
+        let arrivals = vec![
+            arr(0, 0.0, 5.0),
+            arr(2, 20.0, 22.0),
+            arr(1, 10.0, 25.0),
+            arr(3, 30.0, 35.0),
+        ];
+        let sample = BoundedSample {
+            sent_count: 4,
+            arrivals,
+        };
         let report = analyze(&sample, None);
 
         assert_eq!(report.received_count, 4);
@@ -420,8 +469,16 @@ mod tests {
 
     #[test]
     fn duplicates_are_reported_separately_from_loss_and_reordering() {
-        let arrivals = vec![arr(0, 0.0, 5.0), arr(1, 10.0, 15.0), arr(1, 10.0, 16.0), arr(2, 20.0, 25.0)];
-        let sample = BoundedSample { sent_count: 3, arrivals };
+        let arrivals = vec![
+            arr(0, 0.0, 5.0),
+            arr(1, 10.0, 15.0),
+            arr(1, 10.0, 16.0),
+            arr(2, 20.0, 25.0),
+        ];
+        let sample = BoundedSample {
+            sent_count: 3,
+            arrivals,
+        };
         let report = analyze(&sample, None);
 
         assert_eq!(report.duplicate_count, 1);
@@ -437,7 +494,10 @@ mod tests {
         // present) has no arrival for start_seq itself, so gap_duration_ms
         // must be None, not fabricated as 0.0.
         let arrivals = vec![arr(1, 10.0, 15.0), arr(2, 20.0, 25.0)];
-        let sample = BoundedSample { sent_count: 3, arrivals };
+        let sample = BoundedSample {
+            sent_count: 3,
+            arrivals,
+        };
         let report = analyze(&sample, None);
 
         assert_eq!(report.burst.burst_count, 1);
@@ -448,7 +508,10 @@ mod tests {
     #[test]
     fn no_bursts_reports_none_mean_run_length_not_zero() {
         let arrivals = vec![arr(0, 0.0, 5.0), arr(1, 10.0, 15.0)];
-        let sample = BoundedSample { sent_count: 2, arrivals };
+        let sample = BoundedSample {
+            sent_count: 2,
+            arrivals,
+        };
         let report = analyze(&sample, None);
         assert_eq!(report.burst.burst_count, 0);
         assert_eq!(report.burst.mean_run_length, None);
@@ -456,9 +519,18 @@ mod tests {
 
     #[test]
     fn capture_qualification_travels_into_the_report() {
-        let sample = BoundedSample { sent_count: 1, arrivals: vec![arr(0, 0.0, 1.0)] };
-        let report = analyze(&sample, Some("host-side capture, offload-suspect".to_string()));
-        assert_eq!(report.capture_qualification, Some("host-side capture, offload-suspect".to_string()));
+        let sample = BoundedSample {
+            sent_count: 1,
+            arrivals: vec![arr(0, 0.0, 1.0)],
+        };
+        let report = analyze(
+            &sample,
+            Some("host-side capture, offload-suspect".to_string()),
+        );
+        assert_eq!(
+            report.capture_qualification,
+            Some("host-side capture, offload-suspect".to_string())
+        );
         assert!(report.notes.iter().any(|n| n.contains("offload-suspect")));
     }
 
@@ -474,11 +546,17 @@ mod tests {
         arrivals[9] = arr(9, 90.0, 90.0 + 45.0);
         // seq 10 is lost (the burst); seq 11 resumes normal delay.
         arrivals.push(arr(11, 110.0, 115.0));
-        let sample = BoundedSample { sent_count: 12, arrivals };
+        let sample = BoundedSample {
+            sent_count: 12,
+            arrivals,
+        };
         let report = analyze(&sample, None);
 
         assert_eq!(report.burst.burst_count, 1);
         assert_eq!(report.queue_delay_correlation.len(), 1);
-        assert_eq!(report.queue_delay_correlation[0].delay_rising_before_burst, Some(true));
+        assert_eq!(
+            report.queue_delay_correlation[0].delay_rising_before_burst,
+            Some(true)
+        );
     }
 }

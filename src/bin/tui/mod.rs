@@ -9,17 +9,14 @@ pub mod test_panel;
 pub mod test_registration;
 
 // Re-exports from app module (which has everything)
-pub use app::{App, AppState, AppMode, render};
+pub use app::{render, App, AppState};
 
 use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen},
-    event::{DisableMouseCapture, EnableMouseCapture},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
 pub fn run_tui() -> io::Result<()> {
@@ -28,20 +25,20 @@ pub fn run_tui() -> io::Result<()> {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    
+
     let state = std::sync::Arc::new(std::sync::Mutex::new(AppState::default()));
     let mut app = App::new(state);
-    
+
     loop {
         terminal.draw(|f| {
             render(f, &mut app);
         })?;
-        
+
         if app::handle_events(&mut app)? || app.should_quit {
             break;
         }
     }
-    
+
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -49,6 +46,6 @@ pub fn run_tui() -> io::Result<()> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-    
+
     Ok(())
 }

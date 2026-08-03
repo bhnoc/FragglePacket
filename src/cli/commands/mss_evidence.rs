@@ -68,7 +68,10 @@ pub struct MssEvidenceArgs {
 fn parse_destination(raw: &str) -> Option<DestinationMss> {
     let (name, mss_str) = raw.split_once('=')?;
     let mss: u16 = mss_str.trim().parse().ok()?;
-    Some(DestinationMss { destination: name.trim().to_string(), negotiated_mss: mss })
+    Some(DestinationMss {
+        destination: name.trim().to_string(),
+        negotiated_mss: mss,
+    })
 }
 
 pub fn run(args: &MssEvidenceArgs) {
@@ -95,14 +98,19 @@ pub fn run(args: &MssEvidenceArgs) {
                         ));
                         buf.push_str(&format!(
                             "    local_advertised={:?} peer_advertised={:?} both_directions={}\n",
-                            flow.local_advertised, flow.peer_advertised, flow.both_directions_observed
+                            flow.local_advertised,
+                            flow.peer_advertised,
+                            flow.both_directions_observed
                         ));
                         let verdict_str = match attribution.verdict {
                             MiddleboxVerdict::NoRewriteEvidence => "no-rewrite-evidence",
                             MiddleboxVerdict::Ambiguous => "ambiguous",
                             MiddleboxVerdict::InsufficientEvidence => "insufficient-evidence",
                         };
-                        buf.push_str(&format!("    verdict={} confidence={:?}\n", verdict_str, attribution.confidence));
+                        buf.push_str(&format!(
+                            "    verdict={} confidence={:?}\n",
+                            verdict_str, attribution.confidence
+                        ));
                         buf.push_str(&format!("    {}\n", attribution.explanation));
                     }
                     print!("{}", policy.apply(&buf));
@@ -123,7 +131,11 @@ pub fn run(args: &MssEvidenceArgs) {
             .filter_map(|d| {
                 let parsed = parse_destination(d);
                 if parsed.is_none() {
-                    eprintln!("{} could not parse --destination '{}' (expected name=mss)", "✗".red(), d);
+                    eprintln!(
+                        "{} could not parse --destination '{}' (expected name=mss)",
+                        "✗".red(),
+                        d
+                    );
                 }
                 parsed
             })
@@ -159,7 +171,12 @@ pub fn run(args: &MssEvidenceArgs) {
         if args.json {
             println!("{}", serde_json::to_string_pretty(&report).unwrap());
         } else {
-            println!("{}", "== GAP-026 multi-destination MSS clustering ==".cyan().bold());
+            println!(
+                "{}",
+                "== GAP-026 multi-destination MSS clustering =="
+                    .cyan()
+                    .bold()
+            );
             for d in &report.destinations {
                 println!("  {}: MSS {}", d.destination, d.negotiated_mss);
             }
@@ -170,7 +187,13 @@ pub fn run(args: &MssEvidenceArgs) {
                         "  route MTU measured against: {} on interface {}{}",
                         mtu,
                         iface,
-                        if report.route_is_tunnel { " (TUNNEL -- not the physical network under test)".yellow().to_string() } else { String::new() }
+                        if report.route_is_tunnel {
+                            " (TUNNEL -- not the physical network under test)"
+                                .yellow()
+                                .to_string()
+                        } else {
+                            String::new()
+                        }
                     );
                 }
                 (Some(mtu), None) => println!("  route MTU: {} (interface not specified)", mtu),

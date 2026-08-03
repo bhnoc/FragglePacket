@@ -1,8 +1,8 @@
 //! GAP-011: Wi-Fi radio/retry diagnostic with safe elevation (`radio-diagnostic`).
 
 use colored::*;
-use fraggle_packet::load_guard::radio_diagnostic::{build_diagnostic, RadioDiagnostic};
 use fraggle_packet::load_guard::radio::RadioSnapshot;
+use fraggle_packet::load_guard::radio_diagnostic::{build_diagnostic, RadioDiagnostic};
 use fraggle_packet::load_guard::wdutil::{self, WdutilError};
 
 #[derive(clap::Args, Debug)]
@@ -27,13 +27,18 @@ pub fn run(args: &RadioDiagnosticArgs) {
             "../../../harness/fixtures/wifi/system_profiler-airport.txt"
         ));
         let privileged = if args.inject_privilege_denied {
-            Err(WdutilError::PrivilegeRequired { command: wdutil::suggested_privileged_command() })
+            Err(WdutilError::PrivilegeRequired {
+                command: wdutil::suggested_privileged_command(),
+            })
         } else {
-            Ok(wdutil::parse_wdutil_info(include_str!("../../../harness/fixtures/wifi/wdutil-info.txt")))
+            Ok(wdutil::parse_wdutil_info(include_str!(
+                "../../../harness/fixtures/wifi/wdutil-info.txt"
+            )))
         };
         build_diagnostic(base, privileged)
     } else {
-        let base = fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
+        let base = fraggle_packet::load_guard::radio::snapshot_live()
+            .unwrap_or_else(|_| RadioSnapshot::unavailable());
         let privileged = wdutil::snapshot_live();
         build_diagnostic(base, privileged)
     };
@@ -46,11 +51,13 @@ pub fn run(args: &RadioDiagnosticArgs) {
 }
 
 fn fmt_dbm(v: Option<i32>) -> String {
-    v.map(|v| format!("{v}dBm")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v}dBm"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn fmt_pct(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.1}%")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.1}%"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn print_human(diag: &RadioDiagnostic) {
@@ -60,25 +67,40 @@ fn print_human(diag: &RadioDiagnostic) {
     println!(
         "  band={} channel={} width={}",
         diag.band.as_deref().unwrap_or("unavailable"),
-        diag.channel.map(|c| c.to_string()).unwrap_or_else(|| "unavailable".to_string()),
-        diag.width_mhz.map(|w| format!("{w}MHz")).unwrap_or_else(|| "unavailable".to_string())
+        diag.channel
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "unavailable".to_string()),
+        diag.width_mhz
+            .map(|w| format!("{w}MHz"))
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     println!(
         "  rssi={} noise={} snr={}",
         fmt_dbm(diag.rssi_dbm),
         fmt_dbm(diag.noise_dbm),
-        diag.snr_db.map(|s| format!("{s}dB")).unwrap_or_else(|| "unavailable".to_string())
+        diag.snr_db
+            .map(|s| format!("{s}dB"))
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     println!(
         "  mcs={} phy_rate={}",
-        diag.mcs_index.map(|m| m.to_string()).unwrap_or_else(|| "unavailable".to_string()),
-        diag.tx_rate_mbps.map(|r| format!("{r}Mbps")).unwrap_or_else(|| "unavailable".to_string())
+        diag.mcs_index
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| "unavailable".to_string()),
+        diag.tx_rate_mbps
+            .map(|r| format!("{r}Mbps"))
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     println!("  rf_quality: {:?}", diag.rf_quality);
-    println!("  channel_utilization: {}", fmt_pct(diag.channel_utilization_pct));
+    println!(
+        "  channel_utilization: {}",
+        fmt_pct(diag.channel_utilization_pct)
+    );
     println!(
         "  retries: {} (see platform limitations below)",
-        diag.retries.map(|r| r.to_string()).unwrap_or_else(|| "unavailable".to_string())
+        diag.retries
+            .map(|r| r.to_string())
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     println!(
         "  wmm_access_category: {} (see platform limitations below)",

@@ -173,7 +173,8 @@ pub fn run(args: &LoadGuardArgs) {
         } else if fake_radio {
             Ok(strong_snapshot())
         } else {
-            Ok(fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| strong_snapshot()))
+            Ok(fraggle_packet::load_guard::radio::snapshot_live()
+                .unwrap_or_else(|_| strong_snapshot()))
         }
     });
 
@@ -190,7 +191,8 @@ pub fn run(args: &LoadGuardArgs) {
         } else if fake_radio {
             Ok(strong_snapshot())
         } else {
-            Ok(fraggle_packet::load_guard::radio::snapshot_fast().unwrap_or_else(|_| strong_snapshot()))
+            Ok(fraggle_packet::load_guard::radio::snapshot_fast()
+                .unwrap_or_else(|_| strong_snapshot()))
         }
     });
 
@@ -201,8 +203,16 @@ pub fn run(args: &LoadGuardArgs) {
     });
 
     let radio_is_synthetic = fake_radio || inject_band_change || inject_weak_rf;
-    let guard = match LoadGuard::new(budget, interface.clone(), default_route_is_tunnel, radio, counters) {
-        Ok(g) => g.with_fast_radio_source(radio_fast).with_synthetic_radio_marker(radio_is_synthetic),
+    let guard = match LoadGuard::new(
+        budget,
+        interface.clone(),
+        default_route_is_tunnel,
+        radio,
+        counters,
+    ) {
+        Ok(g) => g
+            .with_fast_radio_source(radio_fast)
+            .with_synthetic_radio_marker(radio_is_synthetic),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);
@@ -328,7 +338,10 @@ fn print_human(report: &GuardReport) {
         Validity::Valid => println!("  validity: valid"),
         Validity::Invalid(reason) => println!("  validity: invalid ({})", reason),
     }
-    println!("  radio before: {}", format_radio_line(&report.radio.before));
+    println!(
+        "  radio before: {}",
+        format_radio_line(&report.radio.before)
+    );
     println!("  radio after:  {}", format_radio_line(&report.radio.after));
     println!(
         "  counters before: rx_bytes={} tx_bytes={}",

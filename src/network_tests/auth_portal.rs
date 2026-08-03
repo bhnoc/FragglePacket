@@ -99,7 +99,9 @@ pub fn classify_portal_response(
     expected_body_marker: Option<&str>,
 ) -> PortalStatus {
     if (300..400).contains(&status_code) {
-        return PortalStatus::PortalDetected { redirect_location: location_header.map(|s| s.to_string()) };
+        return PortalStatus::PortalDetected {
+            redirect_location: location_header.map(|s| s.to_string()),
+        };
     }
     if status_code == 204 {
         return PortalStatus::NoPortalDetected;
@@ -107,11 +109,15 @@ pub fn classify_portal_response(
     if status_code == 200 {
         match expected_body_marker {
             Some(marker) if body.contains(marker) => PortalStatus::NoPortalDetected,
-            Some(_) => PortalStatus::PortalDetected { redirect_location: None },
+            Some(_) => PortalStatus::PortalDetected {
+                redirect_location: None,
+            },
             None => PortalStatus::NoPortalDetected,
         }
     } else {
-        PortalStatus::PortalDetected { redirect_location: None }
+        PortalStatus::PortalDetected {
+            redirect_location: None,
+        }
     }
 }
 
@@ -158,14 +164,21 @@ pub struct SessionContinuitySample {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SessionContinuityVerdict {
     Continuous,
-    ExpiredOrReauthRequired { last_reachable_at_secs: u64 },
+    ExpiredOrReauthRequired {
+        last_reachable_at_secs: u64,
+    },
     /// Fewer than two samples, or every sample unmeasurable -- never
     /// coerced to Continuous by default.
     Indeterminate,
 }
 
-pub fn evaluate_session_continuity(samples: &[SessionContinuitySample]) -> SessionContinuityVerdict {
-    let measured: Vec<&SessionContinuitySample> = samples.iter().filter(|s| s.still_reachable.is_some()).collect();
+pub fn evaluate_session_continuity(
+    samples: &[SessionContinuitySample],
+) -> SessionContinuityVerdict {
+    let measured: Vec<&SessionContinuitySample> = samples
+        .iter()
+        .filter(|s| s.still_reachable.is_some())
+        .collect();
     if measured.len() < 2 {
         return SessionContinuityVerdict::Indeterminate;
     }
@@ -174,7 +187,9 @@ pub fn evaluate_session_continuity(samples: &[SessionContinuitySample]) -> Sessi
         if s.still_reachable == Some(true) {
             last_reachable = Some(s.elapsed_secs);
         } else if let Some(last) = last_reachable {
-            return SessionContinuityVerdict::ExpiredOrReauthRequired { last_reachable_at_secs: last };
+            return SessionContinuityVerdict::ExpiredOrReauthRequired {
+                last_reachable_at_secs: last,
+            };
         }
     }
     SessionContinuityVerdict::Continuous
@@ -195,16 +210,29 @@ mod tests {
 
     #[test]
     fn substituted_200_body_is_portal_detected() {
-        let status = classify_portal_response(200, None, "<html>Please log in</html>", Some("Success"));
-        assert_eq!(status, PortalStatus::PortalDetected { redirect_location: None });
+        let status =
+            classify_portal_response(200, None, "<html>Please log in</html>", Some("Success"));
+        assert_eq!(
+            status,
+            PortalStatus::PortalDetected {
+                redirect_location: None
+            }
+        );
     }
 
     #[test]
     fn redirect_is_portal_detected_with_location() {
-        let status = classify_portal_response(302, Some("http://portal.example/login"), "", Some("Success"));
+        let status = classify_portal_response(
+            302,
+            Some("http://portal.example/login"),
+            "",
+            Some("Success"),
+        );
         assert_eq!(
             status,
-            PortalStatus::PortalDetected { redirect_location: Some("http://portal.example/login".to_string()) }
+            PortalStatus::PortalDetected {
+                redirect_location: Some("http://portal.example/login".to_string())
+            }
         );
     }
 
@@ -226,14 +254,21 @@ mod tests {
         // Each phase is separately inspectable; there is no `total_ms`
         // field on this struct at all -- this test locks that by
         // confirming every phase is independently Some and distinct.
-        let phases = [t.association_ms, t.eap_ms, t.dhcp_ms, t.dns_ms, t.first_https_ms];
+        let phases = [
+            t.association_ms,
+            t.eap_ms,
+            t.dhcp_ms,
+            t.dns_ms,
+            t.first_https_ms,
+        ];
         assert!(phases.iter().all(|p| p.is_some()));
         assert_eq!(phases.iter().filter(|p| **p == Some(8100)).count(), 1);
     }
 
     #[test]
     fn role_mismatch_detected_when_both_subnets_known() {
-        let check = verify_role_assignment("attendee-vlan", Some("10.1.0.0/24"), Some("10.9.0.0/24"));
+        let check =
+            verify_role_assignment("attendee-vlan", Some("10.1.0.0/24"), Some("10.9.0.0/24"));
         assert_eq!(check.matches_expected, Some(false));
     }
 
@@ -245,34 +280,60 @@ mod tests {
 
     #[test]
     fn single_sample_continuity_is_indeterminate() {
-        let samples = vec![SessionContinuitySample { elapsed_secs: 0, still_reachable: Some(true) }];
-        assert_eq!(evaluate_session_continuity(&samples), SessionContinuityVerdict::Indeterminate);
+        let samples = vec![SessionContinuitySample {
+            elapsed_secs: 0,
+            still_reachable: Some(true),
+        }];
+        assert_eq!(
+            evaluate_session_continuity(&samples),
+            SessionContinuityVerdict::Indeterminate
+        );
     }
 
     #[test]
     fn reachable_then_unreachable_is_expired() {
         let samples = vec![
-            SessionContinuitySample { elapsed_secs: 0, still_reachable: Some(true) },
-            SessionContinuitySample { elapsed_secs: 60, still_reachable: Some(false) },
+            SessionContinuitySample {
+                elapsed_secs: 0,
+                still_reachable: Some(true),
+            },
+            SessionContinuitySample {
+                elapsed_secs: 60,
+                still_reachable: Some(false),
+            },
         ];
         assert_eq!(
             evaluate_session_continuity(&samples),
-            SessionContinuityVerdict::ExpiredOrReauthRequired { last_reachable_at_secs: 0 }
+            SessionContinuityVerdict::ExpiredOrReauthRequired {
+                last_reachable_at_secs: 0
+            }
         );
     }
 
     #[test]
     fn continuously_reachable_is_continuous() {
         let samples = vec![
-            SessionContinuitySample { elapsed_secs: 0, still_reachable: Some(true) },
-            SessionContinuitySample { elapsed_secs: 60, still_reachable: Some(true) },
+            SessionContinuitySample {
+                elapsed_secs: 0,
+                still_reachable: Some(true),
+            },
+            SessionContinuitySample {
+                elapsed_secs: 60,
+                still_reachable: Some(true),
+            },
         ];
-        assert_eq!(evaluate_session_continuity(&samples), SessionContinuityVerdict::Continuous);
+        assert_eq!(
+            evaluate_session_continuity(&samples),
+            SessionContinuityVerdict::Continuous
+        );
     }
 
     #[test]
     fn no_credential_field_exists_on_radius_result() {
-        let r = RadiusResult { eap_method: Some(EapMethod::Peap), outcome: RadiusOutcome::Accept };
+        let r = RadiusResult {
+            eap_method: Some(EapMethod::Peap),
+            outcome: RadiusOutcome::Accept,
+        };
         let json = serde_json::to_string(&r).unwrap();
         assert!(!json.to_lowercase().contains("password"));
         assert!(!json.to_lowercase().contains("username"));

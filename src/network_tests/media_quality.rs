@@ -63,7 +63,9 @@ pub enum SetupOutcome {
     TimedOut,
     /// The path itself could not even be attempted (e.g. TURN allocation
     /// refused, TLS handshake failed before any RTP was sent).
-    Refused { detail: String },
+    Refused {
+        detail: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,7 +189,11 @@ pub struct MosInputs {
 /// This is NOT ITU-T P.800/P.862 and must never be presented as such --
 /// enforced by always wrapping the number in `MosEstimate` with `label`
 /// stating it is an estimate.
-pub fn estimate_mos(report: &BurstAnalysisReport, freeze_risk: FreezeRisk, concealment: ConcealmentEstimate) -> MosEstimate {
+pub fn estimate_mos(
+    report: &BurstAnalysisReport,
+    freeze_risk: FreezeRisk,
+    concealment: ConcealmentEstimate,
+) -> MosEstimate {
     let mut score = 4.4_f64;
     score -= (report.loss_percent / 100.0) * 2.0;
     if let Some(j) = report.jitter.mean_ms {
@@ -211,7 +217,8 @@ pub fn estimate_mos(report: &BurstAnalysisReport, freeze_risk: FreezeRisk, conce
             freeze_risk,
             concealment,
         },
-        label: "estimate (E-model-flavored heuristic, NOT an ITU-T P.800 subjective MOS)".to_string(),
+        label: "estimate (E-model-flavored heuristic, NOT an ITU-T P.800 subjective MOS)"
+            .to_string(),
     }
 }
 
@@ -241,7 +248,9 @@ pub fn build_report(
     rtt_ms: Option<f64>,
     clock_offset_verified: bool,
 ) -> MediaQualityReport {
-    let setup_success = ice_candidates.iter().any(|c| matches!(c.setup, SetupOutcome::Established));
+    let setup_success = ice_candidates
+        .iter()
+        .any(|c| matches!(c.setup, SetupOutcome::Established));
     let burst = analyze(sample, None);
     let concealment = estimate_concealment(&burst);
     let freeze_risk = estimate_freeze_risk(&burst, profile);
@@ -253,7 +262,11 @@ pub fn build_report(
         // timestamps are already in a common clock -- that verification is
         // the caller's job (GAP-064). Absent that plumbing, still report
         // unavailable rather than silently deriving from RTT.
-        OneWayDelay::Unavailable { reason: "clock offset verification path not yet wired to a common-clock timestamp source".to_string() }
+        OneWayDelay::Unavailable {
+            reason:
+                "clock offset verification path not yet wired to a common-clock timestamp source"
+                    .to_string(),
+        }
     } else {
         OneWayDelay::Unavailable { reason: "no verified clock offset between endpoints (GAP-064); one-way delay is never derived from RTT/2".to_string() }
     };
@@ -266,7 +279,18 @@ pub fn build_report(
         notes.push("one-way delay unavailable: reporting RTT/jitter/burst only, never halving RTT to approximate it".to_string());
     }
 
-    MediaQualityReport { profile, ice_candidates, setup_success, rtt_ms, one_way_delay, burst, concealment, freeze_risk, mos, notes }
+    MediaQualityReport {
+        profile,
+        ice_candidates,
+        setup_success,
+        rtt_ms,
+        one_way_delay,
+        burst,
+        concealment,
+        freeze_risk,
+        mos,
+        notes,
+    }
 }
 
 #[cfg(test)]
@@ -275,26 +299,43 @@ mod tests {
     use crate::network_tests::burst_analysis::Arrival;
 
     fn arr(seq: u64, sent: f64, received: f64) -> Arrival {
-        Arrival { seq, sent_at_ms: sent, received_at_ms: received }
+        Arrival {
+            seq,
+            sent_at_ms: sent,
+            received_at_ms: received,
+        }
     }
 
     #[test]
     fn one_way_delay_never_derived_from_rtt() {
-        let sample = BoundedSample { sent_count: 2, arrivals: vec![arr(0, 0.0, 5.0), arr(1, 20.0, 25.0)] };
+        let sample = BoundedSample {
+            sent_count: 2,
+            arrivals: vec![arr(0, 0.0, 5.0), arr(1, 20.0, 25.0)],
+        };
         let report = build_report(MediaProfile::Audio, vec![], &sample, Some(50.0), false);
         match report.one_way_delay {
             OneWayDelay::Unavailable { .. } => {}
-            OneWayDelay::Measured { .. } => panic!("one-way delay must not be derived without a verified clock offset"),
+            OneWayDelay::Measured { .. } => {
+                panic!("one-way delay must not be derived without a verified clock offset")
+            }
         }
         // Even flipping "clock_offset_verified" true doesn't produce a
         // fabricated figure without a real common-clock timestamp source.
         let report2 = build_report(MediaProfile::Audio, vec![], &sample, Some(50.0), true);
-        assert!(matches!(report2.one_way_delay, OneWayDelay::Unavailable { .. }));
+        assert!(matches!(
+            report2.one_way_delay,
+            OneWayDelay::Unavailable { .. }
+        ));
     }
 
     #[test]
     fn mos_is_always_labeled_an_estimate_with_inputs() {
-        let sample = BoundedSample { sent_count: 10, arrivals: (0..10).map(|i| arr(i, i as f64 * 20.0, i as f64 * 20.0 + 5.0)).collect() };
+        let sample = BoundedSample {
+            sent_count: 10,
+            arrivals: (0..10)
+                .map(|i| arr(i, i as f64 * 20.0, i as f64 * 20.0 + 5.0))
+                .collect(),
+        };
         let report = build_report(MediaProfile::Audio, vec![], &sample, None, false);
         assert!(report.mos.label.to_lowercase().contains("estimate"));
         assert!(!report.mos.label.contains("P.800") || report.mos.label.contains("NOT"));
@@ -312,7 +353,10 @@ mod tests {
                 single_drop_arrivals.push(arr(i, i as f64 * 20.0, i as f64 * 20.0 + 5.0));
             }
         }
-        let single_drop_sample = BoundedSample { sent_count: 30, arrivals: single_drop_arrivals };
+        let single_drop_sample = BoundedSample {
+            sent_count: 30,
+            arrivals: single_drop_arrivals,
+        };
 
         let mut long_outage_arrivals = Vec::new();
         for i in 0..30u64 {
@@ -320,30 +364,67 @@ mod tests {
                 long_outage_arrivals.push(arr(i, i as f64 * 20.0, i as f64 * 20.0 + 5.0));
             }
         }
-        let long_outage_sample = BoundedSample { sent_count: 30, arrivals: long_outage_arrivals };
+        let long_outage_sample = BoundedSample {
+            sent_count: 30,
+            arrivals: long_outage_arrivals,
+        };
 
-        let single_report = build_report(MediaProfile::Audio, vec![], &single_drop_sample, None, false);
-        let outage_report = build_report(MediaProfile::Audio, vec![], &long_outage_sample, None, false);
+        let single_report = build_report(
+            MediaProfile::Audio,
+            vec![],
+            &single_drop_sample,
+            None,
+            false,
+        );
+        let outage_report = build_report(
+            MediaProfile::Audio,
+            vec![],
+            &long_outage_sample,
+            None,
+            false,
+        );
 
-        assert_eq!(single_report.burst.loss_percent, outage_report.burst.loss_percent, "both samples must share the same mean loss for this test to be meaningful");
-        assert_eq!(single_report.concealment, ConcealmentEstimate::LikelyConcealed);
-        assert_eq!(outage_report.concealment, ConcealmentEstimate::LikelyAudibleArtifact);
+        assert_eq!(
+            single_report.burst.loss_percent, outage_report.burst.loss_percent,
+            "both samples must share the same mean loss for this test to be meaningful"
+        );
+        assert_eq!(
+            single_report.concealment,
+            ConcealmentEstimate::LikelyConcealed
+        );
+        assert_eq!(
+            outage_report.concealment,
+            ConcealmentEstimate::LikelyAudibleArtifact
+        );
         assert!(matches!(single_report.freeze_risk, FreezeRisk::Low));
         assert!(!matches!(outage_report.freeze_risk, FreezeRisk::Low));
     }
 
     #[test]
     fn setup_never_established_is_distinct_from_a_degraded_call() {
-        let sample = BoundedSample { sent_count: 1, arrivals: vec![] };
-        let candidates = vec![IceCandidateResult { path: PathKind::DirectUdp, setup: SetupOutcome::TimedOut, setup_rtt_ms: None }];
+        let sample = BoundedSample {
+            sent_count: 1,
+            arrivals: vec![],
+        };
+        let candidates = vec![IceCandidateResult {
+            path: PathKind::DirectUdp,
+            setup: SetupOutcome::TimedOut,
+            setup_rtt_ms: None,
+        }];
         let report = build_report(MediaProfile::Audio, candidates, &sample, None, false);
         assert!(!report.setup_success);
-        assert!(report.notes.iter().any(|n| n.contains("no ICE candidate path established")));
+        assert!(report
+            .notes
+            .iter()
+            .any(|n| n.contains("no ICE candidate path established")));
     }
 
     #[test]
     fn indeterminate_concealment_when_no_bursts_occurred() {
-        let sample = BoundedSample { sent_count: 3, arrivals: vec![arr(0, 0.0, 5.0), arr(1, 20.0, 25.0), arr(2, 40.0, 45.0)] };
+        let sample = BoundedSample {
+            sent_count: 3,
+            arrivals: vec![arr(0, 0.0, 5.0), arr(1, 20.0, 25.0), arr(2, 40.0, 45.0)],
+        };
         let report = build_report(MediaProfile::Audio, vec![], &sample, None, false);
         assert_eq!(report.concealment, ConcealmentEstimate::Indeterminate);
     }

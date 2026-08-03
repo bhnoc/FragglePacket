@@ -340,17 +340,26 @@ mod tests {
 
     #[test]
     fn ax_client_is_he_not_eht() {
-        assert_eq!(classify_negotiated_generation(&Some("802.11ax".to_string())), NegotiatedGeneration::He);
+        assert_eq!(
+            classify_negotiated_generation(&Some("802.11ax".to_string())),
+            NegotiatedGeneration::He
+        );
     }
 
     #[test]
     fn be_client_is_eht() {
-        assert_eq!(classify_negotiated_generation(&Some("802.11be".to_string())), NegotiatedGeneration::Eht);
+        assert_eq!(
+            classify_negotiated_generation(&Some("802.11be".to_string())),
+            NegotiatedGeneration::Eht
+        );
     }
 
     #[test]
     fn missing_phy_mode_is_unknown_not_guessed() {
-        assert_eq!(classify_negotiated_generation(&None), NegotiatedGeneration::Unknown);
+        assert_eq!(
+            classify_negotiated_generation(&None),
+            NegotiatedGeneration::Unknown
+        );
     }
 
     #[test]
@@ -359,7 +368,11 @@ mod tests {
         // HE-negotiated client. The client's own record must say He, never
         // Eht, regardless of what the AP context claims it supports.
         let client = client_association_from_snapshot(&snapshot("802.11ax"), None);
-        let ap = ApContext { radio_mode: Some(RadioMode::Be), model: Some("C-460".to_string()), ..empty_ap() };
+        let ap = ApContext {
+            radio_mode: Some(RadioMode::Be),
+            model: Some("C-460".to_string()),
+            ..empty_ap()
+        };
         assert_eq!(client.negotiated_generation, NegotiatedGeneration::He);
         assert_eq!(ap.radio_mode, Some(RadioMode::Be));
         assert_ne!(
@@ -371,7 +384,11 @@ mod tests {
     #[test]
     fn single_cell_matrix_never_yields_a_verdict() {
         let client = client_association_from_snapshot(&snapshot("802.11ax"), None);
-        let ap = ApContext { radio_mode: Some(RadioMode::Be), model: Some("C-460".to_string()), ..empty_ap() };
+        let ap = ApContext {
+            radio_mode: Some(RadioMode::Be),
+            model: Some("C-460".to_string()),
+            ..empty_ap()
+        };
         let matrix = CompatibilityMatrix {
             cells: vec![MatrixCell {
                 label: "only-cell".to_string(),
@@ -396,7 +413,9 @@ mod tests {
             CompatibilityVerdict::InsufficientCells { missing } => {
                 assert_eq!(missing.len(), REQUIRED_CELLS.len());
             }
-            CompatibilityVerdict::Comparable { .. } => panic!("empty matrix must never be comparable"),
+            CompatibilityVerdict::Comparable { .. } => {
+                panic!("empty matrix must never be comparable")
+            }
         }
     }
 
@@ -405,9 +424,21 @@ mod tests {
         let he_client = client_association_from_snapshot(&snapshot("802.11ax"), None);
         let eht_client = client_association_from_snapshot(&snapshot("802.11be"), None);
 
-        let be_ap = ApContext { radio_mode: Some(RadioMode::Be), model: Some("C-460".to_string()), ..empty_ap() };
-        let ax_ap_same = ApContext { radio_mode: Some(RadioMode::Ax), model: Some("C-460".to_string()), ..empty_ap() };
-        let wifi6e_ap = ApContext { radio_mode: Some(RadioMode::Ax), model: Some("C-360".to_string()), ..empty_ap() };
+        let be_ap = ApContext {
+            radio_mode: Some(RadioMode::Be),
+            model: Some("C-460".to_string()),
+            ..empty_ap()
+        };
+        let ax_ap_same = ApContext {
+            radio_mode: Some(RadioMode::Ax),
+            model: Some("C-460".to_string()),
+            ..empty_ap()
+        };
+        let wifi6e_ap = ApContext {
+            radio_mode: Some(RadioMode::Ax),
+            model: Some("C-360".to_string()),
+            ..empty_ap()
+        };
 
         let matrix = CompatibilityMatrix {
             cells: vec![
@@ -444,8 +475,12 @@ mod tests {
             ],
         };
         match verdict(&matrix) {
-            CompatibilityVerdict::Comparable { present_cells } => assert_eq!(present_cells.len(), 5),
-            CompatibilityVerdict::InsufficientCells { missing } => panic!("expected comparable, missing: {missing:?}"),
+            CompatibilityVerdict::Comparable { present_cells } => {
+                assert_eq!(present_cells.len(), 5)
+            }
+            CompatibilityVerdict::InsufficientCells { missing } => {
+                panic!("expected comparable, missing: {missing:?}")
+            }
         }
     }
 
@@ -455,7 +490,10 @@ mod tests {
         // "the same AP switched to AX mode" -- it must not satisfy the
         // independent 6E-AP slot.
         let client = client_association_from_snapshot(&snapshot("802.11ax"), None);
-        let ap_no_model = ApContext { radio_mode: Some(RadioMode::Ax), ..empty_ap() };
+        let ap_no_model = ApContext {
+            radio_mode: Some(RadioMode::Ax),
+            ..empty_ap()
+        };
         let cell = MatrixCell {
             label: "ambiguous".to_string(),
             client,
@@ -467,7 +505,10 @@ mod tests {
 
     #[test]
     fn ingest_round_trips_a_missing_firmware_as_none_not_a_guess() {
-        let ap = ApContext { firmware_version: None, ..empty_ap() };
+        let ap = ApContext {
+            firmware_version: None,
+            ..empty_ap()
+        };
         let json = serde_json::to_string(&ap).unwrap();
         let back: ApContext = serde_json::from_str(&json).unwrap();
         assert_eq!(back.firmware_version, None);
@@ -476,8 +517,17 @@ mod tests {
     #[test]
     fn run_descriptor_is_deterministic_for_the_same_cell() {
         let client = client_association_from_snapshot(&snapshot("802.11ax"), None);
-        let ap = ApContext { radio_mode: Some(RadioMode::Be), model: Some("C-460".to_string()), ..empty_ap() };
-        let cell = MatrixCell { label: "x".to_string(), client, ap, client_hardware_generation: None };
+        let ap = ApContext {
+            radio_mode: Some(RadioMode::Be),
+            model: Some("C-460".to_string()),
+            ..empty_ap()
+        };
+        let cell = MatrixCell {
+            label: "x".to_string(),
+            client,
+            ap,
+            client_hardware_generation: None,
+        };
         assert_eq!(run_descriptor_digest(&cell), run_descriptor_digest(&cell));
     }
 

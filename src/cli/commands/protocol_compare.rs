@@ -3,7 +3,8 @@ use std::net::IpAddr;
 use colored::*;
 
 use fraggle_packet::network_tests::protocol_compare::{
-    run_comparison, ComparisonReport, CompareConfig, HttpProtocol, LegResult, ProtocolComparisonResult,
+    run_comparison, CompareConfig, ComparisonReport, HttpProtocol, LegResult,
+    ProtocolComparisonResult,
 };
 
 #[derive(clap::Args, Debug)]
@@ -52,7 +53,11 @@ pub struct ProtocolCompareArgs {
 
 pub fn run(args: &ProtocolCompareArgs) {
     let protocols: Vec<HttpProtocol> = if args.protocols.is_empty() {
-        vec![HttpProtocol::Http1, HttpProtocol::Http2, HttpProtocol::Http3]
+        vec![
+            HttpProtocol::Http1,
+            HttpProtocol::Http2,
+            HttpProtocol::Http3,
+        ]
     } else {
         args.protocols
             .iter()
@@ -94,8 +99,11 @@ fn fmt_leg(label: &str, leg: Option<&LegResult>) {
                 "    {:24} ip={:<16} status={:<5} throughput={} loss={:?}",
                 label,
                 l.connected_ip.clone().unwrap_or_else(|| "?".to_string()),
-                l.http_status.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string()),
-                mbps.map(|m| format!("{:.2} Mbps", m)).unwrap_or_else(|| "unavailable".to_string()),
+                l.http_status
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                mbps.map(|m| format!("{:.2} Mbps", m))
+                    .unwrap_or_else(|| "unavailable".to_string()),
                 l.loss_indicator,
             );
             if l.redirect_count > 0 {
@@ -132,7 +140,10 @@ fn print_human(report: &ComparisonReport) {
     println!(
         "protocol comparison host={} interface={}",
         report.host,
-        report.interface.clone().unwrap_or_else(|| "default".to_string())
+        report
+            .interface
+            .clone()
+            .unwrap_or_else(|| "default".to_string())
     );
     if report.endpoint_mismatch {
         println!(

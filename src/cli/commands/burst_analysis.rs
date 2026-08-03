@@ -18,7 +18,9 @@ use std::time::{Duration, Instant};
 use fraggle_packet::load_guard::{
     CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource,
 };
-use fraggle_packet::network_tests::burst_analysis::{analyze, Arrival, BoundedSample, BurstAnalysisReport};
+use fraggle_packet::network_tests::burst_analysis::{
+    analyze, Arrival, BoundedSample, BurstAnalysisReport,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct BurstAnalysisArgs {
@@ -87,17 +89,21 @@ fn run_one_pass(
         LoadBudget::maintenance(1.0, duration_secs, 1)
     };
 
-    let radio = RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
+    let radio =
+        RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
     let iface_for_counters = interface.to_string();
     let counters = CounterSource::new(move || {
         fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters)
             .or_else(|_| Ok(InterfaceCounters::zero()))
     });
 
-    let guard = LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
+    let guard =
+        LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
 
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
-    socket.set_read_timeout(Some(Duration::from_millis(timeout_ms))).ok();
+    socket
+        .set_read_timeout(Some(Duration::from_millis(timeout_ms)))
+        .ok();
     let dest = SocketAddr::new(target, port);
 
     let arrivals: Arc<Mutex<Vec<Arrival>>> = Arc::new(Mutex::new(Vec::new()));
@@ -146,7 +152,10 @@ fn run_one_pass(
                 }
                 *current += 1;
             }
-            PhaseTick { bytes_sent_delta: bytes_sent, ..Default::default() }
+            PhaseTick {
+                bytes_sent_delta: bytes_sent,
+                ..Default::default()
+            }
         },
         cancel,
     );
@@ -157,8 +166,13 @@ fn run_one_pass(
     // were never sent at all -- the same unknown-rendered-as-a-number trap
     // this whole gap list exists to close.
     let sent_count = *seq.lock().unwrap();
-    let arrivals = Arc::try_unwrap(arrivals).map(|m| m.into_inner().unwrap()).unwrap_or_default();
-    Ok(BoundedSample { sent_count, arrivals })
+    let arrivals = Arc::try_unwrap(arrivals)
+        .map(|m| m.into_inner().unwrap())
+        .unwrap_or_default();
+    Ok(BoundedSample {
+        sent_count,
+        arrivals,
+    })
 }
 
 pub fn run(args: &BurstAnalysisArgs) {
@@ -245,7 +259,12 @@ fn fmt_opt(v: &Option<f64>) -> String {
 
 fn print_human(label: &str, rate_pps: f64, report: &BurstAnalysisReport) {
     println!();
-    println!("{}", format!("== {} pass @ {:.1}pps ==", label, rate_pps).cyan().bold());
+    println!(
+        "{}",
+        format!("== {} pass @ {:.1}pps ==", label, rate_pps)
+            .cyan()
+            .bold()
+    );
     println!(
         "  sent={} received={} loss={:.1}%",
         report.sent_count, report.received_count, report.loss_percent
@@ -283,7 +302,10 @@ fn print_human(label: &str, rate_pps: f64, report: &BurstAnalysisReport) {
             Some(false) => "flat".to_string(),
             None => "unavailable".dimmed().to_string(),
         };
-        println!("  queue-delay @ burst seq={}: {}", c.burst_start_seq, verdict);
+        println!(
+            "  queue-delay @ burst seq={}: {}",
+            c.burst_start_seq, verdict
+        );
     }
     for n in &report.notes {
         println!("  * {}", n);

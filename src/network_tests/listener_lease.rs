@@ -30,9 +30,13 @@ pub struct AuthorizedListener {
 pub enum LeaseError {
     /// The exact enforcement point: this port was never in the operator-
     /// supplied allowlist, so no attempt to contact it is made.
-    PortNotAuthorized { port: u16 },
+    PortNotAuthorized {
+        port: u16,
+    },
     AllListenersInUse,
-    ConcurrencyCapReached { cap: usize },
+    ConcurrencyCapReached {
+        cap: usize,
+    },
 }
 
 impl std::fmt::Display for LeaseError {
@@ -42,7 +46,9 @@ impl std::fmt::Display for LeaseError {
                 write!(f, "port {port} is not in the operator-authorized listener allowlist; refusing to contact it")
             }
             LeaseError::AllListenersInUse => write!(f, "all authorized listeners currently leased"),
-            LeaseError::ConcurrencyCapReached { cap } => write!(f, "concurrency cap ({cap}) reached"),
+            LeaseError::ConcurrencyCapReached { cap } => {
+                write!(f, "concurrency cap ({cap}) reached")
+            }
         }
     }
 }
@@ -70,7 +76,11 @@ impl Drop for ListenerLease {
 
 impl ListenerPool {
     pub fn new(allowlist: Vec<AuthorizedListener>, max_concurrency: usize) -> Self {
-        Self { allowlist, in_use: Arc::new(Mutex::new(HashSet::new())), max_concurrency }
+        Self {
+            allowlist,
+            in_use: Arc::new(Mutex::new(HashSet::new())),
+            max_concurrency,
+        }
     }
 
     pub fn is_authorized(&self, port: u16) -> bool {
@@ -95,10 +105,15 @@ impl ListenerPool {
             return Err(LeaseError::AllListenersInUse);
         };
         if in_use.len() >= self.max_concurrency {
-            return Err(LeaseError::ConcurrencyCapReached { cap: self.max_concurrency });
+            return Err(LeaseError::ConcurrencyCapReached {
+                cap: self.max_concurrency,
+            });
         }
         in_use.insert(l.port);
-        Ok(ListenerLease { listener: l.clone(), in_use: self.in_use.clone() })
+        Ok(ListenerLease {
+            listener: l.clone(),
+            in_use: self.in_use.clone(),
+        })
     }
 
     pub fn lease_specific(&self, port: u16) -> Result<ListenerLease, LeaseError> {
@@ -112,14 +127,19 @@ impl ListenerPool {
         };
         let mut in_use = self.in_use.lock().unwrap();
         if in_use.len() >= self.max_concurrency {
-            return Err(LeaseError::ConcurrencyCapReached { cap: self.max_concurrency });
+            return Err(LeaseError::ConcurrencyCapReached {
+                cap: self.max_concurrency,
+            });
         }
         if in_use.contains(&port) {
             return Err(LeaseError::AllListenersInUse);
         }
         let listener = listener.clone();
         in_use.insert(port);
-        Ok(ListenerLease { listener, in_use: self.in_use.clone() })
+        Ok(ListenerLease {
+            listener,
+            in_use: self.in_use.clone(),
+        })
     }
 
     pub fn leased_count(&self) -> usize {
@@ -145,9 +165,17 @@ pub fn estimate_loss_floor(iperf_version: &str) -> EndpointLossFloor {
     // materially lower, still-nonzero default rather than a false 0.0,
     // which would claim more certainty than was measured.
     if iperf_version.contains("3.9") {
-        EndpointLossFloor { client_version_family: "iperf3-3.9", floor_pct_low: 0.6, floor_pct_high: 1.0 }
+        EndpointLossFloor {
+            client_version_family: "iperf3-3.9",
+            floor_pct_low: 0.6,
+            floor_pct_high: 1.0,
+        }
     } else {
-        EndpointLossFloor { client_version_family: "iperf3-other", floor_pct_low: 0.0, floor_pct_high: 0.2 }
+        EndpointLossFloor {
+            client_version_family: "iperf3-other",
+            floor_pct_low: 0.0,
+            floor_pct_high: 0.2,
+        }
     }
 }
 
@@ -172,7 +200,10 @@ pub struct CapacityCheck {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CapacityVerdict {
     Consistent,
-    DurationInconsistent { requested_secs: f64, reported_secs: f64 },
+    DurationInconsistent {
+        requested_secs: f64,
+        reported_secs: f64,
+    },
 }
 
 /// A reported duration more than this fraction away from what was requested
@@ -213,7 +244,10 @@ mod tests {
     fn pool(ports: &[u16], cap: usize) -> ListenerPool {
         let allowlist = ports
             .iter()
-            .map(|p| AuthorizedListener { host: "example.test".to_string(), port: *p })
+            .map(|p| AuthorizedListener {
+                host: "example.test".to_string(),
+                port: *p,
+            })
             .collect();
         ListenerPool::new(allowlist, cap)
     }
@@ -222,7 +256,10 @@ mod tests {
     fn lease_specific_refuses_a_port_outside_the_allowlist() {
         let p = pool(&[5201, 5202], 2);
         let result = p.lease_specific(9999);
-        assert_eq!(result.err(), Some(LeaseError::PortNotAuthorized { port: 9999 }));
+        assert_eq!(
+            result.err(),
+            Some(LeaseError::PortNotAuthorized { port: 9999 })
+        );
     }
 
     #[test]
@@ -248,7 +285,10 @@ mod tests {
         let _l1 = p.lease().unwrap();
         let _l2 = p.lease().unwrap();
         let err = p.lease();
-        assert!(matches!(err, Err(LeaseError::ConcurrencyCapReached { cap: 2 })));
+        assert!(matches!(
+            err,
+            Err(LeaseError::ConcurrencyCapReached { cap: 2 })
+        ));
     }
 
     #[test]
@@ -279,7 +319,10 @@ mod tests {
             receiver_bits_per_second: 44_600_000.0,
         };
         let verdict = qualify_capacity(&check);
-        assert!(matches!(verdict, CapacityVerdict::DurationInconsistent { .. }));
+        assert!(matches!(
+            verdict,
+            CapacityVerdict::DurationInconsistent { .. }
+        ));
     }
 
     #[test]

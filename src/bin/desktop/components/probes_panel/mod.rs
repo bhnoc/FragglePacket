@@ -344,10 +344,11 @@ fn render_dsl_demo(dst: &str, port: u16, size: usize) -> String {
     };
     let pkt = Ether::new()
         / Ip::new().dst_addr(dst_ip).df()
-        / Tcp::new()
-            .dport(port)
-            .syn()
-            .options(vec![TcpOpt::Mss(1460), TcpOpt::SAckOK, TcpOpt::Nop])
+        / Tcp::new().dport(port).syn().options(vec![
+            TcpOpt::Mss(1460),
+            TcpOpt::SAckOK,
+            TcpOpt::Nop,
+        ])
         / Raw::of_size(size, b'X');
     let mut out = pkt.summary();
     out.push_str("\n\n");

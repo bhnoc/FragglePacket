@@ -18,8 +18,8 @@ pub fn run(args: &HttpsArgs) {
 
 /// Run HTTPS test from CLI
 fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
-    use fraggle_packet::network_tests::{test_https_stages, diagnose_mtu_blackhole};
     use fraggle_packet::diagnosis::{DiagnosisEngine, DiagnosisEvidence};
+    use fraggle_packet::network_tests::{diagnose_mtu_blackhole, test_https_stages};
 
     println!("============================================================");
     println!(" HTTPS Testing - Stage-by-Stage Analysis");
@@ -48,7 +48,11 @@ fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
     println!("│ Stage 2: TCP Connect                │");
     println!("└─────────────────────────────────────┘");
     if result.tcp_success {
-        println!("  {} Success: {} ms", "✓".green(), result.tcp_connect_time_ms.unwrap_or(0));
+        println!(
+            "  {} Success: {} ms",
+            "✓".green(),
+            result.tcp_connect_time_ms.unwrap_or(0)
+        );
     } else {
         println!("  {} Failed", "✗".red());
     }
@@ -58,11 +62,18 @@ fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
     println!("│ Stage 3: TLS Handshake (CRITICAL)  │");
     println!("└─────────────────────────────────────┘");
     if result.tls_success {
-        println!("  {} Success: {} ms", "✓".green(), result.tls_handshake_time_ms.unwrap_or(0));
+        println!(
+            "  {} Success: {} ms",
+            "✓".green(),
+            result.tls_handshake_time_ms.unwrap_or(0)
+        );
     } else {
         println!("  {} Failed or Timeout", "✗".red());
         if result.tcp_success {
-            println!("  {} TCP connected but TLS failed - possible MTU blackhole!", "⚠".yellow());
+            println!(
+                "  {} TCP connected but TLS failed - possible MTU blackhole!",
+                "⚠".yellow()
+            );
         }
     }
     println!();
@@ -110,7 +121,7 @@ fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
         // Run full diagnosis engine
         let evidence = DiagnosisEvidence {
             https_result: Some(result.clone()),
-            interface_mtu: Some(1500),  // TODO: Get actual interface MTU
+            interface_mtu: Some(1500), // TODO: Get actual interface MTU
             ..Default::default()
         };
 
@@ -121,7 +132,12 @@ fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
             println!("{} No issues detected", "✓".green());
         } else {
             for (i, diagnosis) in diagnoses.iter().enumerate() {
-                println!("{} Issue #{}: {:?}", "!".red().bold(), i + 1, diagnosis.issue);
+                println!(
+                    "{} Issue #{}: {:?}",
+                    "!".red().bold(),
+                    i + 1,
+                    diagnosis.issue
+                );
                 println!("  Severity: {:?}", diagnosis.severity);
                 println!("  Description: {}", diagnosis.description);
                 println!("\n  Recommendation:");

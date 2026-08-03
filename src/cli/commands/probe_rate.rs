@@ -48,14 +48,24 @@ pub fn run(args: &ProbeRateArgs) {
     let gateway_ip = match resolve_hostname(&args.gateway) {
         Ok(ip) => ip,
         Err(e) => {
-            eprintln!("{} could not resolve gateway {}: {}", "✗".red(), args.gateway, e);
+            eprintln!(
+                "{} could not resolve gateway {}: {}",
+                "✗".red(),
+                args.gateway,
+                e
+            );
             std::process::exit(1);
         }
     };
     let remote_ip: IpAddr = match resolve_hostname(&args.remote) {
         Ok(ip) => ip,
         Err(e) => {
-            eprintln!("{} could not resolve remote {}: {}", "✗".red(), args.remote, e);
+            eprintln!(
+                "{} could not resolve remote {}: {}",
+                "✗".red(),
+                args.remote,
+                e
+            );
             std::process::exit(1);
         }
     };
@@ -70,12 +80,22 @@ pub fn run(args: &ProbeRateArgs) {
     let gateway = TargetCadenceComparison {
         label: "gateway".to_string(),
         normal: sample_icmp_cadence(gateway_ip, args.normal_rate_hz, args.count, args.timeout_ms),
-        elevated: sample_icmp_cadence(gateway_ip, args.elevated_rate_hz, args.count, args.timeout_ms),
+        elevated: sample_icmp_cadence(
+            gateway_ip,
+            args.elevated_rate_hz,
+            args.count,
+            args.timeout_ms,
+        ),
     };
     let remote = TargetCadenceComparison {
         label: "remote".to_string(),
         normal: sample_icmp_cadence(remote_ip, args.normal_rate_hz, args.count, args.timeout_ms),
-        elevated: sample_icmp_cadence(remote_ip, args.elevated_rate_hz, args.count, args.timeout_ms),
+        elevated: sample_icmp_cadence(
+            remote_ip,
+            args.elevated_rate_hz,
+            args.count,
+            args.timeout_ms,
+        ),
     };
 
     // Non-ICMP corroboration at the elevated cadence: if the remote ICMP
@@ -86,7 +106,9 @@ pub fn run(args: &ProbeRateArgs) {
     let interval = std::time::Duration::from_secs_f64(1.0 / args.elevated_rate_hz.max(0.01));
     for _ in 0..args.count {
         let start = std::time::Instant::now();
-        if let Ok(ms) = test_tcp_connect(&format!("{}:{}", remote_ip, args.tcp_port), args.timeout_ms) {
+        if let Ok(ms) =
+            test_tcp_connect(&format!("{}:{}", remote_ip, args.tcp_port), args.timeout_ms)
+        {
             tcp_samples.push(ms as f64);
         }
         let spent = start.elapsed();
@@ -147,10 +169,20 @@ fn print_human(report: &fraggle_packet::network_tests::probe_rate::ProbeRateRepo
     );
     println!();
     if report.probable_icmp_policing {
-        println!("  {}", "PROBABLE ICMP POLICING/BATCHING (correlated across gateway + remote)".red().bold());
+        println!(
+            "  {}",
+            "PROBABLE ICMP POLICING/BATCHING (correlated across gateway + remote)"
+                .red()
+                .bold()
+        );
     }
     if report.application_latency_confirmed {
-        println!("  {}", "APPLICATION-LATENCY EFFECT CONFIRMED (TCP-corroborated)".red().bold());
+        println!(
+            "  {}",
+            "APPLICATION-LATENCY EFFECT CONFIRMED (TCP-corroborated)"
+                .red()
+                .bold()
+        );
     }
     for n in &report.notes {
         println!("  * {}", n);
@@ -159,5 +191,6 @@ fn print_human(report: &fraggle_packet::network_tests::probe_rate::ProbeRateRepo
 }
 
 fn fmt_ms(v: Option<f64>) -> String {
-    v.map(|v| format!("{:.2}ms", v)).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{:.2}ms", v))
+        .unwrap_or_else(|| "unavailable".to_string())
 }

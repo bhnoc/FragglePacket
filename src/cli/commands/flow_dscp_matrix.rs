@@ -20,10 +20,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fraggle_packet::load_guard::{CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource};
+use fraggle_packet::load_guard::{
+    CounterSource, InterfaceCounters, LoadBudget, LoadGuard, PhaseTick, RadioSource,
+};
 use fraggle_packet::network_tests::flow_dscp_matrix::{
-    build_dscp_result, check_aggregate_constancy, detect_control_drift, DscpCaptureSample, FlowCountMatrix,
-    FlowCountPoint,
+    build_dscp_result, check_aggregate_constancy, detect_control_drift, DscpCaptureSample,
+    FlowCountMatrix, FlowCountPoint,
 };
 
 #[derive(clap::Args, Debug)]
@@ -90,11 +92,28 @@ fn set_send_dscp(socket: &UdpSocket, dscp: u8, is_ipv4: bool) -> Result<(), Stri
     use std::os::fd::AsRawFd;
     let fd = socket.as_raw_fd();
     let tos: libc::c_int = (dscp as i32) << 2;
-    let (level, name) = if is_ipv4 { (libc::IPPROTO_IP, libc::IP_TOS) } else { (libc::IPPROTO_IPV6, libc::IPV6_TCLASS) };
-    let rc = unsafe {
-        libc::setsockopt(fd, level, name, &tos as *const _ as *const libc::c_void, std::mem::size_of::<libc::c_int>() as libc::socklen_t)
+    let (level, name) = if is_ipv4 {
+        (libc::IPPROTO_IP, libc::IP_TOS)
+    } else {
+        (libc::IPPROTO_IPV6, libc::IPV6_TCLASS)
     };
-    if rc == 0 { Ok(()) } else { Err(format!("setsockopt DSCP failed: {}", std::io::Error::last_os_error())) }
+    let rc = unsafe {
+        libc::setsockopt(
+            fd,
+            level,
+            name,
+            &tos as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        )
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "setsockopt DSCP failed: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
 }
 
 fn run_flow_point(
@@ -112,19 +131,27 @@ fn run_flow_point(
     } else {
         LoadBudget::maintenance(1.0, (duration_secs.max(1) * 2).max(2), flow_count.max(1))
     };
-    let radio = RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
+    let radio =
+        RadioSource::new(|| Ok(fraggle_packet::load_guard::radio::RadioSnapshot::unavailable()));
     let iface_for_counters = interface.to_string();
     let counters = CounterSource::new(move || {
-        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters).or_else(|_| Ok(InterfaceCounters::zero()))
+        fraggle_packet::load_guard::counters::snapshot_live(&iface_for_counters)
+            .or_else(|_| Ok(InterfaceCounters::zero()))
     });
-    let guard = LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
+    let guard =
+        LoadGuard::new(budget, interface, false, radio, counters).map_err(|e| e.to_string())?;
 
     let payload_size: usize = 200;
     let bytes_per_sec_per_flow = per_flow_bps;
     let mut sockets = Vec::new();
     let mut ports = Vec::new();
     for _ in 0..flow_count.max(1) {
-        let s = UdpSocket::bind(if target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).map_err(|e| e.to_string())?;
+        let s = UdpSocket::bind(if target.is_ipv4() {
+            "0.0.0.0:0"
+        } else {
+            "[::]:0"
+        })
+        .map_err(|e| e.to_string())?;
         s.set_read_timeout(Some(Duration::from_millis(100))).ok();
         if let Ok(a) = s.local_addr() {
             ports.push(a.port());
@@ -147,7 +174,8 @@ fn run_flow_point(
     // case here (flow intervals of single-digit ms vs a ~200ms tick).
     // Instead, each tick catches every socket up to however many sends are
     // "due" by elapsed time, with no sleep of its own.
-    let sent_counts: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(vec![0u64; sockets_for_phase.len()]));
+    let sent_counts: Arc<Mutex<Vec<u64>>> =
+        Arc::new(Mutex::new(vec![0u64; sockets_for_phase.len()]));
 
     guard.run(
         move |_ramp_rate_mbps: f64, elapsed: Duration| {
@@ -166,21 +194,31 @@ fn run_flow_point(
                 }
             }
             *bytes_writer.lock().unwrap() += total;
-            PhaseTick { bytes_sent_delta: total, ..Default::default() }
+            PhaseTick {
+                bytes_sent_delta: total,
+                ..Default::default()
+            }
         },
         cancel,
     );
 
     let elapsed_secs = start.elapsed().as_secs_f64();
     let total_bytes = *bytes_moved.lock().unwrap();
-    let actual_aggregate_bps = if elapsed_secs > 0.0 { total_bytes as f64 / elapsed_secs } else { 0.0 };
+    let actual_aggregate_bps = if elapsed_secs > 0.0 {
+        total_bytes as f64 / elapsed_secs
+    } else {
+        0.0
+    };
     let _ = per_flow_bps;
     Ok((actual_aggregate_bps, ports))
 }
 
 pub fn run(args: &FlowDscpMatrixArgs) {
     if args.live_event == args.maintenance {
-        eprintln!("{} pass exactly one of --live-event or --maintenance.", "✗".red());
+        eprintln!(
+            "{} pass exactly one of --live-event or --maintenance.",
+            "✗".red()
+        );
         std::process::exit(2);
     }
 
@@ -193,7 +231,15 @@ pub fn run(args: &FlowDscpMatrixArgs) {
 
     let mut points = Vec::new();
     for &fc in &args.flow_counts {
-        match run_flow_point(&args.interface, args.target, args.port, fc, args.target_bps, args.duration_secs, args.live_event) {
+        match run_flow_point(
+            &args.interface,
+            args.target,
+            args.port,
+            fc,
+            args.target_bps,
+            args.duration_secs,
+            args.live_event,
+        ) {
             Ok((actual_agg, ports)) => points.push(FlowCountPoint {
                 flow_count: fc,
                 per_flow_bps: args.target_bps / fc.max(1) as f64,
@@ -220,7 +266,15 @@ pub fn run(args: &FlowDscpMatrixArgs) {
 
     if args.repeat_control {
         if let Some(&first_fc) = args.flow_counts.first() {
-            match run_flow_point(&args.interface, args.target, args.port, first_fc, args.target_bps, args.duration_secs, args.live_event) {
+            match run_flow_point(
+                &args.interface,
+                args.target,
+                args.port,
+                first_fc,
+                args.target_bps,
+                args.duration_secs,
+                args.live_event,
+            ) {
                 Ok((actual_agg, ports)) => points.push(FlowCountPoint {
                     flow_count: first_fc,
                     per_flow_bps: args.target_bps / first_fc.max(1) as f64,
@@ -244,8 +298,16 @@ pub fn run(args: &FlowDscpMatrixArgs) {
         .dscp_classes
         .iter()
         .map(|&class| {
-            let socket = UdpSocket::bind(if args.target.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }).ok();
-            let sent_ok = socket.as_ref().map(|s| set_send_dscp(s, class, args.target.is_ipv4()).is_ok()).unwrap_or(false);
+            let socket = UdpSocket::bind(if args.target.is_ipv4() {
+                "0.0.0.0:0"
+            } else {
+                "[::]:0"
+            })
+            .ok();
+            let sent_ok = socket
+                .as_ref()
+                .map(|s| set_send_dscp(s, class, args.target.is_ipv4()).is_ok())
+                .unwrap_or(false);
             let sample = DscpCaptureSample {
                 sent_dscp: class,
                 observed_at_source: if sent_ok { Some(class) } else { None },
@@ -284,14 +346,23 @@ fn print_human(
             p.flow_count,
             p.per_flow_bps,
             p.target_aggregate_bps,
-            p.actual_aggregate_bps.map(|v| format!("{:.0}", v)).unwrap_or_else(|| "unavailable".to_string()),
+            p.actual_aggregate_bps
+                .map(|v| format!("{:.0}", v))
+                .unwrap_or_else(|| "unavailable".to_string()),
             p.is_repeated_control
         );
     }
     println!(
         "  aggregate held constant: {} (max deviation {})",
-        if constancy.held_constant { "YES".green().to_string() } else { "NO".red().to_string() },
-        constancy.max_deviation_fraction.map(|v| format!("{:.1}%", v * 100.0)).unwrap_or_else(|| "unavailable".to_string())
+        if constancy.held_constant {
+            "YES".green().to_string()
+        } else {
+            "NO".red().to_string()
+        },
+        constancy
+            .max_deviation_fraction
+            .map(|v| format!("{:.1}%", v * 100.0))
+            .unwrap_or_else(|| "unavailable".to_string())
     );
     for d in drift {
         if d.drifted {
@@ -308,9 +379,17 @@ fn print_human(
     println!("{}", "== DSCP sweep ==".cyan().bold());
     for r in dscp_results {
         let verdict = match r.survival {
-            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::Survived => "SURVIVED".green().to_string(),
-            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::AlteredOnPath => "ALTERED ON PATH".red().bold().to_string(),
-            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::Unverified => "UNVERIFIED (no destination-side capture)".yellow().to_string(),
+            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::Survived => {
+                "SURVIVED".green().to_string()
+            }
+            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::AlteredOnPath => {
+                "ALTERED ON PATH".red().bold().to_string()
+            }
+            fraggle_packet::network_tests::flow_dscp_matrix::DscpSurvival::Unverified => {
+                "UNVERIFIED (no destination-side capture)"
+                    .yellow()
+                    .to_string()
+            }
         };
         println!("  class={} survival={}", r.dscp_class, verdict);
     }

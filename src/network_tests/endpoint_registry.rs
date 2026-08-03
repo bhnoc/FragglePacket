@@ -90,12 +90,22 @@ pub struct EndpointRegistry {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SelectionError {
-    UnknownProvider { requested: String, available: Vec<String> },
+    UnknownProvider {
+        requested: String,
+        available: Vec<String>,
+    },
     /// The requested host:port is recorded as having failed. Handing it out
     /// again would reproduce a known endpoint failure and risk recording it as
     /// a network measurement.
-    KnownBad { host: String, port: u16, outcome: String },
-    NoListenerForPurpose { provider: String, purpose: String },
+    KnownBad {
+        host: String,
+        port: u16,
+        outcome: String,
+    },
+    NoListenerForPurpose {
+        provider: String,
+        purpose: String,
+    },
 }
 
 impl SelectionError {
@@ -147,11 +157,17 @@ impl EndpointRegistry {
     }
 
     /// Picks a verified listener for a stated purpose, refusing a known-bad one.
-    pub fn select(&self, provider: &str, purpose: &str) -> Result<&RegistryListener, SelectionError> {
-        let p = self.provider(provider).ok_or_else(|| SelectionError::UnknownProvider {
-            requested: provider.to_string(),
-            available: self.provider_names(),
-        })?;
+    pub fn select(
+        &self,
+        provider: &str,
+        purpose: &str,
+    ) -> Result<&RegistryListener, SelectionError> {
+        let p = self
+            .provider(provider)
+            .ok_or_else(|| SelectionError::UnknownProvider {
+                requested: provider.to_string(),
+                available: self.provider_names(),
+            })?;
 
         for l in &p.listeners {
             let matches_purpose = l
@@ -182,14 +198,19 @@ impl EndpointRegistry {
     /// Known-bad ports are excluded by construction, so the lease layer cannot
     /// be handed one by accident.
     pub fn allowlist_for(&self, provider: &str) -> Result<Vec<AuthorizedListener>, SelectionError> {
-        let p = self.provider(provider).ok_or_else(|| SelectionError::UnknownProvider {
-            requested: provider.to_string(),
-            available: self.provider_names(),
-        })?;
+        let p = self
+            .provider(provider)
+            .ok_or_else(|| SelectionError::UnknownProvider {
+                requested: provider.to_string(),
+                available: self.provider_names(),
+            })?;
         Ok(p.listeners
             .iter()
             .filter(|l| self.is_known_bad(&l.host, l.port).is_none())
-            .map(|l| AuthorizedListener { host: l.host.clone(), port: l.port })
+            .map(|l| AuthorizedListener {
+                host: l.host.clone(),
+                port: l.port,
+            })
             .collect())
     }
 
@@ -198,7 +219,9 @@ impl EndpointRegistry {
     /// limit, and the drift that make a public measurement qualified rather
     /// than authoritative.
     pub fn caveats_for(&self, provider: &str) -> Vec<String> {
-        self.provider(provider).map(|p| p.caveats.clone()).unwrap_or_default()
+        self.provider(provider)
+            .map(|p| p.caveats.clone())
+            .unwrap_or_default()
     }
 
     /// True when the two listeners chosen for opposite directions sit on
@@ -273,7 +296,10 @@ mod tests {
                 l.port
             );
         }
-        assert!(!allow.is_empty(), "verified listeners must survive filtering");
+        assert!(
+            !allow.is_empty(),
+            "verified listeners must survive filtering"
+        );
     }
 
     #[test]
@@ -298,9 +324,18 @@ mod tests {
     #[test]
     fn caveats_name_the_endpoint_loss_floor_and_single_test_limit() {
         let c = reg().caveats_for("xmission").join(" ").to_lowercase();
-        assert!(c.contains("loss floor"), "the 0.6-1.0% endpoint floor must be stated");
-        assert!(c.contains("one test at a time"), "the per-listener limit must be stated");
-        assert!(c.contains("different"), "the two-path comparison caveat must be stated");
+        assert!(
+            c.contains("loss floor"),
+            "the 0.6-1.0% endpoint floor must be stated"
+        );
+        assert!(
+            c.contains("one test at a time"),
+            "the per-listener limit must be stated"
+        );
+        assert!(
+            c.contains("different"),
+            "the two-path comparison caveat must be stated"
+        );
     }
 
     #[test]

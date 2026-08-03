@@ -1,11 +1,9 @@
-pub mod test_trait;
-pub mod result;
-pub mod orchestrator;
 pub mod metrics;
+pub mod orchestrator;
+pub mod result;
+pub mod test_trait;
 
-pub use test_trait::{NetworkTest, TestCategory};
-pub use result::{TestResult, TestStatus, Diagnosis, DiagnosisSeverity};
+pub use metrics::{serve as serve_metrics, MetricsRegistry};
 pub use orchestrator::TestOrchestrator;
-pub use metrics::{MetricsRegistry, serve as serve_metrics};
-
-
+pub use result::{Diagnosis, DiagnosisSeverity, TestResult, TestStatus};
+pub use test_trait::{NetworkTest, TestCategory};

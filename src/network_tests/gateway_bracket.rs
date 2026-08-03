@@ -161,7 +161,8 @@ impl SyntheticPhase {
 
 impl LoadPhase for SyntheticPhase {
     fn tick(&mut self, _ramp_rate_mbps: f64, _elapsed: Duration) -> PhaseTick {
-        self.transferred.fetch_add(self.bytes_per_tick, Ordering::SeqCst);
+        self.transferred
+            .fetch_add(self.bytes_per_tick, Ordering::SeqCst);
         PhaseTick {
             bytes_sent_delta: self.bytes_per_tick,
             ..Default::default()
@@ -251,14 +252,21 @@ pub fn run_phase(
     let bytes_transferred = Arc::new(AtomicU64::new(0));
     let target_bytes = Arc::new(AtomicU64::new(0));
 
-    let gateway_result: Arc<Mutex<Option<(IcmpProbeResult, Option<FallbackResult>, Vec<GatewaySample>)>>> =
-        Arc::new(Mutex::new(None));
+    let gateway_result: Arc<
+        Mutex<Option<(IcmpProbeResult, Option<FallbackResult>, Vec<GatewaySample>)>>,
+    > = Arc::new(Mutex::new(None));
     let gateway_result_writer = gateway_result.clone();
     let sampler_stop = Arc::new(AtomicBool::new(false));
     let sampler_stop_reader = sampler_stop.clone();
 
     let sampler = std::thread::spawn(move || {
-        let out = sample_gateway_during(gateway, phase_duration, cadence_hz, icmp_timeout_ms, tcp_fallback_port);
+        let out = sample_gateway_during(
+            gateway,
+            phase_duration,
+            cadence_hz,
+            icmp_timeout_ms,
+            tcp_fallback_port,
+        );
         *gateway_result_writer.lock().unwrap() = Some(out);
         sampler_stop_reader.store(true, Ordering::SeqCst);
     });
@@ -271,15 +279,21 @@ pub fn run_phase(
             let _ = sampler.join();
         }
         Some(budget) => {
-            let radio = RadioSource::new(|| Err("gateway bracket phase: radio not sampled".to_string()));
-            let counters = CounterSource::new(|| Err("gateway bracket phase: counters not sampled".to_string()));
+            let radio =
+                RadioSource::new(|| Err("gateway bracket phase: radio not sampled".to_string()));
+            let counters = CounterSource::new(|| {
+                Err("gateway bracket phase: counters not sampled".to_string())
+            });
             if let Ok(guard) = LoadGuard::new(budget, "gateway-bracket", false, radio, counters) {
                 let bt = bytes_transferred.clone();
                 let cancel = Arc::new(AtomicBool::new(false));
                 let report = guard.run(
                     move |_rate: f64, _elapsed: Duration| {
                         bt.fetch_add(bytes_per_tick, Ordering::SeqCst);
-                        PhaseTick { bytes_sent_delta: bytes_per_tick, ..Default::default() }
+                        PhaseTick {
+                            bytes_sent_delta: bytes_per_tick,
+                            ..Default::default()
+                        }
                     },
                     cancel,
                 );
@@ -289,11 +303,17 @@ pub fn run_phase(
         }
     }
 
-    let (icmp, fallback, samples) = gateway_result
-        .lock()
-        .unwrap()
-        .take()
-        .unwrap_or_else(|| (IcmpProbeResult { sent: 0, received: 0, state: IcmpState::Lost }, None, Vec::new()));
+    let (icmp, fallback, samples) = gateway_result.lock().unwrap().take().unwrap_or_else(|| {
+        (
+            IcmpProbeResult {
+                sent: 0,
+                received: 0,
+                state: IcmpState::Lost,
+            },
+            None,
+            Vec::new(),
+        )
+    });
     let (avg_rtt_ms, max_rtt_ms) = avg_max_rtt(&samples);
 
     let bt = bytes_transferred.load(Ordering::SeqCst);
@@ -335,12 +355,19 @@ mod tests {
     use super::*;
 
     fn sample(elapsed: f64, rtt: Option<f64>) -> GatewaySample {
-        GatewaySample { elapsed_secs: elapsed, rtt_ms: rtt }
+        GatewaySample {
+            elapsed_secs: elapsed,
+            rtt_ms: rtt,
+        }
     }
 
     #[test]
     fn avg_max_rtt_ignores_lost_samples() {
-        let samples = vec![sample(0.0, Some(2.0)), sample(1.0, None), sample(2.0, Some(4.0))];
+        let samples = vec![
+            sample(0.0, Some(2.0)),
+            sample(1.0, None),
+            sample(2.0, Some(4.0)),
+        ];
         let (avg, max) = avg_max_rtt(&samples);
         assert_eq!(avg, Some(3.0));
         assert_eq!(max, Some(4.0));
@@ -372,7 +399,10 @@ mod tests {
         assert_eq!(result.rtt_delta_ms(Some(2.0)), Some(5.0));
         assert_eq!(result.rtt_delta_ms(None), None);
 
-        let unmeasurable = GatewayPhaseResult { avg_rtt_ms: None, ..result };
+        let unmeasurable = GatewayPhaseResult {
+            avg_rtt_ms: None,
+            ..result
+        };
         assert_eq!(unmeasurable.rtt_delta_ms(Some(2.0)), None);
     }
 

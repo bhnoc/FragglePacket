@@ -22,7 +22,6 @@
 use std::collections::HashSet;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::process::Command;
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -41,7 +40,13 @@ impl IperfVersion {
             .find(|tok| tok.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
         let mut parts = digits.split('.');
         let major = parts.next()?.parse().ok()?;
-        let minor = parts.next().unwrap_or("0").split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+        let minor = parts
+            .next()
+            .unwrap_or("0")
+            .split(|c: char| !c.is_ascii_digit())
+            .next()?
+            .parse()
+            .ok()?;
         Some(IperfVersion { major, minor })
     }
 
@@ -92,7 +97,13 @@ fn parse_rate_sample(v: &Value) -> Option<RateSample> {
     let seconds = v.get("seconds").and_then(Value::as_f64).unwrap_or(0.0);
     let packets = v.get("packets").and_then(Value::as_u64);
     let lost_percent = v.get("lost_percent").and_then(Value::as_f64);
-    Some(RateSample { bits_per_second, bytes, seconds, packets, lost_percent })
+    Some(RateSample {
+        bits_per_second,
+        bytes,
+        seconds,
+        packets,
+        lost_percent,
+    })
 }
 
 /// The four rate kinds kept distinct per GAP-039. `None` means "not present
@@ -153,7 +164,8 @@ pub enum IperfParseError {
 /// reading figures from that shape would report an aborted run as a valid
 /// measurement.
 pub fn parse_iperf_json(text: &str) -> Result<IperfResult, IperfParseError> {
-    let v: Value = serde_json::from_str(text).map_err(|e| IperfParseError::InvalidJson(e.to_string()))?;
+    let v: Value =
+        serde_json::from_str(text).map_err(|e| IperfParseError::InvalidJson(e.to_string()))?;
 
     if let Some(err) = v.get("error").and_then(Value::as_str) {
         return Err(IperfParseError::ServerError(err.to_string()));
@@ -172,8 +184,16 @@ pub fn parse_iperf_json(text: &str) -> Result<IperfResult, IperfParseError> {
         .unwrap_or("unknown")
         .to_string();
 
-    let bidir = test_start.and_then(|t| t.get("bidir")).and_then(Value::as_u64).unwrap_or(0) != 0;
-    let reverse = test_start.and_then(|t| t.get("reverse")).and_then(Value::as_u64).unwrap_or(0) != 0;
+    let bidir = test_start
+        .and_then(|t| t.get("bidir"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        != 0;
+    let reverse = test_start
+        .and_then(|t| t.get("reverse"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        != 0;
     let direction = if bidir {
         TestDirection::Bidirectional
     } else if reverse {
@@ -182,7 +202,9 @@ pub fn parse_iperf_json(text: &str) -> Result<IperfResult, IperfParseError> {
         TestDirection::Forward
     };
 
-    let end = v.get("end").ok_or_else(|| IperfParseError::MissingField("end".to_string()))?;
+    let end = v
+        .get("end")
+        .ok_or_else(|| IperfParseError::MissingField("end".to_string()))?;
     let mut missing = Vec::new();
 
     let offered_bps = test_start
@@ -190,33 +212,62 @@ pub fn parse_iperf_json(text: &str) -> Result<IperfResult, IperfParseError> {
         .and_then(Value::as_f64)
         .filter(|b| *b > 0.0);
 
-    let sent = end.get("sum_sent").and_then(parse_rate_sample).filter(|s| !s.is_hollow());
+    let sent = end
+        .get("sum_sent")
+        .and_then(parse_rate_sample)
+        .filter(|s| !s.is_hollow());
     if end.get("sum_sent").is_none() {
         missing.push("sum_sent".to_string());
     }
-    let received = end.get("sum_received").and_then(parse_rate_sample).filter(|s| !s.is_hollow());
+    let received = end
+        .get("sum_received")
+        .and_then(parse_rate_sample)
+        .filter(|s| !s.is_hollow());
     if end.get("sum_received").is_none() {
         missing.push("sum_received".to_string());
     }
     let estimated_received = end.get("sum").and_then(parse_rate_sample);
 
-    let forward = RateEvidence { offered_bps, sent, received, estimated_received };
+    let forward = RateEvidence {
+        offered_bps,
+        sent,
+        received,
+        estimated_received,
+    };
 
     let bidir_reverse = if bidir {
-        let sent_r = end.get("sum_sent_bidir_reverse").and_then(parse_rate_sample).filter(|s| !s.is_hollow());
-        let recv_r = end.get("sum_received_bidir_reverse").and_then(parse_rate_sample).filter(|s| !s.is_hollow());
+        let sent_r = end
+            .get("sum_sent_bidir_reverse")
+            .and_then(parse_rate_sample)
+            .filter(|s| !s.is_hollow());
+        let recv_r = end
+            .get("sum_received_bidir_reverse")
+            .and_then(parse_rate_sample)
+            .filter(|s| !s.is_hollow());
         if end.get("sum_sent_bidir_reverse").is_none() {
             missing.push("sum_sent_bidir_reverse".to_string());
         }
         if end.get("sum_received_bidir_reverse").is_none() {
             missing.push("sum_received_bidir_reverse".to_string());
         }
-        Some(RateEvidence { offered_bps, sent: sent_r, received: recv_r, estimated_received: None })
+        Some(RateEvidence {
+            offered_bps,
+            sent: sent_r,
+            received: recv_r,
+            estimated_received: None,
+        })
     } else {
         None
     };
 
-    Ok(IperfResult { version, protocol, direction, forward, bidir_reverse, required_fields_missing: missing })
+    Ok(IperfResult {
+        version,
+        protocol,
+        direction,
+        forward,
+        bidir_reverse,
+        required_fields_missing: missing,
+    })
 }
 
 /// Runs one bounded iperf3 client invocation and parses its JSON output.
@@ -232,7 +283,15 @@ pub fn run_iperf_client(
     bind_interface: Option<&str>,
 ) -> Result<IperfResult, IperfParseError> {
     let mut cmd = Command::new("iperf3");
-    cmd.args(["-c", host, "-p", &port.to_string(), "-t", &duration_secs.to_string(), "-J"]);
+    cmd.args([
+        "-c",
+        host,
+        "-p",
+        &port.to_string(),
+        "-t",
+        &duration_secs.to_string(),
+        "-J",
+    ]);
     if reverse {
         cmd.arg("-R");
     }
@@ -268,7 +327,10 @@ pub struct EndpointAllowlist {
 
 impl EndpointAllowlist {
     pub fn new(host: impl Into<String>, ports: Vec<u16>) -> Self {
-        EndpointAllowlist { host: host.into(), ports }
+        EndpointAllowlist {
+            host: host.into(),
+            ports,
+        }
     }
 }
 
@@ -286,9 +348,16 @@ pub struct ListenerCapability {
 /// load) to confirm the listener answers and to read its reported version
 /// from the JSON `start.version` field. Never contacts any port not in the
 /// allowlist, and never mutates server state (client-only iperf3 flags).
-pub fn discover_listeners(allowlist: &EndpointAllowlist, connect_timeout_ms: u32) -> Vec<ListenerCapability> {
+pub fn discover_listeners(
+    allowlist: &EndpointAllowlist,
+    connect_timeout_ms: u32,
+) -> Vec<ListenerCapability> {
     let attempted: HashSet<u16> = allowlist.ports.iter().copied().collect();
-    debug_assert_eq!(attempted.len(), allowlist.ports.len(), "allowlist ports must be unique");
+    debug_assert_eq!(
+        attempted.len(),
+        allowlist.ports.len(),
+        "allowlist ports must be unique"
+    );
 
     allowlist
         .ports
@@ -334,9 +403,13 @@ fn probe_one_listener(host: &str, port: u16, connect_timeout_ms: u32) -> Listene
             supports_bidir: result.version.map(|v| v.supports_bidir_reliably()),
             detail: "listener answered".to_string(),
         },
-        Err(IperfParseError::ServerError(e)) => {
-            ListenerCapability { port, reachable: false, version: None, supports_bidir: None, detail: e }
-        }
+        Err(IperfParseError::ServerError(e)) => ListenerCapability {
+            port,
+            reachable: false,
+            version: None,
+            supports_bidir: None,
+            detail: e,
+        },
         Err(e) => ListenerCapability {
             port,
             reachable: false,
@@ -357,7 +430,9 @@ pub fn resolve_allowlist_host(host: &str) -> Option<IpAddr> {
 /// Selects the first reachable listener from a discovery pass, independent
 /// of any assumption about which port is "the" default. Returns `None` if
 /// no allowlisted port answered, never a guessed default.
-pub fn select_independent_listener(capabilities: &[ListenerCapability]) -> Option<&ListenerCapability> {
+pub fn select_independent_listener(
+    capabilities: &[ListenerCapability],
+) -> Option<&ListenerCapability> {
     capabilities.iter().find(|c| c.reachable)
 }
 
@@ -377,15 +452,32 @@ mod tests {
 
     #[test]
     fn version_parses_from_start_string() {
-        assert_eq!(IperfVersion::parse("iperf 3.21"), Some(IperfVersion { major: 3, minor: 21 }));
-        assert_eq!(IperfVersion::parse("iperf 3.9"), Some(IperfVersion { major: 3, minor: 9 }));
+        assert_eq!(
+            IperfVersion::parse("iperf 3.21"),
+            Some(IperfVersion {
+                major: 3,
+                minor: 21
+            })
+        );
+        assert_eq!(
+            IperfVersion::parse("iperf 3.9"),
+            Some(IperfVersion { major: 3, minor: 9 })
+        );
     }
 
     #[test]
     fn bidir_reliability_gated_on_version() {
         assert!(!IperfVersion { major: 3, minor: 9 }.supports_bidir_reliably());
-        assert!(IperfVersion { major: 3, minor: 16 }.supports_bidir_reliably());
-        assert!(IperfVersion { major: 3, minor: 21 }.supports_bidir_reliably());
+        assert!(IperfVersion {
+            major: 3,
+            minor: 16
+        }
+        .supports_bidir_reliably());
+        assert!(IperfVersion {
+            major: 3,
+            minor: 21
+        }
+        .supports_bidir_reliably());
     }
 
     #[test]
@@ -415,7 +507,9 @@ mod tests {
         assert_eq!(result.direction, TestDirection::Bidirectional);
         assert!(result.forward.sent.is_some());
         assert!(result.forward.received.is_some());
-        let rev = result.bidir_reverse.expect("bidir reverse evidence must be present");
+        let rev = result
+            .bidir_reverse
+            .expect("bidir reverse evidence must be present");
         assert!(rev.sent.is_some());
         assert!(rev.received.is_some());
     }
@@ -426,13 +520,22 @@ mod tests {
         let result = parse_iperf_json(&text).unwrap();
         // sum_sent in this fixture has packets: 0 -- must be filtered out,
         // not surfaced as a confident 0% loss.
-        assert!(result.forward.sent.is_none(), "hollow sum_sent must not surface as a rate sample");
-        let received = result.forward.received.expect("sum_received must be present and non-hollow");
+        assert!(
+            result.forward.sent.is_none(),
+            "hollow sum_sent must not surface as a rate sample"
+        );
+        let received = result
+            .forward
+            .received
+            .expect("sum_received must be present and non-hollow");
         assert_eq!(received.packets, Some(460));
         assert_eq!(received.lost_percent, Some(0.0));
         // estimated_received (legacy `sum`) is kept distinct and reports a
         // different packet count (489) than sum_received (460).
-        let estimated = result.forward.estimated_received.expect("sum block must be present");
+        let estimated = result
+            .forward
+            .estimated_received
+            .expect("sum block must be present");
         assert_eq!(estimated.packets, Some(489));
         assert_ne!(estimated.packets, received.packets);
     }
@@ -443,8 +546,12 @@ mod tests {
         let result = parse_iperf_json(json).unwrap();
         assert!(result.forward.sent.is_none());
         assert!(result.forward.received.is_none());
-        assert!(result.required_fields_missing.contains(&"sum_sent".to_string()));
-        assert!(result.required_fields_missing.contains(&"sum_received".to_string()));
+        assert!(result
+            .required_fields_missing
+            .contains(&"sum_sent".to_string()));
+        assert!(result
+            .required_fields_missing
+            .contains(&"sum_received".to_string()));
     }
 
     #[test]

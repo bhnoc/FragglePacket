@@ -76,7 +76,10 @@ pub fn run(args: &PcapReportArgs) {
     }
 }
 
-fn render_comparison(comparison: &fraggle_packet::network_tests::pcap_report::PcapComparison, buf: &mut String) {
+fn render_comparison(
+    comparison: &fraggle_packet::network_tests::pcap_report::PcapComparison,
+    buf: &mut String,
+) {
     buf.push_str("== Comparison ==\n");
     buf.push_str(&format!(
         "  {:<40} {:>12} {:>12} {:>12} {:>10} {:>10} {:>10}\n",
@@ -91,7 +94,10 @@ fn render_comparison(comparison: &fraggle_packet::network_tests::pcap_report::Pc
             r.protocol_breakdown.quic_candidate_packets,
             r.protocol_breakdown.icmp_packets,
             r.directions_seen.total_tcp_flows,
-            r.health.duration_secs.map(|d| format!("{:.1}", d)).unwrap_or_else(|| "?".to_string()),
+            r.health
+                .duration_secs
+                .map(|d| format!("{:.1}", d))
+                .unwrap_or_else(|| "?".to_string()),
         ));
     }
     for r in &comparison.reports {
@@ -118,7 +124,10 @@ fn render_comparison(comparison: &fraggle_packet::network_tests::pcap_report::Pc
     buf.push('\n');
 }
 
-fn render_report(report: &fraggle_packet::network_tests::pcap_report::PcapReport, buf: &mut String) {
+fn render_report(
+    report: &fraggle_packet::network_tests::pcap_report::PcapReport,
+    buf: &mut String,
+) {
     buf.push_str(&format!("== {} ==\n", report.path));
 
     buf.push_str("-- Capture health --\n");
@@ -126,7 +135,11 @@ fn render_report(report: &fraggle_packet::network_tests::pcap_report::PcapReport
     buf.push_str(&format!("  link type:    {}\n", report.health.link_type));
     buf.push_str(&format!(
         "  interface:    {}\n",
-        report.health.interface_name.as_deref().unwrap_or("(not recorded in file)")
+        report
+            .health
+            .interface_name
+            .as_deref()
+            .unwrap_or("(not recorded in file)")
     ));
     buf.push_str(&format!("  snaplen:      {}\n", report.health.snaplen));
     buf.push_str(&format!("  packets:      {}\n", report.health.packet_count));
@@ -139,7 +152,10 @@ fn render_report(report: &fraggle_packet::network_tests::pcap_report::PcapReport
 
     buf.push_str("-- Vantage classification --\n");
     buf.push_str(&format!("  vantage:      {:?}\n", report.vantage.vantage));
-    buf.push_str(&format!("  confidence:   {:?}\n", report.vantage.confidence));
+    buf.push_str(&format!(
+        "  confidence:   {:?}\n",
+        report.vantage.confidence
+    ));
     for e in &report.vantage.evidence {
         buf.push_str(&format!("    - {}\n", e));
     }
@@ -149,17 +165,35 @@ fn render_report(report: &fraggle_packet::network_tests::pcap_report::PcapReport
         "  oversize threshold (link MTU {} + L2): {} bytes\n",
         report.frame_size.link_mtu_assumed, report.frame_size.oversize_threshold
     ));
-    buf.push_str(&format!("  max observed frame len: {}\n", report.frame_size.max_observed_frame_len));
-    buf.push_str(&format!("  frames over threshold:  {}\n", report.frame_size.observed_over_threshold));
+    buf.push_str(&format!(
+        "  max observed frame len: {}\n",
+        report.frame_size.max_observed_frame_len
+    ));
+    buf.push_str(&format!(
+        "  frames over threshold:  {}\n",
+        report.frame_size.observed_over_threshold
+    ));
     if report.frame_size.oversize_is_host_segment_artifact {
         buf.push_str("  note: over-threshold frames are pre-segmentation host segments, not on-wire oversize frames\n");
     }
 
     buf.push_str("-- TCP anomaly counts (sampled) --\n");
-    buf.push_str(&format!("  sampled packets:   {}\n", report.tcp_anomalies.sampled_packets));
-    buf.push_str(&format!("  retransmissions:   {}\n", report.tcp_anomalies.retransmissions));
-    buf.push_str(&format!("  out of order:      {}\n", report.tcp_anomalies.out_of_order));
-    buf.push_str(&format!("  duplicate acks:    {}\n", report.tcp_anomalies.duplicate_acks));
+    buf.push_str(&format!(
+        "  sampled packets:   {}\n",
+        report.tcp_anomalies.sampled_packets
+    ));
+    buf.push_str(&format!(
+        "  retransmissions:   {}\n",
+        report.tcp_anomalies.retransmissions
+    ));
+    buf.push_str(&format!(
+        "  out of order:      {}\n",
+        report.tcp_anomalies.out_of_order
+    ));
+    buf.push_str(&format!(
+        "  duplicate acks:    {}\n",
+        report.tcp_anomalies.duplicate_acks
+    ));
     if report.tcp_anomalies.qualification_required {
         buf.push_str("  qualification: NOT usable as on-wire network-fault evidence (host-side/offload-suspect capture)\n");
     }

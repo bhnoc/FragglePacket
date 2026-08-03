@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Cell, Gauge, Row, Sparkline, Table, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Cell, Gauge, Paragraph, Row, Sparkline, Table, Wrap},
     Frame,
 };
 
@@ -13,13 +13,13 @@ use super::colors::*;
 
 pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
     let state = app.state.lock().unwrap();
-    
+
     // Split into left (results table) and right (summary + sparkline)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
         .split(area);
-    
+
     // Left: Results table
     let header_cells = ["TARGET", "ICMP", "TCP", "UDP", "QUIC", "MSS", "STATUS"]
         .iter()
@@ -27,15 +27,17 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
     let header = Row::new(header_cells)
         .style(Style::default().bg(TERM_BLACK))
         .height(1);
-    
+
     let rows = state.results.iter().map(|r| {
         let status_style = match r.status {
             TestStatus::Complete => Style::default().fg(TERM_GREEN),
-            TestStatus::Testing => Style::default().fg(TERM_AMBER).add_modifier(Modifier::SLOW_BLINK),
+            TestStatus::Testing => Style::default()
+                .fg(TERM_AMBER)
+                .add_modifier(Modifier::SLOW_BLINK),
             TestStatus::Failed => Style::default().fg(TERM_RED),
             TestStatus::Pending => Style::default().fg(TERM_GREEN_DIM),
         };
-        
+
         let format_mtu = |m: Option<usize>| -> (String, Style) {
             match m {
                 Some(v) if v >= 1500 => (v.to_string(), Style::default().fg(TERM_GREEN)),
@@ -44,22 +46,23 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
                 None => ("---".to_string(), Style::default().fg(TERM_GREEN_DIM)),
             }
         };
-        
+
         let (icmp, icmp_style) = format_mtu(r.icmp_mtu);
         let (tcp, tcp_style) = format_mtu(r.tcp_mtu);
         let (udp, udp_style) = format_mtu(r.udp_mtu);
         let (quic, quic_style) = format_mtu(r.quic_mtu);
         let (mss, mss_style) = format_mtu(r.tcp_mss);
-        
+
         let status_text = match r.status {
             TestStatus::Complete => "OK",
             TestStatus::Testing => "...",
             TestStatus::Failed => "FAIL",
             TestStatus::Pending => "WAIT",
         };
-        
+
         Row::new(vec![
-            Cell::from(r.desc.chars().take(18).collect::<String>()).style(Style::default().fg(TERM_GREEN)),
+            Cell::from(r.desc.chars().take(18).collect::<String>())
+                .style(Style::default().fg(TERM_GREEN)),
             Cell::from(icmp).style(icmp_style),
             Cell::from(tcp).style(tcp_style),
             Cell::from(udp).style(udp_style),
@@ -69,7 +72,7 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
         ])
         .height(1)
     });
-    
+
     let table = Table::new(
         rows,
         [
@@ -83,19 +86,25 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
         ],
     )
     .header(header)
-    .block(Block::default()
-        .title(" ▶ RESULTS ")
-        .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(TERM_GREEN_DIM))
-        .border_type(BorderType::Rounded)
-        .style(Style::default().bg(TERM_BLACK)))
-    .row_highlight_style(Style::default().bg(TERM_GREEN_DARK).add_modifier(Modifier::BOLD))
+    .block(
+        Block::default()
+            .title(" ▶ RESULTS ")
+            .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(TERM_GREEN_DIM))
+            .border_type(BorderType::Rounded)
+            .style(Style::default().bg(TERM_BLACK)),
+    )
+    .row_highlight_style(
+        Style::default()
+            .bg(TERM_GREEN_DARK)
+            .add_modifier(Modifier::BOLD),
+    )
     .highlight_symbol("▶ ");
-    
+
     drop(state);
     frame.render_stateful_widget(table, chunks[0], &mut app.table_state);
-    
+
     // Right panel: Summary and progress
     let state = app.state.lock().unwrap();
     let right_chunks = Layout::default()
@@ -106,7 +115,7 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
             Constraint::Min(5),
         ])
         .split(chunks[1]);
-    
+
     // Verdict box
     let verdict_text = if let Some(v) = &state.verdict {
         let status_style = if v.status == "PASS" {
@@ -116,7 +125,7 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
         } else {
             Style::default().fg(TERM_AMBER).add_modifier(Modifier::BOLD)
         };
-        
+
         vec![
             Line::from(vec![
                 Span::styled("STATUS: ", Style::default().fg(TERM_GREEN_DIM)),
@@ -129,37 +138,47 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
             ]),
             Line::from(vec![
                 Span::styled("Success:    ", Style::default().fg(TERM_GREEN_DIM)),
-                Span::styled(format!("{:.1}%", v.percent_ok), Style::default().fg(TERM_GREEN)),
+                Span::styled(
+                    format!("{:.1}%", v.percent_ok),
+                    Style::default().fg(TERM_GREEN),
+                ),
             ]),
             if let Some(mtu) = v.recommended_mtu {
                 Line::from(vec![
                     Span::styled("Set MTU:    ", Style::default().fg(TERM_AMBER)),
-                    Span::styled(mtu.to_string(), Style::default().fg(TERM_AMBER).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        mtu.to_string(),
+                        Style::default().fg(TERM_AMBER).add_modifier(Modifier::BOLD),
+                    ),
                 ])
             } else {
-                Line::from(vec![
-                    Span::styled("No changes needed", Style::default().fg(TERM_GREEN)),
-                ])
+                Line::from(vec![Span::styled(
+                    "No changes needed",
+                    Style::default().fg(TERM_GREEN),
+                )])
             },
         ]
     } else {
-        vec![
-            Line::from(Span::styled("Awaiting scan...", Style::default().fg(TERM_GREEN_DIM))),
-        ]
+        vec![Line::from(Span::styled(
+            "Awaiting scan...",
+            Style::default().fg(TERM_GREEN_DIM),
+        ))]
     };
-    
+
     let verdict_widget = Paragraph::new(verdict_text)
-        .block(Block::default()
-            .title(" ▶ VERDICT ")
-            .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(TERM_GREEN_DIM))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(TERM_BLACK)))
+        .block(
+            Block::default()
+                .title(" ▶ VERDICT ")
+                .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(TERM_GREEN_DIM))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(TERM_BLACK)),
+        )
         .wrap(Wrap { trim: true });
-    
+
     frame.render_widget(verdict_widget, right_chunks[0]);
-    
+
     // Progress bar
     let progress_pct = (state.progress * 100.0) as u16;
     let progress_label = if state.testing {
@@ -167,34 +186,43 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
     } else {
         format!("{}%", progress_pct)
     };
-    
+
     let progress = Gauge::default()
-        .block(Block::default()
-            .title(" ▶ PROGRESS ")
-            .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(TERM_GREEN_DIM))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(TERM_BLACK)))
+        .block(
+            Block::default()
+                .title(" ▶ PROGRESS ")
+                .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(TERM_GREEN_DIM))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(TERM_BLACK)),
+        )
         .gauge_style(Style::default().fg(TERM_GREEN).bg(TERM_BLACK))
         .percent(progress_pct)
         .label(progress_label);
-    
+
     frame.render_widget(progress, right_chunks[1]);
-    
+
     // MTU Sparkline
     let sparkline = Sparkline::default()
-        .block(Block::default()
-            .title(" ▶ MTU TREND ")
-            .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(TERM_GREEN_DIM))
-            .border_type(BorderType::Rounded)
-            .style(Style::default().bg(TERM_BLACK)))
-        .data(&state.mtu_history.iter().map(|&v| v as u64).collect::<Vec<_>>())
+        .block(
+            Block::default()
+                .title(" ▶ MTU TREND ")
+                .title_style(Style::default().fg(TERM_GREEN).add_modifier(Modifier::BOLD))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(TERM_GREEN_DIM))
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(TERM_BLACK)),
+        )
+        .data(
+            &state
+                .mtu_history
+                .iter()
+                .map(|&v| v as u64)
+                .collect::<Vec<_>>(),
+        )
         .max(1600)
         .style(Style::default().fg(TERM_GREEN));
-    
+
     frame.render_widget(sparkline, right_chunks[2]);
 }
-

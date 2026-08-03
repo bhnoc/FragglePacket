@@ -51,11 +51,8 @@ impl NetworkTest for QuicPmtudTest {
         TestCategory::MTU
     }
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
         result.add_metadata(
             "cli_command",
             format!(
@@ -149,17 +146,15 @@ impl NetworkTest for QuicPmtudTest {
         }
 
         if !evidence.df.applied {
-            result.add_diagnosis(
-                Diagnosis::new(
-                    DiagnosisSeverity::Warning,
-                    "Don't-fragment could not be set".to_string(),
-                    format!(
-                        "DF was requested but not applied ({}). Any confirmed size may describe \
+            result.add_diagnosis(Diagnosis::new(
+                DiagnosisSeverity::Warning,
+                "Don't-fragment could not be set".to_string(),
+                format!(
+                    "DF was requested but not applied ({}). Any confirmed size may describe \
                          fragmented delivery rather than a true path MTU.",
-                        evidence.df.detail
-                    ),
+                    evidence.df.detail
                 ),
-            );
+            ));
         }
 
         let local_refusals: Vec<String> = evidence

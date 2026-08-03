@@ -30,11 +30,15 @@ pub enum Verdict {
     /// The dependency did not respond, and there is no signal indicating
     /// the network deliberately closed it -- e.g. it timed out mid-TLS
     /// rather than being cleanly reset/refused immediately.
-    Unhealthy { detail_kind: DetailKind },
+    Unhealthy {
+        detail_kind: DetailKind,
+    },
     /// The network answered in a way consistent with deliberate blocking
     /// -- an immediate connection refused/reset, or a policy-shaped
     /// response -- distinct from silent unresponsiveness.
-    BlockedByPolicy { detail_kind: DetailKind },
+    BlockedByPolicy {
+        detail_kind: DetailKind,
+    },
     /// The dependency was not configured/applicable for this check (e.g.
     /// no controller endpoint was supplied).
     NotApplicable,
@@ -64,7 +68,9 @@ pub fn classify_dependency_error(e: &std::io::Error) -> Verdict {
         _ => DetailKind::Other,
     };
     match detail_kind {
-        DetailKind::ConnectionRefused | DetailKind::ConnectionReset => Verdict::BlockedByPolicy { detail_kind },
+        DetailKind::ConnectionRefused | DetailKind::ConnectionReset => {
+            Verdict::BlockedByPolicy { detail_kind }
+        }
         _ => Verdict::Unhealthy { detail_kind },
     }
 }
@@ -76,7 +82,12 @@ pub struct DependencyCheck {
     pub elapsed_ms: u64,
 }
 
-pub fn check_tcp_dependency(label: &str, host: &str, port: u16, timeout: Duration) -> DependencyCheck {
+pub fn check_tcp_dependency(
+    label: &str,
+    host: &str,
+    port: u16,
+    timeout: Duration,
+) -> DependencyCheck {
     use std::net::{TcpStream, ToSocketAddrs};
     let start = std::time::Instant::now();
     let verdict = match format!("{host}:{port}").to_socket_addrs() {
@@ -85,11 +96,19 @@ pub fn check_tcp_dependency(label: &str, host: &str, port: u16, timeout: Duratio
                 Ok(_) => Verdict::Healthy,
                 Err(e) => classify_dependency_error(&e),
             },
-            None => Verdict::Unhealthy { detail_kind: DetailKind::Other },
+            None => Verdict::Unhealthy {
+                detail_kind: DetailKind::Other,
+            },
         },
-        Err(_) => Verdict::Unhealthy { detail_kind: DetailKind::Other },
+        Err(_) => Verdict::Unhealthy {
+            detail_kind: DetailKind::Other,
+        },
     };
-    DependencyCheck { label: label.to_string(), verdict, elapsed_ms: start.elapsed().as_millis() as u64 }
+    DependencyCheck {
+        label: label.to_string(),
+        verdict,
+        elapsed_ms: start.elapsed().as_millis() as u64,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,7 +165,9 @@ pub fn measure_ntp_offset(server: &str, timeout: Duration) -> NtpOffsetResult {
                     server: server.to_string(),
                     offset_ms: None,
                     round_trip_delay_ms: None,
-                    verdict: Verdict::Unhealthy { detail_kind: DetailKind::Other },
+                    verdict: Verdict::Unhealthy {
+                        detail_kind: DetailKind::Other,
+                    },
                 },
             }
         }
@@ -154,7 +175,9 @@ pub fn measure_ntp_offset(server: &str, timeout: Duration) -> NtpOffsetResult {
             server: server.to_string(),
             offset_ms: None,
             round_trip_delay_ms: None,
-            verdict: Verdict::Unhealthy { detail_kind: DetailKind::Other },
+            verdict: Verdict::Unhealthy {
+                detail_kind: DetailKind::Other,
+            },
         },
     }
 }
@@ -189,11 +212,17 @@ impl DependencyBundle {
     }
 
     pub fn blocked_by_policy_count(&self) -> usize {
-        self.all_checks().iter().filter(|c| matches!(c.verdict, Verdict::BlockedByPolicy { .. })).count()
+        self.all_checks()
+            .iter()
+            .filter(|c| matches!(c.verdict, Verdict::BlockedByPolicy { .. }))
+            .count()
     }
 
     pub fn unhealthy_count(&self) -> usize {
-        self.all_checks().iter().filter(|c| matches!(c.verdict, Verdict::Unhealthy { .. })).count()
+        self.all_checks()
+            .iter()
+            .filter(|c| matches!(c.verdict, Verdict::Unhealthy { .. }))
+            .count()
     }
 }
 
@@ -204,19 +233,28 @@ mod tests {
     #[test]
     fn refused_is_blocked_by_policy_not_unhealthy() {
         let e = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
-        assert!(matches!(classify_dependency_error(&e), Verdict::BlockedByPolicy { .. }));
+        assert!(matches!(
+            classify_dependency_error(&e),
+            Verdict::BlockedByPolicy { .. }
+        ));
     }
 
     #[test]
     fn reset_is_blocked_by_policy() {
         let e = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
-        assert!(matches!(classify_dependency_error(&e), Verdict::BlockedByPolicy { .. }));
+        assert!(matches!(
+            classify_dependency_error(&e),
+            Verdict::BlockedByPolicy { .. }
+        ));
     }
 
     #[test]
     fn timeout_is_unhealthy_not_blocked() {
         let e = std::io::Error::from(std::io::ErrorKind::TimedOut);
-        assert!(matches!(classify_dependency_error(&e), Verdict::Unhealthy { .. }));
+        assert!(matches!(
+            classify_dependency_error(&e),
+            Verdict::Unhealthy { .. }
+        ));
     }
 
     #[test]
@@ -227,19 +265,26 @@ mod tests {
             cert_checks: vec![],
             ocsp_checks: vec![DependencyCheck {
                 label: "ocsp.example".to_string(),
-                verdict: Verdict::BlockedByPolicy { detail_kind: DetailKind::ConnectionRefused },
+                verdict: Verdict::BlockedByPolicy {
+                    detail_kind: DetailKind::ConnectionRefused,
+                },
                 elapsed_ms: 5,
             }],
             portal_checks: vec![],
             controller_checks: vec![DependencyCheck {
                 label: "controller.example".to_string(),
-                verdict: Verdict::Unhealthy { detail_kind: DetailKind::TimedOut },
+                verdict: Verdict::Unhealthy {
+                    detail_kind: DetailKind::TimedOut,
+                },
                 elapsed_ms: 3000,
             }],
         };
         assert_eq!(bundle.blocked_by_policy_count(), 1);
         assert_eq!(bundle.unhealthy_count(), 1);
-        assert_ne!(bundle.blocked_by_policy_count(), bundle.unhealthy_count() + 1);
+        assert_ne!(
+            bundle.blocked_by_policy_count(),
+            bundle.unhealthy_count() + 1
+        );
     }
 
     #[test]

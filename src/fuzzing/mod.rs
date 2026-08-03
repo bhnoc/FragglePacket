@@ -132,21 +132,11 @@ pub fn run_campaign(
     let start = Instant::now();
 
     let packets = match mode {
-        FuzzMode::SegmentSize => {
-            fuzzers::segment_size::fuzz(ctx, output_path)?
-        }
-        FuzzMode::LengthMismatch => {
-            fuzzers::length_mismatch::fuzz(ctx, output_path)?
-        }
-        FuzzMode::TcpOptions => {
-            fuzzers::tcp_options::fuzz(ctx, output_path)?
-        }
-        FuzzMode::Fragmentation => {
-            fuzzers::fragmentation::fuzz(ctx, output_path)?
-        }
-        FuzzMode::Checksum => {
-            fuzzers::checksum::fuzz(ctx, output_path)?
-        }
+        FuzzMode::SegmentSize => fuzzers::segment_size::fuzz(ctx, output_path)?,
+        FuzzMode::LengthMismatch => fuzzers::length_mismatch::fuzz(ctx, output_path)?,
+        FuzzMode::TcpOptions => fuzzers::tcp_options::fuzz(ctx, output_path)?,
+        FuzzMode::Fragmentation => fuzzers::fragmentation::fuzz(ctx, output_path)?,
+        FuzzMode::Checksum => fuzzers::checksum::fuzz(ctx, output_path)?,
     };
 
     let duration_ms = start.elapsed().as_millis() as u64;
@@ -160,4 +150,3 @@ pub fn run_campaign(
         duration_ms,
     })
 }
-

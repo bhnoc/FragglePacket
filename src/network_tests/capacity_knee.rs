@@ -24,7 +24,10 @@ use serde::{Deserialize, Serialize};
 pub enum PointRejection {
     /// Reported duration diverged from the request beyond tolerance, so any
     /// rate derived from the window is arithmetic nonsense.
-    DurationInconsistent { requested_secs: f64, reported_secs: f64 },
+    DurationInconsistent {
+        requested_secs: f64,
+        reported_secs: f64,
+    },
     /// The runner reported an error before producing a measurement.
     ProcessFailure { detail: String },
     /// A required field was absent from the result schema.
@@ -34,7 +37,10 @@ pub enum PointRejection {
 impl PointRejection {
     pub fn reason(&self) -> String {
         match self {
-            PointRejection::DurationInconsistent { requested_secs, reported_secs } => format!(
+            PointRejection::DurationInconsistent {
+                requested_secs,
+                reported_secs,
+            } => format!(
                 "reported a {:.2}s interval for a {:.2}s request, so the measurement window is not \
                  trustworthy",
                 reported_secs, requested_secs
@@ -43,7 +49,10 @@ impl PointRejection {
                 format!("the runner failed before measuring: {}", detail)
             }
             PointRejection::SchemaIncomplete { missing } => {
-                format!("result schema lacked required field(s): {}", missing.join(", "))
+                format!(
+                    "result schema lacked required field(s): {}",
+                    missing.join(", ")
+                )
             }
         }
     }
@@ -110,7 +119,9 @@ pub fn reject_if_invalid(
 ) -> Option<PointRejection> {
     if let Some(e) = error {
         if !e.trim().is_empty() {
-            return Some(PointRejection::ProcessFailure { detail: e.to_string() });
+            return Some(PointRejection::ProcessFailure {
+                detail: e.to_string(),
+            });
         }
     }
     match reported_secs {
@@ -239,7 +250,10 @@ pub fn detect_knee(points: &[SweepPoint]) -> KneeVerdict {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CrossValidation {
     /// Both methods found a knee at a comparable rate.
-    Reproduced { native_knee_mbps: f64, application_knee_mbps: f64 },
+    Reproduced {
+        native_knee_mbps: f64,
+        application_knee_mbps: f64,
+    },
     /// The native finding did not reproduce, so it is not established. GAP-069
     /// is the precedent: a single-method result can be harness artifact.
     NotReproduced { detail: String },
@@ -260,8 +274,12 @@ pub const KNEE_AGREEMENT: f64 = 0.35;
 pub fn cross_validate(native: &KneeVerdict, application: Option<&KneeVerdict>) -> CrossValidation {
     let knee_of = |v: &KneeVerdict| -> Option<f64> {
         match v {
-            KneeVerdict::CapacityPlateau { knee_offered_mbps, .. }
-            | KneeVerdict::DirectionalUnfairness { knee_offered_mbps, .. } => Some(*knee_offered_mbps),
+            KneeVerdict::CapacityPlateau {
+                knee_offered_mbps, ..
+            }
+            | KneeVerdict::DirectionalUnfairness {
+                knee_offered_mbps, ..
+            } => Some(*knee_offered_mbps),
             _ => None,
         }
     };
@@ -464,7 +482,11 @@ mod tests {
     #[test]
     fn pc13_native_sweep_reports_a_capacity_plateau() {
         match detect_knee(&pc13_native()) {
-            KneeVerdict::CapacityPlateau { knee_offered_mbps, plateau_combined_mbps, .. } => {
+            KneeVerdict::CapacityPlateau {
+                knee_offered_mbps,
+                plateau_combined_mbps,
+                ..
+            } => {
                 assert!((60.0..=70.0).contains(&knee_offered_mbps));
                 assert!((130.0..=145.0).contains(&plateau_combined_mbps));
             }
@@ -475,7 +497,11 @@ mod tests {
     #[test]
     fn pc13_application_sweep_reports_directional_unfairness() {
         match detect_knee(&pc13_application()) {
-            KneeVerdict::DirectionalUnfairness { weaker_direction, balance, .. } => {
+            KneeVerdict::DirectionalUnfairness {
+                weaker_direction,
+                balance,
+                ..
+            } => {
                 assert_eq!(weaker_direction, "upload");
                 assert!(balance <= UNFAIR_BALANCE);
             }
@@ -502,7 +528,9 @@ mod tests {
             pt(40.0, 40.0, 40.0, 6.0, 3),
         ];
         match detect_knee(&linear) {
-            KneeVerdict::NoKneeWithinTestedRange { highest_tested_mbps } => {
+            KneeVerdict::NoKneeWithinTestedRange {
+                highest_tested_mbps,
+            } => {
                 assert_eq!(highest_tested_mbps, 40.0);
             }
             other => panic!("expected no knee, got {:?}", other),
@@ -532,7 +560,10 @@ mod tests {
     fn a_duration_inconsistent_point_is_rejected_not_scored() {
         // The field shape: a 15.84s reported interval for a shorter request.
         let r = reject_if_invalid(10.0, Some(15.84), None);
-        assert!(matches!(r, Some(PointRejection::DurationInconsistent { .. })));
+        assert!(matches!(
+            r,
+            Some(PointRejection::DurationInconsistent { .. })
+        ));
 
         let mut pts = pc13_native();
         pts[2].rejected = r;
@@ -570,7 +601,10 @@ mod tests {
         assert!(!cv.permits_established_claim());
         match cv {
             CrossValidation::NotReproduced { detail } => {
-                assert!(detail.contains("GAP-069"), "should cite the artifact precedent");
+                assert!(
+                    detail.contains("GAP-069"),
+                    "should cite the artifact precedent"
+                );
             }
             other => panic!("expected NotReproduced, got {:?}", other),
         }
@@ -578,7 +612,10 @@ mod tests {
 
     #[test]
     fn pc13_both_methods_agree_so_the_knee_is_reproduced() {
-        let cv = cross_validate(&detect_knee(&pc13_native()), Some(&detect_knee(&pc13_application())));
+        let cv = cross_validate(
+            &detect_knee(&pc13_native()),
+            Some(&detect_knee(&pc13_application())),
+        );
         assert!(cv.permits_established_claim(), "got {:?}", cv);
     }
 
@@ -644,7 +681,10 @@ mod tests {
         );
         assert!(r.established_claim.is_some());
         assert!(r.rejected_points.is_empty());
-        assert!(matches!(r.native_verdict, KneeVerdict::CapacityPlateau { .. }));
+        assert!(matches!(
+            r.native_verdict,
+            KneeVerdict::CapacityPlateau { .. }
+        ));
         assert!(matches!(
             r.application_verdict,
             Some(KneeVerdict::DirectionalUnfairness { .. })
@@ -656,8 +696,14 @@ mod tests {
         // GAP-040 leases one listener per active session; a sweep that reused
         // one listener across concurrent phases would be measuring contention.
         let pts = pc13_native();
-        let labels: std::collections::BTreeSet<_> =
-            pts.iter().filter_map(|p| p.listener_label.clone()).collect();
-        assert_eq!(labels.len(), pts.len(), "each phase needs a distinct listener");
+        let labels: std::collections::BTreeSet<_> = pts
+            .iter()
+            .filter_map(|p| p.listener_label.clone())
+            .collect();
+        assert_eq!(
+            labels.len(),
+            pts.len(),
+            "each phase needs a distinct listener"
+        );
     }
 }

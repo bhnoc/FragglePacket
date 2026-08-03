@@ -38,12 +38,21 @@ pub fn run(args: &ReferenceEndpointArgs) {
 
     if args.show_limits {
         if args.json {
-            println!("{}", serde_json::to_string_pretty(&limits).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&limits).unwrap_or_default()
+            );
         } else {
             println!("\n== Reference endpoint limits ==");
-            println!("  max concurrent sessions: {}", limits.max_concurrent_sessions);
+            println!(
+                "  max concurrent sessions: {}",
+                limits.max_concurrent_sessions
+            );
             println!("  max session seconds:     {}", limits.max_session_secs);
-            println!("  max rate:                {:.1} Mbps", limits.max_rate_mbps);
+            println!(
+                "  max rate:                {:.1} Mbps",
+                limits.max_rate_mbps
+            );
             println!("  max retained results:    {}", limits.max_retained_results);
         }
         return;
@@ -52,7 +61,10 @@ pub fn run(args: &ReferenceEndpointArgs) {
     if let Some(spec) = &args.admit {
         let parts: Vec<&str> = spec.split(',').collect();
         if parts.len() != 3 {
-            eprintln!("{} --admit expects active_sessions,duration_secs,rate_mbps", "✗".red());
+            eprintln!(
+                "{} --admit expects active_sessions,duration_secs,rate_mbps",
+                "✗".red()
+            );
             std::process::exit(2);
         }
         let active: u32 = parts[0].trim().parse().unwrap_or(0);
@@ -88,7 +100,10 @@ pub fn run(args: &ReferenceEndpointArgs) {
     if args.calibrate {
         let report = calibrate(health, limits, args.max_skew_ms);
         if args.json {
-            println!("{}", serde_json::to_string_pretty(&report).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).unwrap_or_default()
+            );
             return;
         }
         println!("\n== Reference endpoint calibration ==");
@@ -116,10 +131,16 @@ pub fn run(args: &ReferenceEndpointArgs) {
 fn render_acceptance(a: &ResultAcceptance) {
     match a {
         ResultAcceptance::Accepted => {
-            println!("  {} the endpoint was clean; the client result may be accepted", "ACCEPTED".green());
+            println!(
+                "  {} the endpoint was clean; the client result may be accepted",
+                "ACCEPTED".green()
+            );
         }
         ResultAcceptance::RejectedServerSide { reasons } => {
-            println!("  {} the endpoint, not the network, limited this run", "REJECTED".red());
+            println!(
+                "  {} the endpoint, not the network, limited this run",
+                "REJECTED".red()
+            );
             for r in reasons {
                 println!("    - {}", r);
             }
@@ -130,7 +151,9 @@ fn render_acceptance(a: &ResultAcceptance) {
             for m in missing {
                 println!("    - {}", m);
             }
-            println!("  an unread counter is not a healthy zero; collect these before accepting results");
+            println!(
+                "  an unread counter is not a healthy zero; collect these before accepting results"
+            );
         }
     }
 }

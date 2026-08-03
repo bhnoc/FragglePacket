@@ -73,7 +73,10 @@ impl CompareConfigInput {
 
 /// One site's repeated samples, run through `protocol_compare::run_comparison`
 /// unmodified per repeat.
-pub fn run_site_samples(input: &CompareConfigInput, repeat_samples: u32) -> Result<Vec<ComparisonReport>, String> {
+pub fn run_site_samples(
+    input: &CompareConfigInput,
+    repeat_samples: u32,
+) -> Result<Vec<ComparisonReport>, String> {
     let cfg = input.into_compare_config()?;
     let mut reports = Vec::new();
     for _ in 0..repeat_samples.max(1) {
@@ -120,11 +123,19 @@ fn median_clean_download_mbps(reports: &[ComparisonReport], protocol: &str) -> O
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SiteAbVerdict {
     /// Both sides ran cleanly enough to compare throughput directly.
-    Compared { affected_mbps: f64, control_mbps: f64, ratio: f64 },
+    Compared {
+        affected_mbps: f64,
+        control_mbps: f64,
+        ratio: f64,
+    },
     /// Either side redirected -- comparing throughput would compare a stub
     /// against real capacity, or vice versa. Refused, and which side(s)
     /// redirected is named explicitly.
-    RedirectedRatherThanCompared { affected_redirected: bool, control_redirected: bool, detail: String },
+    RedirectedRatherThanCompared {
+        affected_redirected: bool,
+        control_redirected: bool,
+        detail: String,
+    },
     /// Neither side produced a clean sample to compare (e.g. both timed
     /// out, or the protocol was unsupported on both).
     Withheld { reason: String },
@@ -139,7 +150,11 @@ pub struct SiteAbReport {
 /// Produces one side-by-side verdict per requested protocol. Never averages
 /// a redirected leg's stub bytes into a throughput figure -- the entire
 /// point of this module.
-pub fn compare_sites(affected: &[ComparisonReport], control: &[ComparisonReport], protocols: &[String]) -> Vec<SiteAbReport> {
+pub fn compare_sites(
+    affected: &[ComparisonReport],
+    control: &[ComparisonReport],
+    protocols: &[String],
+) -> Vec<SiteAbReport> {
     let (affected_redirected, affected_detail) = any_redirected(affected);
     let (control_redirected, control_detail) = any_redirected(control);
 
@@ -180,8 +195,10 @@ pub fn compare_sites(affected: &[ComparisonReport], control: &[ComparisonReport]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::network_tests::protocol_compare::{LegResult, LossIndicator, ProtocolComparisonResult};
     use crate::network_tests::pcap_report::Confidence;
+    use crate::network_tests::protocol_compare::{
+        LegResult, LossIndicator, ProtocolComparisonResult,
+    };
 
     fn clean_report(protocol: &str, mbps: f64, redirected: bool) -> ComparisonReport {
         let leg = LegResult {
@@ -214,7 +231,11 @@ mod tests {
             endpoint_mismatch: false,
             endpoint_mismatch_detail: None,
             redirected_to_different_host: redirected,
-            redirect_detail: if redirected { Some("example.com redirected to other.example.com".to_string()) } else { None },
+            redirect_detail: if redirected {
+                Some("example.com redirected to other.example.com".to_string())
+            } else {
+                None
+            },
         }
     }
 
@@ -224,7 +245,11 @@ mod tests {
         let control = vec![clean_report("http2", 200.0, false)];
         let reports = compare_sites(&affected, &control, &["http2".to_string()]);
         match &reports[0].verdict {
-            SiteAbVerdict::Compared { affected_mbps, control_mbps, ratio } => {
+            SiteAbVerdict::Compared {
+                affected_mbps,
+                control_mbps,
+                ratio,
+            } => {
                 assert_eq!(*affected_mbps, 50.0);
                 assert_eq!(*control_mbps, 200.0);
                 assert_eq!(*ratio, 0.25);
@@ -241,7 +266,11 @@ mod tests {
         let control = vec![clean_report("http2", 200.0, false)];
         let reports = compare_sites(&affected, &control, &["http2".to_string()]);
         match &reports[0].verdict {
-            SiteAbVerdict::RedirectedRatherThanCompared { affected_redirected, control_redirected, detail } => {
+            SiteAbVerdict::RedirectedRatherThanCompared {
+                affected_redirected,
+                control_redirected,
+                detail,
+            } => {
                 assert!(affected_redirected);
                 assert!(!control_redirected);
                 assert!(detail.contains("affected URL redirected"));
@@ -256,7 +285,11 @@ mod tests {
         let control = vec![clean_report("http2", 0.02, true)];
         let reports = compare_sites(&affected, &control, &["http2".to_string()]);
         match &reports[0].verdict {
-            SiteAbVerdict::RedirectedRatherThanCompared { affected_redirected, control_redirected, .. } => {
+            SiteAbVerdict::RedirectedRatherThanCompared {
+                affected_redirected,
+                control_redirected,
+                ..
+            } => {
                 assert!(!affected_redirected);
                 assert!(*control_redirected);
             }
@@ -279,7 +312,11 @@ mod tests {
     fn median_uses_only_clean_legs() {
         let dirty = clean_report("http1", 999.0, false);
         let mut dirty = dirty;
-        dirty.protocols[0].download_only.as_mut().unwrap().loss_indicator = LossIndicator::BodyTooSmall;
+        dirty.protocols[0]
+            .download_only
+            .as_mut()
+            .unwrap()
+            .loss_indicator = LossIndicator::BodyTooSmall;
         let reports = vec![dirty, clean_report("http1", 40.0, false)];
         assert_eq!(median_clean_download_mbps(&reports, "http1"), Some(40.0));
     }

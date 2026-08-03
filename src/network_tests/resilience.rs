@@ -25,7 +25,10 @@ use serde::{Deserialize, Serialize};
 pub use crate::network_tests::nat_capacity::require_authorization_for;
 
 pub fn require_authorization(statement: Option<&str>) -> Result<String, String> {
-    require_authorization_for(statement, "run a continuous session bundle across an operator-performed component change")
+    require_authorization_for(
+        statement,
+        "run a continuous session bundle across an operator-performed component change",
+    )
 }
 
 /// A component change the OPERATOR performed and is reporting after the
@@ -115,7 +118,8 @@ pub fn judge_resilience(run: &ResilienceRun) -> ResilienceVerdict {
         _ => None,
     };
 
-    let mut by_session: std::collections::BTreeMap<u32, Vec<&SessionSample>> = std::collections::BTreeMap::new();
+    let mut by_session: std::collections::BTreeMap<u32, Vec<&SessionSample>> =
+        std::collections::BTreeMap::new();
     for s in &run.samples {
         by_session.entry(s.session_id).or_default().push(s);
     }
@@ -140,22 +144,40 @@ pub fn judge_resilience(run: &ResilienceRun) -> ResilienceVerdict {
         }
     }
 
-    let route_identities: Vec<&str> = run.samples.iter().filter_map(|s| s.route_identity.as_deref()).collect();
+    let route_identities: Vec<&str> = run
+        .samples
+        .iter()
+        .filter_map(|s| s.route_identity.as_deref())
+        .collect();
     let route_identity = match (route_identities.first(), route_identities.last()) {
-        (Some(first), Some(last)) if first != last => RouteIdentityContinuity::Changed { before: first.to_string(), after: last.to_string() },
+        (Some(first), Some(last)) if first != last => RouteIdentityContinuity::Changed {
+            before: first.to_string(),
+            after: last.to_string(),
+        },
         (Some(_), Some(_)) => RouteIdentityContinuity::Unchanged,
         _ => RouteIdentityContinuity::Unavailable,
     };
 
-    let nat_identities: Vec<&str> = run.samples.iter().filter_map(|s| s.nat_identity.as_deref()).collect();
+    let nat_identities: Vec<&str> = run
+        .samples
+        .iter()
+        .filter_map(|s| s.nat_identity.as_deref())
+        .collect();
     let nat_identity = match (nat_identities.first(), nat_identities.last()) {
-        (Some(first), Some(last)) if first != last => NatIdentityContinuity::Changed { before: first.to_string(), after: last.to_string() },
+        (Some(first), Some(last)) if first != last => NatIdentityContinuity::Changed {
+            before: first.to_string(),
+            after: last.to_string(),
+        },
         (Some(_), Some(_)) => NatIdentityContinuity::Unchanged,
         _ => NatIdentityContinuity::Unavailable,
     };
 
     let state_resync_observed = if run.samples.iter().any(|s| s.state_resynchronized.is_some()) {
-        Some(run.samples.iter().any(|s| s.state_resynchronized == Some(true)))
+        Some(
+            run.samples
+                .iter()
+                .any(|s| s.state_resynchronized == Some(true)),
+        )
     } else {
         None
     };
@@ -190,13 +212,22 @@ mod tests {
     }
 
     fn sample(id: u32, alive: Option<bool>) -> SessionSample {
-        SessionSample { session_id: id, session_alive: alive, route_identity: None, nat_identity: None, state_resynchronized: None }
+        SessionSample {
+            session_id: id,
+            session_alive: alive,
+            route_identity: None,
+            nat_identity: None,
+            state_resynchronized: None,
+        }
     }
 
     #[test]
     fn an_outage_that_was_never_observed_reports_duration_as_none_never_zero() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "WAN-A uplink".to_string(), action_description: "unplugged".to_string() },
+            change: ComponentChange {
+                component_label: "WAN-A uplink".to_string(),
+                action_description: "unplugged".to_string(),
+            },
             samples: vec![sample(1, Some(true)), sample(1, Some(true))],
             outage_started_secs: None,
             outage_ended_secs: None,
@@ -208,7 +239,10 @@ mod tests {
     #[test]
     fn a_bracketed_outage_reports_its_real_duration() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "WAN-A uplink".to_string(), action_description: "unplugged".to_string() },
+            change: ComponentChange {
+                component_label: "WAN-A uplink".to_string(),
+                action_description: "unplugged".to_string(),
+            },
             samples: vec![sample(1, Some(false)), sample(1, Some(true))],
             outage_started_secs: Some(10.0),
             outage_ended_secs: Some(12.4),
@@ -220,8 +254,15 @@ mod tests {
     #[test]
     fn a_session_that_recovers_is_counted_as_survived_not_lost() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "core switch 2".to_string(), action_description: "rebooted".to_string() },
-            samples: vec![sample(1, Some(true)), sample(1, Some(false)), sample(1, Some(true))],
+            change: ComponentChange {
+                component_label: "core switch 2".to_string(),
+                action_description: "rebooted".to_string(),
+            },
+            samples: vec![
+                sample(1, Some(true)),
+                sample(1, Some(false)),
+                sample(1, Some(true)),
+            ],
             outage_started_secs: Some(1.0),
             outage_ended_secs: Some(3.0),
         };
@@ -233,7 +274,10 @@ mod tests {
     #[test]
     fn a_session_that_never_recovers_is_counted_as_lost() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "core switch 2".to_string(), action_description: "rebooted".to_string() },
+            change: ComponentChange {
+                component_label: "core switch 2".to_string(),
+                action_description: "rebooted".to_string(),
+            },
             samples: vec![sample(1, Some(true)), sample(1, Some(false))],
             outage_started_secs: Some(1.0),
             outage_ended_secs: Some(3.0),
@@ -245,7 +289,10 @@ mod tests {
     #[test]
     fn a_session_never_sampled_is_excluded_not_counted_as_lost() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "core switch 2".to_string(), action_description: "rebooted".to_string() },
+            change: ComponentChange {
+                component_label: "core switch 2".to_string(),
+                action_description: "rebooted".to_string(),
+            },
             samples: vec![sample(1, None), sample(1, None)],
             outage_started_secs: None,
             outage_ended_secs: None,
@@ -259,7 +306,10 @@ mod tests {
     #[test]
     fn a_route_identity_change_across_the_failover_is_detected() {
         let mut run = ResilienceRun {
-            change: ComponentChange { component_label: "WAN-A".to_string(), action_description: "unplugged".to_string() },
+            change: ComponentChange {
+                component_label: "WAN-A".to_string(),
+                action_description: "unplugged".to_string(),
+            },
             samples: vec![sample(1, Some(true)), sample(1, Some(true))],
             outage_started_secs: None,
             outage_ended_secs: None,
@@ -267,13 +317,22 @@ mod tests {
         run.samples[0].route_identity = Some("via-wan-a".to_string());
         run.samples[1].route_identity = Some("via-wan-b".to_string());
         let v = judge_resilience(&run);
-        assert_eq!(v.route_identity, RouteIdentityContinuity::Changed { before: "via-wan-a".to_string(), after: "via-wan-b".to_string() });
+        assert_eq!(
+            v.route_identity,
+            RouteIdentityContinuity::Changed {
+                before: "via-wan-a".to_string(),
+                after: "via-wan-b".to_string()
+            }
+        );
     }
 
     #[test]
     fn missing_identity_evidence_is_unavailable_not_assumed_unchanged() {
         let run = ResilienceRun {
-            change: ComponentChange { component_label: "WAN-A".to_string(), action_description: "unplugged".to_string() },
+            change: ComponentChange {
+                component_label: "WAN-A".to_string(),
+                action_description: "unplugged".to_string(),
+            },
             samples: vec![sample(1, Some(true))],
             outage_started_secs: None,
             outage_ended_secs: None,
@@ -290,7 +349,10 @@ mod tests {
         // verdict). Neither accepts anything resembling a target/command/
         // socket/handle. This test exists so that if a future edit adds
         // one, a reviewer sees this comment fail its own premise.
-        let change = ComponentChange { component_label: "anything".to_string(), action_description: "anything".to_string() };
+        let change = ComponentChange {
+            component_label: "anything".to_string(),
+            action_description: "anything".to_string(),
+        };
         // Constructing a ComponentChange performs no I/O and has no side effect.
         assert_eq!(change.component_label, "anything");
     }

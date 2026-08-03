@@ -108,7 +108,10 @@ pub fn run(args: &EndpointsArgs) {
         match registry.allowlist_for(&provider) {
             Ok(list) => {
                 if args.json {
-                    println!("{}", serde_json::to_string_pretty(&list).unwrap_or_default());
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&list).unwrap_or_default()
+                    );
                 } else {
                     println!("\n== Allowlist for {} ==", provider);
                     for l in &list {
@@ -119,7 +122,11 @@ pub fn run(args: &EndpointsArgs) {
                          cannot be handed one by accident.",
                         registry
                             .provider(&provider)
-                            .map(|p| p.known_bad_ports.iter().map(|b| b.all_ports().len()).sum::<usize>())
+                            .map(|p| p
+                                .known_bad_ports
+                                .iter()
+                                .map(|b| b.all_ports().len())
+                                .sum::<usize>())
                             .unwrap_or(0)
                     );
                 }
@@ -162,7 +169,10 @@ pub fn run(args: &EndpointsArgs) {
 
     // Default: show what is known, failures included.
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&registry).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&registry).unwrap_or_default()
+        );
         return;
     }
 
@@ -178,7 +188,10 @@ pub fn run(args: &EndpointsArgs) {
                 "verified".green(),
                 l.host,
                 l.port,
-                l.purpose.as_deref().map(|s| format!("  ({})", s)).unwrap_or_default()
+                l.purpose
+                    .as_deref()
+                    .map(|s| format!("  ({})", s))
+                    .unwrap_or_default()
             );
         }
         for b in &p.known_bad_ports {

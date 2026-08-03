@@ -92,7 +92,7 @@ impl PmtuEvidence {
             .filter(|s| s.outcome.is_path_evidence())
             .map(|s| s.size)
             .max()
-        }
+    }
 
     /// Smallest size that produced no response, which bounds where the path
     /// ceiling may lie once something below it is confirmed.
@@ -115,7 +115,11 @@ pub fn set_dont_fragment(socket: &UdpSocket, is_ipv4: bool) -> DfStatus {
         use std::os::fd::AsRawFd;
         let fd = socket.as_raw_fd();
         let (level, name, val) = if is_ipv4 {
-            (libc::IPPROTO_IP, libc::IP_MTU_DISCOVER, libc::IP_PMTUDISC_DO)
+            (
+                libc::IPPROTO_IP,
+                libc::IP_MTU_DISCOVER,
+                libc::IP_PMTUDISC_DO,
+            )
         } else {
             (
                 libc::IPPROTO_IPV6,
@@ -134,12 +138,19 @@ pub fn set_dont_fragment(socket: &UdpSocket, is_ipv4: bool) -> DfStatus {
             )
         };
         if rc == 0 {
-            DfStatus { requested: true, applied: true, detail: "IP_MTU_DISCOVER=IP_PMTUDISC_DO".to_string() }
+            DfStatus {
+                requested: true,
+                applied: true,
+                detail: "IP_MTU_DISCOVER=IP_PMTUDISC_DO".to_string(),
+            }
         } else {
             DfStatus {
                 requested: true,
                 applied: false,
-                detail: format!("setsockopt IP_MTU_DISCOVER failed: {}", std::io::Error::last_os_error()),
+                detail: format!(
+                    "setsockopt IP_MTU_DISCOVER failed: {}",
+                    std::io::Error::last_os_error()
+                ),
             }
         }
     }
@@ -164,12 +175,19 @@ pub fn set_dont_fragment(socket: &UdpSocket, is_ipv4: bool) -> DfStatus {
             )
         };
         if rc == 0 {
-            DfStatus { requested: true, applied: true, detail: "IP_DONTFRAG=1".to_string() }
+            DfStatus {
+                requested: true,
+                applied: true,
+                detail: "IP_DONTFRAG=1".to_string(),
+            }
         } else {
             DfStatus {
                 requested: true,
                 applied: false,
-                detail: format!("setsockopt IP_DONTFRAG failed: {}", std::io::Error::last_os_error()),
+                detail: format!(
+                    "setsockopt IP_DONTFRAG failed: {}",
+                    std::io::Error::last_os_error()
+                ),
             }
         }
     }
@@ -227,11 +245,11 @@ pub async fn confirm_size_via_quic(
     };
 
     let mut transport = TransportConfig::default();
-    let idle: quinn::IdleTimeout = match Duration::from_millis(timeout.as_millis() as u64).try_into()
-    {
-        Ok(v) => v,
-        Err(_) => return (SizeOutcome::NoResponse, "invalid idle timeout".to_string()),
-    };
+    let idle: quinn::IdleTimeout =
+        match Duration::from_millis(timeout.as_millis() as u64).try_into() {
+            Ok(v) => v,
+            Err(_) => return (SizeOutcome::NoResponse, "invalid idle timeout".to_string()),
+        };
     transport.max_idle_timeout(Some(idle));
     transport.min_mtu(size);
     transport.initial_mtu(size);
@@ -246,13 +264,23 @@ pub async fn confirm_size_via_quic(
         Err(e) => return (SizeOutcome::NoResponse, format!("bind parse: {}", e)),
     }) {
         Ok(e) => e,
-        Err(e) => return (SizeOutcome::SendFailedLocally, format!("endpoint bind: {}", e)),
+        Err(e) => {
+            return (
+                SizeOutcome::SendFailedLocally,
+                format!("endpoint bind: {}", e),
+            )
+        }
     };
     endpoint.set_default_client_config(client_config);
 
     let connecting = match endpoint.connect(SocketAddr::new(ip, port), host) {
         Ok(c) => c,
-        Err(e) => return (SizeOutcome::SendFailedLocally, format!("connect setup: {}", e)),
+        Err(e) => {
+            return (
+                SizeOutcome::SendFailedLocally,
+                format!("connect setup: {}", e),
+            )
+        }
     };
 
     match tokio::time::timeout(timeout, connecting).await {
@@ -271,9 +299,16 @@ pub async fn confirm_size_via_quic(
                 Ok(Ok(mut stream)) => {
                     let payload = vec![0x41u8; (size as usize) * 4];
                     let wrote = tokio::time::timeout(timeout, async {
-                        stream.write_all(&payload).await.map_err(|e| e.to_string())?;
+                        stream
+                            .write_all(&payload)
+                            .await
+                            .map_err(|e| e.to_string())?;
                         stream.finish().map_err(|e| e.to_string())?;
-                        stream.stopped().await.map(|_| ()).map_err(|e| e.to_string())
+                        stream
+                            .stopped()
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| e.to_string())
                     })
                     .await;
 
@@ -357,7 +392,11 @@ pub fn local_send_check(ip: IpAddr, port: u16, size: usize) -> (SizeOutcome, Str
             return (
                 SizeOutcome::SendFailedLocally,
                 format!("bind: {}", e),
-                DfStatus { requested: false, applied: false, detail: "socket bind failed".to_string() },
+                DfStatus {
+                    requested: false,
+                    applied: false,
+                    detail: "socket bind failed".to_string(),
+                },
             )
         }
     };
@@ -408,7 +447,11 @@ pub fn probe_pmtu_evidence(
         } else {
             match &rt {
                 Ok(rt) => {
-                    let s16 = if size > u16::MAX as usize { u16::MAX } else { size as u16 };
+                    let s16 = if size > u16::MAX as usize {
+                        u16::MAX
+                    } else {
+                        size as u16
+                    };
                     rt.block_on(confirm_size_via_quic(host, ip, port, s16, timeout))
                 }
                 Err(e) => (SizeOutcome::NoResponse, format!("runtime: {}", e)),
@@ -450,10 +493,7 @@ pub fn build_verdict(e: &PmtuEvidence) -> String {
             ));
             if let Some(u) = e.smallest_unanswered() {
                 if u > c {
-                    parts.push(format!(
-                        "path ceiling lies between {} and {} bytes",
-                        c, u
-                    ));
+                    parts.push(format!("path ceiling lies between {} and {} bytes", c, u));
                 }
             }
         }

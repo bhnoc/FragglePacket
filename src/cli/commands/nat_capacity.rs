@@ -5,8 +5,8 @@ use std::net::IpAddr;
 
 use fraggle_packet::load_guard::LoadBudget;
 use fraggle_packet::network_tests::nat_capacity::{
-    correlate_with_telemetry, observe_idle_mapping_survival, require_authorization, run_session_rate_probe,
-    CorrelationVerdict, FirewallTelemetry,
+    correlate_with_telemetry, observe_idle_mapping_survival, require_authorization,
+    run_session_rate_probe, CorrelationVerdict, FirewallTelemetry,
 };
 
 #[derive(clap::Args, Debug)]
@@ -71,12 +71,28 @@ pub fn run(args: &NatCapacityArgs) {
         match require_authorization(args.authorized.as_deref()) {
             Ok(_statement) => {
                 let budget = if args.maintenance {
-                    LoadBudget::maintenance(args.rate_mbps, args.max_duration_secs, args.max_concurrency)
+                    LoadBudget::maintenance(
+                        args.rate_mbps,
+                        args.max_duration_secs,
+                        args.max_concurrency,
+                    )
                 } else {
-                    LoadBudget::live_event(args.rate_mbps, args.max_duration_secs, args.max_concurrency)
+                    LoadBudget::live_event(
+                        args.rate_mbps,
+                        args.max_duration_secs,
+                        args.max_concurrency,
+                    )
                 };
-                let interface = args.interface.clone().unwrap_or_else(|| "unspecified".to_string());
-                Some(run_session_rate_probe(args.target, args.port, budget, &interface))
+                let interface = args
+                    .interface
+                    .clone()
+                    .unwrap_or_else(|| "unspecified".to_string());
+                Some(run_session_rate_probe(
+                    args.target,
+                    args.port,
+                    budget,
+                    &interface,
+                ))
             }
             Err(e) => {
                 eprintln!("{} {}", "✗".red(), e);
@@ -93,7 +109,10 @@ pub fn run(args: &NatCapacityArgs) {
             .and_then(|text| serde_json::from_str(&text).ok())
     });
 
-    let correlation = session_result.as_ref().and_then(|r| r.as_ref().ok()).map(|r| correlate_with_telemetry(r, &telemetry));
+    let correlation = session_result
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .map(|r| correlate_with_telemetry(r, &telemetry));
 
     if args.json {
         let report = serde_json::json!({
@@ -109,11 +128,17 @@ pub fn run(args: &NatCapacityArgs) {
     println!("{}", "== NAT/Firewall Capacity Matrix ==".cyan().bold());
     match idle_result {
         Ok(r) => {
-            println!("  idle mapping ({}s, keepalive={}):", r.idle_secs_attempted, r.keepalive_sent);
+            println!(
+                "  idle mapping ({}s, keepalive={}):",
+                r.idle_secs_attempted, r.keepalive_sent
+            );
             match r.still_responsive_after_idle {
                 Some(true) => println!("    still responsive: {}", "yes".green()),
                 Some(false) => println!("    still responsive: {}", "no".red()),
-                None => println!("    still responsive: {}", "unknown (no reply observed)".yellow()),
+                None => println!(
+                    "    still responsive: {}",
+                    "unknown (no reply observed)".yellow()
+                ),
             }
         }
         Err(e) => println!("  idle mapping check failed: {}", e),
@@ -130,7 +155,10 @@ pub fn run(args: &NatCapacityArgs) {
 
     match session_result {
         Some(Ok(r)) => {
-            println!("  session rate: attempted={} created={} elapsed={:.2}s", r.attempted, r.created, r.elapsed_secs);
+            println!(
+                "  session rate: attempted={} created={} elapsed={:.2}s",
+                r.attempted, r.created, r.elapsed_secs
+            );
             println!(
                 "    remote_refused={} remote_timed_out={} local_resource_exhausted={}",
                 r.remote_refused, r.remote_timed_out, r.local_resource_exhausted
@@ -144,10 +172,20 @@ pub fn run(args: &NatCapacityArgs) {
             }
             match correlation {
                 Some(CorrelationVerdict::Correlated { table_usage_pct }) => {
-                    println!("    telemetry correlation: table usage {:.1}%", table_usage_pct)
+                    println!(
+                        "    telemetry correlation: table usage {:.1}%",
+                        table_usage_pct
+                    )
                 }
                 Some(CorrelationVerdict::TelemetryAbsent { missing }) => {
-                    println!("    {}", format!("telemetry correlation WITHHELD: missing {}", missing.join(", ")).yellow())
+                    println!(
+                        "    {}",
+                        format!(
+                            "telemetry correlation WITHHELD: missing {}",
+                            missing.join(", ")
+                        )
+                        .yellow()
+                    )
                 }
                 None => {}
             }

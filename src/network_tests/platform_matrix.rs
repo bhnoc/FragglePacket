@@ -15,7 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::network_tests::rf_survey::{Metric, Obtainability};
+use crate::network_tests::rf_survey::Metric;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PhyGeneration {
@@ -79,10 +79,16 @@ pub struct VaryingAxes {
 
 impl VaryingAxes {
     pub fn count(&self) -> u32 {
-        [self.os_family, self.driver_family, self.kernel_major, self.phy_generation, self.iperf_version]
-            .iter()
-            .filter(|b| **b)
-            .count() as u32
+        [
+            self.os_family,
+            self.driver_family,
+            self.kernel_major,
+            self.phy_generation,
+            self.iperf_version,
+        ]
+        .iter()
+        .filter(|b| **b)
+        .count() as u32
     }
 }
 
@@ -100,11 +106,17 @@ fn compare_axes(a: &ClientCapability, b: &ClientCapability) -> VaryingAxes {
 pub enum Attribution {
     /// Exactly one capability axis differed between the two results, so a
     /// throughput/loss difference can be attributed to that axis.
-    SinglePlatformFactor { axis: String, delta_mbps: Option<f64> },
+    SinglePlatformFactor {
+        axis: String,
+        delta_mbps: Option<f64>,
+    },
     /// More than one axis differed -- the field-evidence case. The
     /// difference cannot be assigned to any one variable from this
     /// comparison alone.
-    ConfoundedEntangled { varying_axes: Vec<String>, reason: String },
+    ConfoundedEntangled {
+        varying_axes: Vec<String>,
+        reason: String,
+    },
     /// No axis differed at all; any observed difference is not a platform
     /// effect (it's noise, infrastructure, or something else entirely).
     NoVariation,
@@ -163,7 +175,13 @@ pub fn power_save_observability() -> Metric<PowerSaveState> {
 mod tests {
     use super::*;
 
-    fn cap(os: &str, driver: Option<&str>, kernel: Option<&str>, phy: PhyGeneration, iperf: Option<&str>) -> ClientCapability {
+    fn cap(
+        os: &str,
+        driver: Option<&str>,
+        kernel: Option<&str>,
+        phy: PhyGeneration,
+        iperf: Option<&str>,
+    ) -> ClientCapability {
         ClientCapability {
             os_family: os.to_string(),
             driver_family: driver.map(|s| s.to_string()),
@@ -175,7 +193,12 @@ mod tests {
     }
 
     fn result(capability: ClientCapability, throughput: Option<f64>) -> MatrixResult {
-        MatrixResult { capability, power_save_during_test: PowerSaveState::Active, throughput_mbps: throughput, loss_percent: None }
+        MatrixResult {
+            capability,
+            power_save_during_test: PowerSaveState::Active,
+            throughput_mbps: throughput,
+            loss_percent: None,
+        }
     }
 
     #[test]
@@ -187,8 +210,26 @@ mod tests {
 
     #[test]
     fn single_varying_axis_yields_attribution() {
-        let a = result(cap("linux", Some("iwlwifi"), Some("5"), PhyGeneration::Wifi5, Some("3.9")), Some(300.0));
-        let b = result(cap("linux", Some("iwlwifi"), Some("5"), PhyGeneration::Wifi6, Some("3.9")), Some(450.0));
+        let a = result(
+            cap(
+                "linux",
+                Some("iwlwifi"),
+                Some("5"),
+                PhyGeneration::Wifi5,
+                Some("3.9"),
+            ),
+            Some(300.0),
+        );
+        let b = result(
+            cap(
+                "linux",
+                Some("iwlwifi"),
+                Some("5"),
+                PhyGeneration::Wifi6,
+                Some("3.9"),
+            ),
+            Some(450.0),
+        );
         let attribution = attribute_difference(&a, &b);
         match attribution {
             Attribution::SinglePlatformFactor { axis, delta_mbps } => {
@@ -203,12 +244,34 @@ mod tests {
     fn field_evidence_four_entangled_axes_withholds_attribution() {
         // The exact field-evidence cohorts: VHT/5.10/iperf3-3.9 vs HE/6.1/iperf3-3.16,
         // also differing driver family.
-        let a = result(cap("linux", Some("ath10k"), Some("5"), PhyGeneration::Wifi5, Some("3.9")), Some(280.0));
-        let b = result(cap("linux", Some("iwlwifi"), Some("6"), PhyGeneration::Wifi6, Some("3.16")), Some(410.0));
+        let a = result(
+            cap(
+                "linux",
+                Some("ath10k"),
+                Some("5"),
+                PhyGeneration::Wifi5,
+                Some("3.9"),
+            ),
+            Some(280.0),
+        );
+        let b = result(
+            cap(
+                "linux",
+                Some("iwlwifi"),
+                Some("6"),
+                PhyGeneration::Wifi6,
+                Some("3.16"),
+            ),
+            Some(410.0),
+        );
         let attribution = attribute_difference(&a, &b);
         match attribution {
             Attribution::ConfoundedEntangled { varying_axes, .. } => {
-                assert!(varying_axes.len() >= 3, "expected multiple entangled axes, got {:?}", varying_axes);
+                assert!(
+                    varying_axes.len() >= 3,
+                    "expected multiple entangled axes, got {:?}",
+                    varying_axes
+                );
             }
             other => panic!("expected ConfoundedEntangled, got {:?}", other),
         }
@@ -216,8 +279,29 @@ mod tests {
 
     #[test]
     fn identical_capability_yields_no_variation() {
-        let a = result(cap("macos", Some("wl"), Some("25"), PhyGeneration::Wifi6E, Some("3.21")), Some(600.0));
-        let b = result(cap("macos", Some("wl"), Some("25"), PhyGeneration::Wifi6E, Some("3.21")), Some(590.0));
-        assert!(matches!(attribute_difference(&a, &b), Attribution::NoVariation));
+        let a = result(
+            cap(
+                "macos",
+                Some("wl"),
+                Some("25"),
+                PhyGeneration::Wifi6E,
+                Some("3.21"),
+            ),
+            Some(600.0),
+        );
+        let b = result(
+            cap(
+                "macos",
+                Some("wl"),
+                Some("25"),
+                PhyGeneration::Wifi6E,
+                Some("3.21"),
+            ),
+            Some(590.0),
+        );
+        assert!(matches!(
+            attribute_difference(&a, &b),
+            Attribution::NoVariation
+        ));
     }
 }

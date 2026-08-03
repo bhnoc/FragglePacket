@@ -74,7 +74,12 @@ impl ResolverResult {
     }
 }
 
-fn run_dig(resolver: &str, name: &str, record_type: RecordType, timeout_secs: u64) -> ResolverResult {
+fn run_dig(
+    resolver: &str,
+    name: &str,
+    record_type: RecordType,
+    timeout_secs: u64,
+) -> ResolverResult {
     let start = Instant::now();
     let output = Command::new("dig")
         .args([
@@ -108,14 +113,23 @@ fn run_dig(resolver: &str, name: &str, record_type: RecordType, timeout_secs: u6
             resolver: resolver.to_string(),
             query_time_ms: Some(elapsed_ms),
             answers: vec![],
-            error: Some(if stderr.is_empty() { "dig exited with an error".to_string() } else { stderr }),
+            error: Some(if stderr.is_empty() {
+                "dig exited with an error".to_string()
+            } else {
+                stderr
+            }),
         };
     }
 
     let text = String::from_utf8_lossy(&output.stdout);
     let answers = parse_dig_answers(&text, record_type);
 
-    ResolverResult { resolver: resolver.to_string(), query_time_ms: Some(elapsed_ms), answers, error: None }
+    ResolverResult {
+        resolver: resolver.to_string(),
+        query_time_ms: Some(elapsed_ms),
+        answers,
+        error: None,
+    }
 }
 
 /// Parses `dig +noall +answer` output: `name ttl IN TYPE value...`.
@@ -131,17 +145,26 @@ fn parse_dig_answers(text: &str, requested: RecordType) -> Vec<AnswerRecord> {
         }
         let ttl = fields[1].parse::<u32>().ok();
         let value = fields[4..].join(" ");
-        out.push(AnswerRecord { record_type: requested, value, ttl_secs: ttl });
+        out.push(AnswerRecord {
+            record_type: requested,
+            value,
+            ttl_secs: ttl,
+        });
     }
     out
 }
 
 /// Runs every record type against one resolver.
 pub fn query_resolver(resolver: &str, name: &str, timeout_secs: u64) -> Vec<ResolverResult> {
-    [RecordType::A, RecordType::Aaaa, RecordType::Https, RecordType::Svcb]
-        .iter()
-        .map(|&rt| run_dig(resolver, name, rt, timeout_secs))
-        .collect()
+    [
+        RecordType::A,
+        RecordType::Aaaa,
+        RecordType::Https,
+        RecordType::Svcb,
+    ]
+    .iter()
+    .map(|&rt| run_dig(resolver, name, rt, timeout_secs))
+    .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,18 +190,32 @@ pub struct SteeringComparison {
 /// divergence. Never labels one resolver "wrong" -- different answers from
 /// healthy resolvers are steering, not a fault in either.
 pub fn compare_steering(name: &str, resolvers: &[String], timeout_secs: u64) -> SteeringComparison {
-    let per_resolver: Vec<Vec<ResolverResult>> =
-        resolvers.iter().map(|r| query_resolver(r, name, timeout_secs)).collect();
+    let per_resolver: Vec<Vec<ResolverResult>> = resolvers
+        .iter()
+        .map(|r| query_resolver(r, name, timeout_secs))
+        .collect();
     let (verdict, explanation) = decide_verdict(&per_resolver, resolvers.len());
-    SteeringComparison { name: name.to_string(), per_resolver, verdict, explanation }
+    SteeringComparison {
+        name: name.to_string(),
+        per_resolver,
+        verdict,
+        explanation,
+    }
 }
 
 /// Pure decision logic, factored out of `compare_steering` so it is
 /// testable without shelling out to `dig`.
-fn decide_verdict(per_resolver: &[Vec<ResolverResult>], resolver_count: usize) -> (SteeringVerdict, String) {
+fn decide_verdict(
+    per_resolver: &[Vec<ResolverResult>],
+    resolver_count: usize,
+) -> (SteeringVerdict, String) {
     let answered: Vec<&Vec<ResolverResult>> = per_resolver
         .iter()
-        .filter(|results| results.iter().any(|r| r.answered() && !r.endpoint_addresses().is_empty()))
+        .filter(|results| {
+            results
+                .iter()
+                .any(|r| r.answered() && !r.endpoint_addresses().is_empty())
+        })
         .collect();
 
     if answered.len() < 2 {
@@ -195,7 +232,11 @@ fn decide_verdict(per_resolver: &[Vec<ResolverResult>], resolver_count: usize) -
     let endpoint_sets: Vec<BTreeSet<&str>> = answered
         .iter()
         .map(|results| {
-            results.iter().filter(|r| r.answered()).flat_map(|r| r.endpoint_addresses()).collect::<BTreeSet<&str>>()
+            results
+                .iter()
+                .filter(|r| r.answered())
+                .flat_map(|r| r.endpoint_addresses())
+                .collect::<BTreeSet<&str>>()
         })
         .collect();
 
@@ -203,7 +244,10 @@ fn decide_verdict(per_resolver: &[Vec<ResolverResult>], resolver_count: usize) -
     let all_same = endpoint_sets.iter().all(|s| s == first);
 
     if all_same {
-        (SteeringVerdict::Consistent, "all answering resolvers returned the same endpoint address set".to_string())
+        (
+            SteeringVerdict::Consistent,
+            "all answering resolvers returned the same endpoint address set".to_string(),
+        )
     } else {
         (
             SteeringVerdict::Diverges,
@@ -234,7 +278,11 @@ mod tests {
         vec![ResolverResult {
             resolver: resolver.to_string(),
             query_time_ms: Some(10),
-            answers: vec![AnswerRecord { record_type: RecordType::A, value: addr.to_string(), ttl_secs: Some(60) }],
+            answers: vec![AnswerRecord {
+                record_type: RecordType::A,
+                value: addr.to_string(),
+                ttl_secs: Some(60),
+            }],
             error: None,
         }]
     }
@@ -274,14 +322,21 @@ mod tests {
 
     #[test]
     fn mismatch_warning_fires_only_on_different_resolvers() {
-        assert!(resolver_mismatch_warning(&["1.1.1.1".to_string(), "8.8.8.8".to_string()]).is_some());
-        assert!(resolver_mismatch_warning(&["1.1.1.1".to_string(), "1.1.1.1".to_string()]).is_none());
+        assert!(
+            resolver_mismatch_warning(&["1.1.1.1".to_string(), "8.8.8.8".to_string()]).is_some()
+        );
+        assert!(
+            resolver_mismatch_warning(&["1.1.1.1".to_string(), "1.1.1.1".to_string()]).is_none()
+        );
     }
 
     #[test]
     fn fewer_than_two_answering_resolvers_is_inconclusive() {
-        let comparison =
-            compare_steering("nonexistent-host-for-testing.invalid.", &["127.0.0.1".to_string()], 1);
+        let comparison = compare_steering(
+            "nonexistent-host-for-testing.invalid.",
+            &["127.0.0.1".to_string()],
+            1,
+        );
         assert_eq!(comparison.verdict, SteeringVerdict::Inconclusive);
     }
 }

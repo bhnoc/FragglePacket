@@ -5,8 +5,8 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::time::Duration;
 
 use fraggle_packet::network_tests::stun::{
-    binding_request_once, turn_allocate_tcp, turn_allocate_udp, BindingAttempt, BindingOutcome, TurnCredentials,
-    TurnOutcome,
+    binding_request_once, turn_allocate_tcp, turn_allocate_udp, BindingAttempt, BindingOutcome,
+    TurnCredentials, TurnOutcome,
 };
 
 #[derive(clap::Args, Debug)]
@@ -109,18 +109,42 @@ fn synthetic_attempts(seed: &str) -> Vec<BindingAttempt> {
     let changed: SocketAddr = "203.0.113.99:40001".parse().unwrap();
     match seed {
         "changed" => vec![
-            BindingAttempt { outcome: BindingOutcome::Mapped(stable), rtt_ms: Some(12.0) },
-            BindingAttempt { outcome: BindingOutcome::Mapped(stable), rtt_ms: Some(11.0) },
-            BindingAttempt { outcome: BindingOutcome::Mapped(changed), rtt_ms: Some(13.0) },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(stable),
+                rtt_ms: Some(12.0),
+            },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(stable),
+                rtt_ms: Some(11.0),
+            },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(changed),
+                rtt_ms: Some(13.0),
+            },
         ],
         "unreachable" => vec![
-            BindingAttempt { outcome: BindingOutcome::Unreachable, rtt_ms: None },
-            BindingAttempt { outcome: BindingOutcome::Unreachable, rtt_ms: None },
+            BindingAttempt {
+                outcome: BindingOutcome::Unreachable,
+                rtt_ms: None,
+            },
+            BindingAttempt {
+                outcome: BindingOutcome::Unreachable,
+                rtt_ms: None,
+            },
         ],
         _ => vec![
-            BindingAttempt { outcome: BindingOutcome::Mapped(stable), rtt_ms: Some(12.0) },
-            BindingAttempt { outcome: BindingOutcome::Mapped(stable), rtt_ms: Some(11.5) },
-            BindingAttempt { outcome: BindingOutcome::Mapped(stable), rtt_ms: Some(12.3) },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(stable),
+                rtt_ms: Some(12.0),
+            },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(stable),
+                rtt_ms: Some(11.5),
+            },
+            BindingAttempt {
+                outcome: BindingOutcome::Mapped(stable),
+                rtt_ms: Some(12.3),
+            },
         ],
     }
 }
@@ -145,7 +169,11 @@ fn mapping_change_verdict(attempts: &[BindingAttempt]) -> MappingChangeSummary {
     } else {
         "changed"
     };
-    MappingChangeSummary { verdict, successful_bindings: mapped.len(), total_attempts: attempts.len() }
+    MappingChangeSummary {
+        verdict,
+        successful_bindings: mapped.len(),
+        total_attempts: attempts.len(),
+    }
 }
 
 fn run_binding_attempts(args: &StunTurnArgs) -> Result<Vec<BindingAttempt>, String> {
@@ -153,7 +181,8 @@ fn run_binding_attempts(args: &StunTurnArgs) -> Result<Vec<BindingAttempt>, Stri
         return Ok(synthetic_attempts(seed));
     }
     let server = resolve(&args.stun_server)?;
-    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("failed to bind local UDP socket: {e}"))?;
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .map_err(|e| format!("failed to bind local UDP socket: {e}"))?;
     let timeout = Duration::from_millis(args.timeout_ms);
     let mut attempts = Vec::new();
     for i in 0..args.repeat.max(1) {
@@ -168,14 +197,20 @@ fn run_binding_attempts(args: &StunTurnArgs) -> Result<Vec<BindingAttempt>, Stri
 fn run_turn(args: &StunTurnArgs) -> Option<TurnRecord> {
     let turn_server_str = args.turn_server.as_ref()?;
     let credentials = match (&args.turn_username, &args.turn_password) {
-        (Some(u), Some(p)) => Some(TurnCredentials { username: u.clone(), password: p.clone() }),
+        (Some(u), Some(p)) => Some(TurnCredentials {
+            username: u.clone(),
+            password: p.clone(),
+        }),
         _ => None,
     };
     if let Some(seed) = &args.inject_fixture {
         let outcome = if seed == "turn-no-creds" {
             TurnOutcome::NoCredentialsSupplied
         } else if seed == "turn-allocated" {
-            TurnOutcome::Allocated { lifetime_secs: 600, relayed: "203.0.113.50:51000".parse().unwrap() }
+            TurnOutcome::Allocated {
+                lifetime_secs: 600,
+                relayed: "203.0.113.50:51000".parse().unwrap(),
+            }
         } else {
             TurnOutcome::Unreachable
         };
@@ -199,13 +234,19 @@ fn run_turn(args: &StunTurnArgs) -> Option<TurnRecord> {
                 Ok(s) => s,
                 Err(e) => return Some(err_record(args.turn_transport, e.to_string())),
             };
-            turn_allocate_udp(&socket, server, credentials.as_ref(), Duration::from_millis(args.timeout_ms))
+            turn_allocate_udp(
+                &socket,
+                server,
+                credentials.as_ref(),
+                Duration::from_millis(args.timeout_ms),
+            )
         }
         TurnTransport::Tcp => {
-            let mut stream = match TcpStream::connect_timeout(&server, Duration::from_millis(args.timeout_ms)) {
-                Ok(s) => s,
-                Err(e) => return Some(err_record(args.turn_transport, e.to_string())),
-            };
+            let mut stream =
+                match TcpStream::connect_timeout(&server, Duration::from_millis(args.timeout_ms)) {
+                    Ok(s) => s,
+                    Err(e) => return Some(err_record(args.turn_transport, e.to_string())),
+                };
             turn_allocate_tcp(&mut stream, credentials.as_ref())
         }
         TurnTransport::Tls => {
@@ -228,7 +269,13 @@ fn run_turn(args: &StunTurnArgs) -> Option<TurnRecord> {
 }
 
 fn err_record(transport: TurnTransport, detail: String) -> TurnRecord {
-    TurnRecord { transport: transport_label(transport), outcome: "unreachable", detail: Some(detail), relayed_address_revealed: None, lifetime_secs: None }
+    TurnRecord {
+        transport: transport_label(transport),
+        outcome: "unreachable",
+        detail: Some(detail),
+        relayed_address_revealed: None,
+        lifetime_secs: None,
+    }
 }
 
 fn transport_label(t: TurnTransport) -> &'static str {
@@ -242,7 +289,10 @@ fn transport_label(t: TurnTransport) -> &'static str {
 fn turn_outcome_to_record(transport: TurnTransport, outcome: TurnOutcome) -> TurnRecord {
     let transport = transport_label(transport);
     match outcome {
-        TurnOutcome::Allocated { lifetime_secs, relayed } => TurnRecord {
+        TurnOutcome::Allocated {
+            lifetime_secs,
+            relayed,
+        } => TurnRecord {
             transport,
             outcome: "allocated",
             detail: None,
@@ -253,11 +303,41 @@ fn turn_outcome_to_record(transport: TurnTransport, outcome: TurnOutcome) -> Tur
             relayed_address_revealed: Some(relayed.to_string()),
             lifetime_secs: Some(lifetime_secs),
         },
-        TurnOutcome::Unauthorized => TurnRecord { transport, outcome: "unauthorized", detail: None, relayed_address_revealed: None, lifetime_secs: None },
-        TurnOutcome::CredentialsRejected => TurnRecord { transport, outcome: "credentials_rejected", detail: None, relayed_address_revealed: None, lifetime_secs: None },
-        TurnOutcome::NoCredentialsSupplied => TurnRecord { transport, outcome: "no_credentials_supplied", detail: None, relayed_address_revealed: None, lifetime_secs: None },
-        TurnOutcome::Unreachable => TurnRecord { transport, outcome: "unreachable", detail: None, relayed_address_revealed: None, lifetime_secs: None },
-        TurnOutcome::Invalid(e) => TurnRecord { transport, outcome: "invalid", detail: Some(e), relayed_address_revealed: None, lifetime_secs: None },
+        TurnOutcome::Unauthorized => TurnRecord {
+            transport,
+            outcome: "unauthorized",
+            detail: None,
+            relayed_address_revealed: None,
+            lifetime_secs: None,
+        },
+        TurnOutcome::CredentialsRejected => TurnRecord {
+            transport,
+            outcome: "credentials_rejected",
+            detail: None,
+            relayed_address_revealed: None,
+            lifetime_secs: None,
+        },
+        TurnOutcome::NoCredentialsSupplied => TurnRecord {
+            transport,
+            outcome: "no_credentials_supplied",
+            detail: None,
+            relayed_address_revealed: None,
+            lifetime_secs: None,
+        },
+        TurnOutcome::Unreachable => TurnRecord {
+            transport,
+            outcome: "unreachable",
+            detail: None,
+            relayed_address_revealed: None,
+            lifetime_secs: None,
+        },
+        TurnOutcome::Invalid(e) => TurnRecord {
+            transport,
+            outcome: "invalid",
+            detail: Some(e),
+            relayed_address_revealed: None,
+            lifetime_secs: None,
+        },
     }
 }
 
@@ -279,7 +359,11 @@ pub fn run(args: &StunTurnArgs) {
                 result: "mapped",
                 rtt_ms: a.rtt_ms,
                 invalid_reason: None,
-                mapped_address: if args.reveal_mapped_address { Some(addr.to_string()) } else { None },
+                mapped_address: if args.reveal_mapped_address {
+                    Some(addr.to_string())
+                } else {
+                    None
+                },
             },
             BindingOutcome::Unreachable => BindingRecord {
                 attempt: i as u32,
@@ -321,10 +405,22 @@ pub fn run(args: &StunTurnArgs) {
     for r in &records {
         match r.result {
             "mapped" => {
-                let addr_note = r.mapped_address.as_deref().unwrap_or("hidden (pass --reveal-mapped-address to show)");
-                println!("  [{}] mapped rtt={} address={}", r.attempt, fmt_ms(r.rtt_ms), addr_note);
+                let addr_note = r
+                    .mapped_address
+                    .as_deref()
+                    .unwrap_or("hidden (pass --reveal-mapped-address to show)");
+                println!(
+                    "  [{}] mapped rtt={} address={}",
+                    r.attempt,
+                    fmt_ms(r.rtt_ms),
+                    addr_note
+                );
             }
-            "unreachable" => println!("  [{}] {}", r.attempt, "UNREACHABLE (no response within timeout)".yellow()),
+            "unreachable" => println!(
+                "  [{}] {}",
+                r.attempt,
+                "UNREACHABLE (no response within timeout)".yellow()
+            ),
             _ => println!(
                 "  [{}] {} ({})",
                 r.attempt,
@@ -335,8 +431,18 @@ pub fn run(args: &StunTurnArgs) {
     }
     println!();
     match change.verdict {
-        "stable" => println!("  mapping: {} across {} of {} attempts", "unchanged".green().bold(), change.successful_bindings, change.total_attempts),
-        "changed" => println!("  mapping: {} across {} of {} attempts", "CHANGED".red().bold(), change.successful_bindings, change.total_attempts),
+        "stable" => println!(
+            "  mapping: {} across {} of {} attempts",
+            "unchanged".green().bold(),
+            change.successful_bindings,
+            change.total_attempts
+        ),
+        "changed" => println!(
+            "  mapping: {} across {} of {} attempts",
+            "CHANGED".red().bold(),
+            change.successful_bindings,
+            change.total_attempts
+        ),
         _ => println!(
             "  mapping: {} (0 of {} attempts validated -- not evidence of stability)",
             "unavailable".yellow().bold(),
@@ -354,12 +460,15 @@ pub fn run(args: &StunTurnArgs) {
             println!("    lifetime_secs: {l}");
         }
         if t.outcome == "no_credentials_supplied" {
-            println!("    (pass --turn-username/--turn-password to attempt an authenticated allocation)");
+            println!(
+                "    (pass --turn-username/--turn-password to attempt an authenticated allocation)"
+            );
         }
     }
     println!();
 }
 
 fn fmt_ms(v: Option<f64>) -> String {
-    v.map(|v| format!("{v:.2}ms")).unwrap_or_else(|| "unavailable".to_string())
+    v.map(|v| format!("{v:.2}ms"))
+        .unwrap_or_else(|| "unavailable".to_string())
 }

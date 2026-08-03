@@ -20,11 +20,20 @@ pub fn run(args: &ProbeArgs) {
     use std::time::Duration;
     println!(
         "{}",
-        format!("Active PMTU probe {} -> {} on {}", args.min, args.max, args.iface)
-            .cyan()
-            .bold()
+        format!(
+            "Active PMTU probe {} -> {} on {}",
+            args.min, args.max, args.iface
+        )
+        .cyan()
+        .bold()
     );
-    match active_pmtu_probe(&args.iface, args.target, args.min, args.max, Duration::from_millis(1500)) {
+    match active_pmtu_probe(
+        &args.iface,
+        args.target,
+        args.min,
+        args.max,
+        Duration::from_millis(1500),
+    ) {
         Ok(r) => {
             println!("Samples tried: {:?}", r.samples_tried);
             println!("Frag needed seen: {}", r.frag_needed_reported);

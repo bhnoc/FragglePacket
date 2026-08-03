@@ -4,7 +4,9 @@ use colored::*;
 use std::fs;
 use std::time::Duration;
 
-use fraggle_packet::network_tests::policy_manifest::{DriftVerdict, ObservedOutcome, PolicyEntry, PolicyManifest, ReportMode};
+use fraggle_packet::network_tests::policy_manifest::{
+    DriftVerdict, ObservedOutcome, PolicyEntry, PolicyManifest, ReportMode,
+};
 
 #[derive(clap::Args, Debug)]
 pub struct PolicyManifestArgs {
@@ -42,7 +44,11 @@ pub fn run(args: &PolicyManifestArgs) {
 
     let manifest = PolicyManifest::new(entries);
     let results = manifest.run_all(Duration::from_secs(args.timeout_secs));
-    let mode = if args.attendee_facing { ReportMode::AttendeeFacing } else { ReportMode::Operator };
+    let mode = if args.attendee_facing {
+        ReportMode::AttendeeFacing
+    } else {
+        ReportMode::Operator
+    };
     let report = manifest.report(&results, mode);
 
     if args.json {
@@ -52,7 +58,13 @@ pub fn run(args: &PolicyManifestArgs) {
 
     println!(
         "{}",
-        format!("== Policy manifest ({} entries, mode={:?}) ==", manifest.entries().len(), mode).cyan().bold()
+        format!(
+            "== Policy manifest ({} entries, mode={:?}) ==",
+            manifest.entries().len(),
+            mode
+        )
+        .cyan()
+        .bold()
     );
     for r in &report {
         let dest = match (&r.destination_host, r.destination_port) {
@@ -73,13 +85,33 @@ pub fn run(args: &PolicyManifestArgs) {
         };
         println!(
             "  [{}] role={} zone={} proto={:?} expected={:?} observed={} drift={} ({}ms) -> {}",
-            r.entry_index, r.role, r.source_zone, r.protocol, r.expected, observed_str, drift_str, r.elapsed_ms, dest
+            r.entry_index,
+            r.role,
+            r.source_zone,
+            r.protocol,
+            r.expected,
+            observed_str,
+            drift_str,
+            r.elapsed_ms,
+            dest
         );
     }
 
-    let drift_count = report.iter().filter(|r| r.drift != DriftVerdict::MatchesExpectation).count();
+    let drift_count = report
+        .iter()
+        .filter(|r| r.drift != DriftVerdict::MatchesExpectation)
+        .count();
     if drift_count > 0 {
-        println!("{}", format!("-- {} entr{} show policy drift --", drift_count, if drift_count == 1 { "y" } else { "ies" }).red().bold());
+        println!(
+            "{}",
+            format!(
+                "-- {} entr{} show policy drift --",
+                drift_count,
+                if drift_count == 1 { "y" } else { "ies" }
+            )
+            .red()
+            .bold()
+        );
     } else {
         println!("{}", "-- no policy drift detected --".green());
     }

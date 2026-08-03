@@ -38,7 +38,9 @@ impl RadioTimeline {
         let baseline = self.before.association_fingerprint();
         let mut points = self.during.iter().collect::<Vec<_>>();
         points.push(&self.after);
-        points.iter().any(|s| s.association_fingerprint() != baseline)
+        points
+            .iter()
+            .any(|s| s.association_fingerprint() != baseline)
     }
 
     pub fn band_changed(&self) -> bool {
@@ -121,10 +123,18 @@ impl Validity {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StopReason {
     Completed,
-    AbortGatewayLatency { observed_ms: u64, threshold_ms: u64 },
-    AbortLoss { observed_pct_x100: u64, threshold_pct_x100: u64 },
+    AbortGatewayLatency {
+        observed_ms: u64,
+        threshold_ms: u64,
+    },
+    AbortLoss {
+        observed_pct_x100: u64,
+        threshold_pct_x100: u64,
+    },
     AbortAssociationChange,
-    AbortEndpointError { detail: String },
+    AbortEndpointError {
+        detail: String,
+    },
     OperatorCancelled,
 }
 
@@ -132,18 +142,26 @@ impl std::fmt::Display for StopReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             StopReason::Completed => write!(f, "completed"),
-            StopReason::AbortGatewayLatency { observed_ms, threshold_ms } => write!(
+            StopReason::AbortGatewayLatency {
+                observed_ms,
+                threshold_ms,
+            } => write!(
                 f,
                 "aborted: gateway latency {observed_ms}ms exceeded threshold {threshold_ms}ms"
             ),
-            StopReason::AbortLoss { observed_pct_x100, threshold_pct_x100 } => write!(
+            StopReason::AbortLoss {
+                observed_pct_x100,
+                threshold_pct_x100,
+            } => write!(
                 f,
                 "aborted: loss {:.2}% exceeded threshold {:.2}%",
                 *observed_pct_x100 as f64 / 100.0,
                 *threshold_pct_x100 as f64 / 100.0
             ),
             StopReason::AbortAssociationChange => write!(f, "aborted: association changed"),
-            StopReason::AbortEndpointError { detail } => write!(f, "aborted: endpoint error: {detail}"),
+            StopReason::AbortEndpointError { detail } => {
+                write!(f, "aborted: endpoint error: {detail}")
+            }
             StopReason::OperatorCancelled => write!(f, "aborted: operator cancellation (SIGINT)"),
         }
     }
@@ -420,7 +438,9 @@ impl LoadGuard {
                 bytes_transferred += tick.bytes_sent_delta;
 
                 if let Some(detail) = tick.endpoint_error {
-                    stop_reason = StopReason::AbortEndpointError { detail: detail.to_string() };
+                    stop_reason = StopReason::AbortEndpointError {
+                        detail: detail.to_string(),
+                    };
                     break 'ramp;
                 }
                 if let Some(ms) = tick.gateway_latency_ms {
@@ -445,7 +465,9 @@ impl LoadGuard {
                 {
                     let guard = during_radio.lock().unwrap();
                     if let Some(latest) = guard.last() {
-                        if latest.association_fingerprint() != before_radio.association_fingerprint() {
+                        if latest.association_fingerprint()
+                            != before_radio.association_fingerprint()
+                        {
                             stop_reason = StopReason::AbortAssociationChange;
                             break 'ramp;
                         }
@@ -527,7 +549,9 @@ impl LoadGuard {
                 // intercepted here: fabricated radio state cannot support
                 // "no roam, no weak RF, everything measured fine" as a
                 // conclusion, because nothing was actually measured.
-                _ if self.radio_source_is_synthetic => Validity::Invalid(InvalidReason::SyntheticRadioSource),
+                _ if self.radio_source_is_synthetic => {
+                    Validity::Invalid(InvalidReason::SyntheticRadioSource)
+                }
                 _ => Validity::Valid,
             }
         };
@@ -551,7 +575,11 @@ impl LoadGuard {
             raw,
             derived,
             default_route_is_tunnel: self.default_route_is_tunnel,
-            radio_source: if self.radio_source_is_synthetic { "synthetic" } else { "live" },
+            radio_source: if self.radio_source_is_synthetic {
+                "synthetic"
+            } else {
+                "live"
+            },
             rf_check_coverage_caveat: RF_CHECK_COVERAGE_CAVEAT,
         }
     }
@@ -615,7 +643,10 @@ mod tests {
             .unwrap()
             .with_sample_interval(Duration::from_millis(5));
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1000,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(report.validity, Validity::Valid);
@@ -639,12 +670,18 @@ mod tests {
             .unwrap()
             .with_sample_interval(Duration::from_millis(5));
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1000,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert!(!report.validity.is_valid());
         assert!(report.derived.is_none());
-        assert!(report.raw.bytes_transferred > 0, "raw evidence must be retained even when invalid");
+        assert!(
+            report.raw.bytes_transferred > 0,
+            "raw evidence must be retained even when invalid"
+        );
     }
 
     #[test]
@@ -670,10 +707,16 @@ mod tests {
             .unwrap()
             .with_sample_interval(Duration::from_millis(5));
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { endpoint_error: Some("connection reset"), ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                endpoint_error: Some("connection reset"),
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
-        assert!(matches!(report.stop_reason, StopReason::AbortEndpointError { .. }));
+        assert!(matches!(
+            report.stop_reason,
+            StopReason::AbortEndpointError { .. }
+        ));
     }
 
     #[test]
@@ -684,10 +727,16 @@ mod tests {
             .unwrap()
             .with_sample_interval(Duration::from_millis(5));
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { gateway_latency_ms: Some(9999.0), ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                gateway_latency_ms: Some(9999.0),
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
-        assert!(matches!(report.stop_reason, StopReason::AbortGatewayLatency { .. }));
+        assert!(matches!(
+            report.stop_reason,
+            StopReason::AbortGatewayLatency { .. }
+        ));
     }
 
     #[test]
@@ -701,7 +750,10 @@ mod tests {
         // 1000 Mbps / 5s target — this is the "0.82% of target" shape from
         // the field report, not an abort.
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(report.stop_reason, StopReason::Completed);
@@ -710,7 +762,10 @@ mod tests {
             Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
         );
         assert!(report.derived.is_none());
-        assert!(report.raw.bytes_transferred > 0, "raw evidence retained even when invalid");
+        assert!(
+            report.raw.bytes_transferred > 0,
+            "raw evidence retained even when invalid"
+        );
     }
 
     #[test]
@@ -728,7 +783,10 @@ mod tests {
         let report = guard.run(
             |_rate: f64, _elapsed: Duration| {
                 std::thread::sleep(Duration::from_millis(1500));
-                PhaseTick { bytes_sent_delta: 1_000_000, ..Default::default() }
+                PhaseTick {
+                    bytes_sent_delta: 1_000_000,
+                    ..Default::default()
+                }
             },
             Arc::new(AtomicBool::new(false)),
         );
@@ -752,10 +810,16 @@ mod tests {
             .unwrap()
             .with_sample_interval(Duration::from_millis(5));
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { endpoint_error: Some("reset"), ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                endpoint_error: Some("reset"),
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
-        assert!(matches!(report.stop_reason, StopReason::AbortEndpointError { .. }));
+        assert!(matches!(
+            report.stop_reason,
+            StopReason::AbortEndpointError { .. }
+        ));
         assert_ne!(
             report.validity,
             Validity::Invalid(InvalidReason::PhaseTargetUndershoot)
@@ -775,11 +839,17 @@ mod tests {
             .with_sample_interval(Duration::from_millis(5))
             .with_synthetic_radio_marker(true);
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1000,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(report.radio_source, "synthetic");
-        assert_eq!(report.validity, Validity::Invalid(InvalidReason::SyntheticRadioSource));
+        assert_eq!(
+            report.validity,
+            Validity::Invalid(InvalidReason::SyntheticRadioSource)
+        );
         assert!(report.derived.is_none());
     }
 
@@ -793,14 +863,21 @@ mod tests {
         let calls = std::sync::atomic::AtomicUsize::new(0);
         let radio = RadioSource::new(move || {
             let n = calls.fetch_add(1, Ordering::SeqCst);
-            if n == 0 { Ok(strong_snapshot()) } else { Ok(roamed_snapshot()) }
+            if n == 0 {
+                Ok(strong_snapshot())
+            } else {
+                Ok(roamed_snapshot())
+            }
         });
         let guard = LoadGuard::new(budget, "en0", false, radio, no_op_counters())
             .unwrap()
             .with_sample_interval(Duration::from_millis(5))
             .with_synthetic_radio_marker(true);
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1000,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(report.validity, Validity::Invalid(InvalidReason::Roamed));
@@ -815,7 +892,10 @@ mod tests {
             .with_sample_interval(Duration::from_millis(5))
             .with_synthetic_radio_marker(false);
         let report = guard.run(
-            |_rate: f64, _elapsed: Duration| PhaseTick { bytes_sent_delta: 1000, ..Default::default() },
+            |_rate: f64, _elapsed: Duration| PhaseTick {
+                bytes_sent_delta: 1000,
+                ..Default::default()
+            },
             Arc::new(AtomicBool::new(false)),
         );
         assert_eq!(report.radio_source, "live");

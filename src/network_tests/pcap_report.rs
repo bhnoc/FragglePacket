@@ -163,14 +163,29 @@ struct FlowKey {
 impl FlowKey {
     fn normalized(src_ip: [u8; 16], src_port: u16, dst_ip: [u8; 16], dst_port: u16) -> Self {
         if (src_ip, src_port) <= (dst_ip, dst_port) {
-            FlowKey { a_ip: src_ip, a_port: src_port, b_ip: dst_ip, b_port: dst_port }
+            FlowKey {
+                a_ip: src_ip,
+                a_port: src_port,
+                b_ip: dst_ip,
+                b_port: dst_port,
+            }
         } else {
-            FlowKey { a_ip: dst_ip, a_port: dst_port, b_ip: src_ip, b_port: src_port }
+            FlowKey {
+                a_ip: dst_ip,
+                a_port: dst_port,
+                b_ip: src_ip,
+                b_port: src_port,
+            }
         }
     }
 
     fn id(&self) -> (u128, u16, u128, u16) {
-        (u128::from_be_bytes(self.a_ip), self.a_port, u128::from_be_bytes(self.b_ip), self.b_port)
+        (
+            u128::from_be_bytes(self.a_ip),
+            self.a_port,
+            u128::from_be_bytes(self.b_ip),
+            self.b_port,
+        )
     }
 }
 
@@ -220,7 +235,8 @@ pub fn analyze_pcap<P: AsRef<Path>>(path: P) -> Result<PcapReport, PcapReportErr
 }
 
 fn analyze_pcap_classic<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapReportError> {
-    let mut pcap_reader = PcapReader::new(reader).map_err(|e| PcapReportError::Pcap(e.to_string()))?;
+    let mut pcap_reader =
+        PcapReader::new(reader).map_err(|e| PcapReportError::Pcap(e.to_string()))?;
     let header = pcap_reader.header();
 
     let mut acc = Accumulator::new(header.snaplen, datalink_name(header.datalink));
@@ -236,7 +252,8 @@ fn analyze_pcap_classic<R: Read>(path: &Path, reader: R) -> Result<PcapReport, P
 }
 
 fn analyze_pcapng<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapReportError> {
-    let mut pcapng_reader = PcapNgReader::new(reader).map_err(|e| PcapReportError::Pcap(e.to_string()))?;
+    let mut pcapng_reader =
+        PcapNgReader::new(reader).map_err(|e| PcapReportError::Pcap(e.to_string()))?;
 
     let mut acc: Option<Accumulator> = None;
     let mut isb_drop: Option<u64> = None;
@@ -248,7 +265,11 @@ fn analyze_pcapng<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapRep
 
         if let Some(idb) = block.as_interface_description() {
             if acc.is_none() {
-                let snaplen = if idb.snaplen == 0 { u32::MAX } else { idb.snaplen };
+                let snaplen = if idb.snaplen == 0 {
+                    u32::MAX
+                } else {
+                    idb.snaplen
+                };
                 acc = Some(Accumulator::new(snaplen, datalink_name(idb.linktype)));
             }
             for opt in &idb.options {
@@ -271,7 +292,11 @@ fn analyze_pcapng<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapRep
 
         if let Some(epb) = block.as_enhanced_packet() {
             let acc = acc.get_or_insert_with(|| Accumulator::new(u32::MAX, "Unknown".to_string()));
-            acc.observe(epb.original_len as u64, epb.data.as_ref(), Some(epb.timestamp));
+            acc.observe(
+                epb.original_len as u64,
+                epb.data.as_ref(),
+                Some(epb.timestamp),
+            );
             continue;
         }
 
@@ -286,7 +311,11 @@ fn analyze_pcapng<R: Read>(path: &Path, reader: R) -> Result<PcapReport, PcapRep
     let acc = acc.unwrap_or_else(|| Accumulator::new(u32::MAX, "Unknown".to_string()));
     // A pcapng file *can* carry isb_ifdrop; if we never saw an ISB block at
     // all, treat drops as unknown rather than assuming zero loss.
-    let drops = if saw_isb { Some(isb_drop.unwrap_or(0)) } else { None };
+    let drops = if saw_isb {
+        Some(isb_drop.unwrap_or(0))
+    } else {
+        None
+    };
     Ok(acc.finish(path, "pcapng", if_name, drops))
 }
 
@@ -445,7 +474,8 @@ impl Accumulator {
                 self.udp_bytes += orig_len;
                 let sp = udp.source_port();
                 let dp = udp.destination_port();
-                self.udp_flows.insert(FlowKey::normalized(src16, sp, dst16, dp).id());
+                self.udp_flows
+                    .insert(FlowKey::normalized(src16, sp, dst16, dp).id());
                 // QUIC has no fixed port, but the near-universal convention
                 // is UDP/443; a long-header Initial packet's first byte also
                 // has its top bit set (0x80) with version bits following.
@@ -523,7 +553,11 @@ impl Accumulator {
             let checksum_bad = tcp.checksum() == 0
                 || (frame_complete
                     && v4_addrs
-                        .map(|(s, d)| tcp.calc_checksum_ipv4(s, d).map(|c| c != tcp.checksum()).unwrap_or(false))
+                        .map(|(s, d)| {
+                            tcp.calc_checksum_ipv4(s, d)
+                                .map(|c| c != tcp.checksum())
+                                .unwrap_or(false)
+                        })
                         .unwrap_or(false));
             if checksum_bad {
                 self.tcp_checksum_zero += 1;
@@ -549,9 +583,17 @@ impl Accumulator {
                 }
 
                 let (max_seq_end, last_ack, dup_run) = if a_side {
-                    (&mut state.a_max_seq_end, &mut state.a_last_ack, &mut state.a_dup_ack_run)
+                    (
+                        &mut state.a_max_seq_end,
+                        &mut state.a_last_ack,
+                        &mut state.a_dup_ack_run,
+                    )
                 } else {
-                    (&mut state.b_max_seq_end, &mut state.b_last_ack, &mut state.b_dup_ack_run)
+                    (
+                        &mut state.b_max_seq_end,
+                        &mut state.b_last_ack,
+                        &mut state.b_dup_ack_run,
+                    )
                 };
 
                 if payload_len > 0 {
@@ -653,8 +695,15 @@ impl Accumulator {
 
         if let Some(name) = &if_name {
             let lname = name.to_lowercase();
-            if lname.starts_with("en") || lname.starts_with("eth") || lname.contains("wl") || lname.starts_with("utun") {
-                evidence.push(format!("interface name '{}' matches a host NIC naming convention", name));
+            if lname.starts_with("en")
+                || lname.starts_with("eth")
+                || lname.contains("wl")
+                || lname.starts_with("utun")
+            {
+                evidence.push(format!(
+                    "interface name '{}' matches a host NIC naming convention",
+                    name
+                ));
                 score_host += 1;
             }
         } else {
@@ -662,7 +711,14 @@ impl Accumulator {
         }
 
         let (vantage, confidence) = if score_host >= 3 {
-            (Vantage::HostOffloadSuspect, if score_host >= 5 { Confidence::High } else { Confidence::Medium })
+            (
+                Vantage::HostOffloadSuspect,
+                if score_host >= 5 {
+                    Confidence::High
+                } else {
+                    Confidence::Medium
+                },
+            )
         } else if score_wire > score_host {
             (Vantage::OnWireMirrorOrTap, Confidence::Low)
         } else if score_host > 0 {
@@ -715,7 +771,11 @@ impl Accumulator {
                 duration_secs,
                 drops_known,
             },
-            vantage: VantageClassification { vantage, confidence, evidence },
+            vantage: VantageClassification {
+                vantage,
+                confidence,
+                evidence,
+            },
             frame_size: FrameSizeAnalysis {
                 link_mtu_assumed: DEFAULT_LINK_MTU,
                 oversize_threshold: threshold,
@@ -804,7 +864,11 @@ pub fn compare_reports(reports: Vec<PcapReport>) -> PcapComparison {
         );
     }
 
-    PcapComparison { reports, any_offload_suspect, notes }
+    PcapComparison {
+        reports,
+        any_offload_suspect,
+        notes,
+    }
 }
 
 #[cfg(test)]

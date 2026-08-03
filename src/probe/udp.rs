@@ -17,7 +17,11 @@ pub fn probe_udp(target: IpAddr, payload_len: usize, timeout_ms: u64, retries: u
     false
 }
 
-pub fn send_udp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> std::io::Result<bool> {
+pub fn send_udp_probe(
+    target: IpAddr,
+    payload_len: usize,
+    timeout_ms: u64,
+) -> std::io::Result<bool> {
     use std::net::UdpSocket;
 
     // Bind to any available port
@@ -54,7 +58,7 @@ pub fn send_udp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> st
             // We can try to receive an ICMP error back
             let mut buf = [0u8; 1024];
             match socket.recv_from(&mut buf) {
-                Ok(_) => Ok(true),   // Got response
+                Ok(_) => Ok(true), // Got response
                 Err(e) => {
                     // Timeout is expected (no response = packet probably arrived)
                     // EMSGSIZE means too big
@@ -77,7 +81,13 @@ pub fn send_udp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> st
     }
 }
 
-pub fn binary_search_mtu_udp(target: IpAddr, min: usize, max: usize, timeout_ms: u64, retries: usize) -> Option<usize> {
+pub fn binary_search_mtu_udp(
+    target: IpAddr,
+    min: usize,
+    max: usize,
+    timeout_ms: u64,
+    retries: usize,
+) -> Option<usize> {
     // First check if UDP works at all
     if !probe_udp(target, 64, timeout_ms, 1) {
         return None;

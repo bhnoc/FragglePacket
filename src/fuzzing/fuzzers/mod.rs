@@ -1,27 +1,23 @@
 //! Fuzzing implementations for different attack vectors
 
-pub mod segment_size;
-pub mod length_mismatch;
-pub mod tcp_options;
-pub mod fragmentation;
 pub mod checksum;
+pub mod fragmentation;
+pub mod length_mismatch;
+pub mod segment_size;
+pub mod tcp_options;
 
-use crate::fuzzing::{PacketContext, PcapWriter, FuzzError};
+use crate::fuzzing::{FuzzError, PacketContext, PcapWriter};
 
 /// Trait for fuzzing strategies
 pub trait Fuzzer {
     /// Get the name of this fuzzer
     fn name(&self) -> &str;
-    
+
     /// Get a description of what this fuzzer tests
     fn description(&self) -> &str;
-    
+
     /// Run the fuzzing campaign
-    fn fuzz(
-        &self,
-        ctx: &PacketContext,
-        writer: &mut PcapWriter,
-    ) -> Result<usize, FuzzError>;
+    fn fuzz(&self, ctx: &PacketContext, writer: &mut PcapWriter) -> Result<usize, FuzzError>;
 }
 
 /// Segment size fuzzer struct
@@ -108,4 +104,3 @@ impl Fuzzer for ChecksumFuzzer {
         checksum::fuzz_to_writer(ctx, writer)
     }
 }
-

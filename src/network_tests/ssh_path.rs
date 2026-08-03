@@ -79,11 +79,8 @@ impl NetworkTest for SshDataPathTest {
     }
 
     fn run(&self, target: &str) -> Result<TestResult, Box<dyn Error>> {
-        let mut result = TestResult::new(
-            self.name().to_string(),
-            self.category(),
-            target.to_string(),
-        );
+        let mut result =
+            TestResult::new(self.name().to_string(), self.category(), target.to_string());
         result.add_metadata(
             "cli_banner",
             format!("nc -w 5 {} {} </dev/null", target, self.port),
@@ -112,8 +109,8 @@ impl NetworkTest for SshDataPathTest {
                 let out = run_ssh_exec(user, target, self.port, self.bulk_bytes);
                 match out {
                     Ok(text) => {
-                        let ok = text.contains("SSH_OK")
-                            && text.contains(&self.bulk_bytes.to_string());
+                        let ok =
+                            text.contains("SSH_OK") && text.contains(&self.bulk_bytes.to_string());
                         exec_ok = Some(ok);
                         result.add_metadata("ssh_exec_output", text);
                     }
@@ -184,12 +181,7 @@ fn read_banner(target: &str, port: u16, timeout_secs: u64) -> Option<String> {
     }
 }
 
-fn run_ssh_exec(
-    user: &str,
-    target: &str,
-    port: u16,
-    bulk_bytes: usize,
-) -> Result<String, String> {
+fn run_ssh_exec(user: &str, target: &str, port: u16, bulk_bytes: usize) -> Result<String, String> {
     let remote_cmd = format!(
         "printf 'SSH_OK\\n'; head -c {} /dev/zero | wc -c",
         bulk_bytes

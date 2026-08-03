@@ -11,7 +11,10 @@ pub struct RouteInfo {
 }
 
 pub fn is_tunnel_interface(name: &str) -> bool {
-    name.starts_with("utun") || name.starts_with("tun") || name.starts_with("ppp") || name.starts_with("ipsec")
+    name.starts_with("utun")
+        || name.starts_with("tun")
+        || name.starts_with("ppp")
+        || name.starts_with("ipsec")
 }
 
 /// Parses `route -n get default` output for the `interface:` line.
@@ -45,8 +48,10 @@ pub fn detect_live() -> Result<RouteInfo, String> {
 mod tests {
     use super::*;
 
-    const TUNNEL_ROUTE: &str = "   route to: default\ndestination: default\n       mask: default\n  interface: utun6\n";
-    const WIFI_ROUTE: &str = "   route to: default\ndestination: default\n       mask: default\n  interface: en0\n";
+    const TUNNEL_ROUTE: &str =
+        "   route to: default\ndestination: default\n       mask: default\n  interface: utun6\n";
+    const WIFI_ROUTE: &str =
+        "   route to: default\ndestination: default\n       mask: default\n  interface: en0\n";
 
     #[test]
     fn detects_tunnel_default_route() {

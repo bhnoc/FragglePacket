@@ -4,10 +4,10 @@
 //! protocol testing, and packet fuzzing capabilities.
 
 mod app;
-mod state;
 mod components;
-mod theme;
+mod state;
 mod test_registration;
+mod theme;
 mod window_manager;
 
 fn main() {
@@ -17,12 +17,9 @@ fn main() {
             dioxus::desktop::WindowBuilder::new()
                 .with_title("FragglePacket")
                 .with_inner_size(dioxus::desktop::LogicalSize::new(1280.0, 800.0))
-                .with_min_inner_size(dioxus::desktop::LogicalSize::new(800.0, 600.0))
+                .with_min_inner_size(dioxus::desktop::LogicalSize::new(800.0, 600.0)),
         )
-        .with_custom_head(format!(
-            r#"<style>{}</style>"#,
-            theme::get_css()
-        ));
+        .with_custom_head(format!(r#"<style>{}</style>"#, theme::get_css()));
 
     dioxus::LaunchBuilder::desktop()
         .with_cfg(cfg)

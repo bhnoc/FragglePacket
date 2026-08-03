@@ -10,7 +10,13 @@ pub const ICMP_ECHO_REQUEST: u8 = 8;
 pub const ICMP_HEADER_SIZE: usize = 8;
 pub const IP_HEADER_SIZE: usize = 20;
 
-pub fn binary_search_mtu_icmp(target: IpAddr, min: usize, max: usize, timeout_ms: u64, retries: usize) -> usize {
+pub fn binary_search_mtu_icmp(
+    target: IpAddr,
+    min: usize,
+    max: usize,
+    timeout_ms: u64,
+    retries: usize,
+) -> usize {
     let mut low = min;
     let mut high = max;
     let mut best = min;
@@ -42,8 +48,16 @@ pub fn probe_icmp(target: IpAddr, payload_len: usize, timeout_ms: u64, retries: 
     false
 }
 
-pub fn send_icmp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> std::io::Result<bool> {
-    let socket = Socket::new(Domain::IPV4, Type::from(libc::SOCK_RAW), Some(Protocol::ICMPV4))?;
+pub fn send_icmp_probe(
+    target: IpAddr,
+    payload_len: usize,
+    timeout_ms: u64,
+) -> std::io::Result<bool> {
+    let socket = Socket::new(
+        Domain::IPV4,
+        Type::from(libc::SOCK_RAW),
+        Some(Protocol::ICMPV4),
+    )?;
 
     // Set DF bit on Linux
     #[cfg(target_os = "linux")]
@@ -106,9 +120,8 @@ pub fn send_icmp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> s
 
         match socket.recv_from(&mut buffer) {
             Ok((size, _)) => {
-                let received = unsafe {
-                    std::slice::from_raw_parts(buffer[0].as_ptr() as *const u8, size)
-                };
+                let received =
+                    unsafe { std::slice::from_raw_parts(buffer[0].as_ptr() as *const u8, size) };
 
                 if received.len() < 20 + ICMP_HEADER_SIZE {
                     continue;
@@ -125,9 +138,9 @@ pub fn send_icmp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> s
                 if icmp[0] == 0 {
                     let reply_id = ((icmp[4] as u16) << 8) | (icmp[5] as u16);
                     if reply_id == id {
-                    return Ok(true);
+                        return Ok(true);
+                    }
                 }
-            }
             }
             Err(_) => return Ok(false),
         }

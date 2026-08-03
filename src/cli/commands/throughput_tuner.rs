@@ -5,8 +5,8 @@ use std::process::{Command, Stdio};
 
 use fraggle_packet::network_tests::iperf::{parse_iperf_json, IperfParseError, IperfResult};
 use fraggle_packet::network_tests::throughput_tuner::{
-    build_verdict, detect_preflight_limits, evaluate_trial, preflight_candidate, randomize_candidates,
-    Candidate, DriftBracket, PreflightVerdict, TrialResult,
+    build_verdict, detect_preflight_limits, evaluate_trial, preflight_candidate,
+    randomize_candidates, Candidate, DriftBracket, PreflightVerdict, TrialResult,
 };
 
 #[derive(clap::Args, Debug)]
@@ -58,13 +58,23 @@ pub struct ThroughputTunerArgs {
 /// tuner needs to vary as its candidate dimensions, so the client is
 /// invoked directly here; the output is still parsed via the shared
 /// `parse_iperf_json` rather than a second parser.
-fn run_iperf(host: &str, port: u16, candidate: Candidate, duration_secs: u64) -> Result<IperfResult, IperfParseError> {
+fn run_iperf(
+    host: &str,
+    port: u16,
+    candidate: Candidate,
+    duration_secs: u64,
+) -> Result<IperfResult, IperfParseError> {
     let mut args: Vec<String> = vec![
-        "-c".into(), host.to_string(),
-        "-p".into(), port.to_string(),
-        "-P".into(), candidate.streams.to_string(),
-        "-l".into(), format!("{}K", candidate.block_size_kib),
-        "-t".into(), duration_secs.to_string(),
+        "-c".into(),
+        host.to_string(),
+        "-p".into(),
+        port.to_string(),
+        "-P".into(),
+        candidate.streams.to_string(),
+        "-l".into(),
+        format!("{}K", candidate.block_size_kib),
+        "-t".into(),
+        duration_secs.to_string(),
         "-J".into(),
     ];
     if candidate.zero_copy {
@@ -86,7 +96,11 @@ pub fn run(args: &ThroughputTunerArgs) {
     let mut candidates = Vec::new();
     for &s in &args.streams {
         for &b in &args.block_sizes_kib {
-            candidates.push(Candidate { streams: s, block_size_kib: b, zero_copy: args.zero_copy });
+            candidates.push(Candidate {
+                streams: s,
+                block_size_kib: b,
+                zero_copy: args.zero_copy,
+            });
         }
     }
     let candidates = randomize_candidates(candidates, args.seed);
@@ -101,7 +115,11 @@ pub fn run(args: &ThroughputTunerArgs) {
             continue;
         }
         let parsed = run_iperf(&args.host, args.port, *candidate, args.trial_duration_secs);
-        trials.push(evaluate_trial(*candidate, args.trial_duration_secs as f64, &parsed));
+        trials.push(evaluate_trial(
+            *candidate,
+            args.trial_duration_secs as f64,
+            &parsed,
+        ));
     }
 
     let representative = Candidate {
@@ -110,25 +128,44 @@ pub fn run(args: &ThroughputTunerArgs) {
         zero_copy: args.zero_copy,
     };
     if !trials.iter().any(|t| t.candidate == representative) {
-        let parsed = run_iperf(&args.host, args.port, representative, args.trial_duration_secs);
-        trials.push(evaluate_trial(representative, args.trial_duration_secs as f64, &parsed));
+        let parsed = run_iperf(
+            &args.host,
+            args.port,
+            representative,
+            args.trial_duration_secs,
+        );
+        trials.push(evaluate_trial(
+            representative,
+            args.trial_duration_secs as f64,
+            &parsed,
+        ));
     }
 
     let drift = if args.drift_baseline_repeats >= 2 {
         let mut samples = Vec::new();
         for _ in 0..args.drift_baseline_repeats {
-            if let Ok(result) = run_iperf(&args.host, args.port, representative, args.trial_duration_secs) {
+            if let Ok(result) = run_iperf(
+                &args.host,
+                args.port,
+                representative,
+                args.trial_duration_secs,
+            ) {
                 if let Some(r) = result.forward.received {
                     samples.push(r.bits_per_second);
                 }
             }
         }
-        Some(DriftBracket { samples_bps: samples })
+        Some(DriftBracket {
+            samples_bps: samples,
+        })
     } else {
         None
     };
 
-    let cohort_label = args.cohort_label.clone().unwrap_or_else(|| "unspecified-cohort".to_string());
+    let cohort_label = args
+        .cohort_label
+        .clone()
+        .unwrap_or_else(|| "unspecified-cohort".to_string());
     let verdict = build_verdict(&cohort_label, trials, representative, drift);
 
     if args.json {
@@ -143,26 +180,46 @@ pub fn run(args: &ThroughputTunerArgs) {
 
     println!("{}", "== Throughput Tuner ==".cyan().bold());
     println!("  cohort: {}", verdict.cohort.cohort_label);
-    match (verdict.synthetic_maximum_bps, verdict.synthetic_maximum_candidate) {
+    match (
+        verdict.synthetic_maximum_bps,
+        verdict.synthetic_maximum_candidate,
+    ) {
         (Some(bps), Some(c)) => println!(
             "  synthetic maximum: {:.1} Mbps @ {} streams / {} KiB / zero_copy={}",
-            bps / 1_000_000.0, c.streams, c.block_size_kib, c.zero_copy
+            bps / 1_000_000.0,
+            c.streams,
+            c.block_size_kib,
+            c.zero_copy
         ),
-        _ => println!("  synthetic maximum: {}", "no valid trial completed".yellow()),
+        _ => println!(
+            "  synthetic maximum: {}",
+            "no valid trial completed".yellow()
+        ),
     }
     match verdict.representative_application_bps {
-        Some(bps) => println!("  representative-application: {:.1} Mbps @ {:?}", bps / 1_000_000.0, verdict.representative_candidate),
-        None => println!("  representative-application: {}", "no valid trial completed".yellow()),
+        Some(bps) => println!(
+            "  representative-application: {:.1} Mbps @ {:?}",
+            bps / 1_000_000.0,
+            verdict.representative_candidate
+        ),
+        None => println!(
+            "  representative-application: {}",
+            "no valid trial completed".yellow()
+        ),
     }
     if verdict.drift_provisional {
-        println!("  {}", "WARNING: endpoint drift is severe; this profile is provisional".yellow());
+        println!(
+            "  {}",
+            "WARNING: endpoint drift is severe; this profile is provisional".yellow()
+        );
     }
     if !verdict.rejected_trials.is_empty() {
         println!("  rejected trials (never scored):");
         for t in &verdict.rejected_trials {
             println!(
                 "    {:?} streams/{} KiB -- {}",
-                t.candidate.streams, t.candidate.block_size_kib,
+                t.candidate.streams,
+                t.candidate.block_size_kib,
                 t.rejected_reason.as_deref().unwrap_or("unknown")
             );
         }
@@ -170,7 +227,10 @@ pub fn run(args: &ThroughputTunerArgs) {
     if !preflight_skips.is_empty() {
         println!("  preflight-skipped candidates (never attempted):");
         for (c, v) in &preflight_skips {
-            println!("    {} streams/{} KiB -- {:?}", c.streams, c.block_size_kib, v);
+            println!(
+                "    {} streams/{} KiB -- {:?}",
+                c.streams, c.block_size_kib, v
+            );
         }
     }
 }

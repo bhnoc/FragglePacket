@@ -20,12 +20,11 @@ pub fn fuzz_to_writer(ctx: &PacketContext, writer: &mut PcapWriter) -> Result<us
     // Test sizes (much smaller to avoid snaplen issues)
     let sizes = vec![
         // Tiny segments (0-9 bytes)
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        // Edge cases
-        536,   // Minimum MSS
-        1460,  // Standard MSS
-        1500,  // MTU boundary
-        4096,  // Small jumbo
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, // Edge cases
+        536,  // Minimum MSS
+        1460, // Standard MSS
+        1500, // MTU boundary
+        4096, // Small jumbo
     ];
 
     for size in sizes {
@@ -54,11 +53,10 @@ mod tests {
     fn test_segment_size_fuzzer() {
         let ctx = PacketContext::new("192.168.1.1", "8.8.8.8").unwrap();
         let output = "/tmp/test_segment_size.pcap";
-        
+
         let packets = fuzz(&ctx, output).unwrap();
-        assert_eq!(packets, 14);  // Actual count from fuzzer // 10 + 7 = 17 packets
-        
+        assert_eq!(packets, 14); // Actual count from fuzzer // 10 + 7 = 17 packets
+
         std::fs::remove_file(output).ok();
     }
 }
-

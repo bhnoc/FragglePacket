@@ -59,7 +59,11 @@ impl SizePoint {
         ip_family: Option<IpFamily>,
         mtu_safe: bool,
     ) -> Self {
-        let offered_pps = if elapsed_secs > 0.0 { offered_count as f64 / elapsed_secs } else { 0.0 };
+        let offered_pps = if elapsed_secs > 0.0 {
+            offered_count as f64 / elapsed_secs
+        } else {
+            0.0
+        };
         let offered_bps = offered_pps * payload_size as f64 * 8.0;
         let (received_pps, received_bps) = if elapsed_secs > 0.0 && offered_count > 0 {
             let pps = received_count as f64 / elapsed_secs;
@@ -68,7 +72,10 @@ impl SizePoint {
             (None, None)
         };
         let loss_percent = if offered_count > 0 {
-            Some(((offered_count - received_count.min(offered_count)) as f64 / offered_count as f64) * 100.0)
+            Some(
+                ((offered_count - received_count.min(offered_count)) as f64 / offered_count as f64)
+                    * 100.0,
+            )
         } else {
             None
         };
@@ -142,13 +149,19 @@ pub fn classify_pressure(matrix: &SizeRateMatrix) -> PressureVerdict {
     let packet_ceiling_signature = byte_rate_endpoints.map(|(smallest, largest)| {
         // Held byte rate constant, size shrank (packet rate rose): loss
         // rising at the smallest size is the packet-rate-ceiling signature.
-        material_rise(largest.loss_percent.unwrap(), smallest.loss_percent.unwrap())
+        material_rise(
+            largest.loss_percent.unwrap(),
+            smallest.loss_percent.unwrap(),
+        )
     });
 
     let byte_policing_signature = packet_rate_endpoints.map(|(smallest, largest)| {
         // Held packet rate constant, size grew (byte rate rose): loss
         // rising at the largest size is the byte-rate-policing signature.
-        material_rise(smallest.loss_percent.unwrap(), largest.loss_percent.unwrap())
+        material_rise(
+            smallest.loss_percent.unwrap(),
+            largest.loss_percent.unwrap(),
+        )
     });
 
     match (packet_ceiling_signature, byte_policing_signature) {
@@ -262,7 +275,10 @@ mod tests {
             constant_byte_rate: vec![point(1000, 100, 95, 1.0)],
             constant_packet_rate: vec![point(1000, 100, 95, 1.0)],
         };
-        assert!(matches!(classify_pressure(&matrix), PressureVerdict::Inconclusive { .. }));
+        assert!(matches!(
+            classify_pressure(&matrix),
+            PressureVerdict::Inconclusive { .. }
+        ));
     }
 
     #[test]

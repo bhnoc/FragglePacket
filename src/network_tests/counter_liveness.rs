@@ -131,7 +131,12 @@ const RESET_MAX_MAGNITUDE_VS_STIMULUS: f64 = 50.0;
 /// unattributable anomaly.
 const WRAP_TOLERANCE_PACKETS: i128 = 10_000;
 
-pub fn classify_delta(source_name: &str, stimulus_packets_sent: u64, before: u64, after: u64) -> LivenessBracket {
+pub fn classify_delta(
+    source_name: &str,
+    stimulus_packets_sent: u64,
+    before: u64,
+    after: u64,
+) -> LivenessBracket {
     let delta: i128 = after as i128 - before as i128;
     let stimulus = stimulus_packets_sent as i128;
 
@@ -220,7 +225,9 @@ fn magnitude_or_zero(delta: i128) -> i128 {
 /// packets.
 pub fn send_loopback_stimulus(packet_count: u64, payload_len: usize) -> Result<u64, String> {
     let receiver = UdpSocket::bind("127.0.0.1:0").map_err(|e| format!("bind receiver: {e}"))?;
-    let receiver_addr = receiver.local_addr().map_err(|e| format!("receiver addr: {e}"))?;
+    let receiver_addr = receiver
+        .local_addr()
+        .map_err(|e| format!("receiver addr: {e}"))?;
     receiver.set_nonblocking(true).ok();
 
     let sender = UdpSocket::bind("127.0.0.1:0").map_err(|e| format!("bind sender: {e}"))?;
@@ -298,12 +305,16 @@ pub fn qualify_zero_drop_claim(
         };
     }
 
-    let all_agree_zero = primary_drops_observed == 0 && corroborating_sources.iter().all(|(_, d)| *d == 0);
+    let all_agree_zero =
+        primary_drops_observed == 0 && corroborating_sources.iter().all(|(_, d)| *d == 0);
 
     ZeroDropVerdict {
         primary_source: primary_source.to_string(),
         primary_live: true,
-        corroborating_sources: corroborating_sources.iter().map(|(n, _)| n.clone()).collect(),
+        corroborating_sources: corroborating_sources
+            .iter()
+            .map(|(n, _)| n.clone())
+            .collect(),
         verdict: Some(all_agree_zero),
         explanation: if all_agree_zero {
             format!(
@@ -323,13 +334,19 @@ mod tests {
     #[test]
     fn right_anchored_parse_handles_link_row_with_no_address_column() {
         let sample = "Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll\nlo0        16384 <Link#1>                      198863802     0 2278739684880 198863802     0 2278739684880     0\n";
-        assert_eq!(parse_rx_packets_right_anchored(sample, "lo0"), Some(198863802));
+        assert_eq!(
+            parse_rx_packets_right_anchored(sample, "lo0"),
+            Some(198863802)
+        );
     }
 
     #[test]
     fn right_anchored_parse_handles_link_row_with_address_column() {
         let sample = "Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll\nen0        1500  <Link#14>   ca:86:b7:85:e2:33 32826500     0 42035483011 36105402     0 46481108372     0\n";
-        assert_eq!(parse_rx_packets_right_anchored(sample, "en0"), Some(32826500));
+        assert_eq!(
+            parse_rx_packets_right_anchored(sample, "en0"),
+            Some(32826500)
+        );
     }
 
     #[test]

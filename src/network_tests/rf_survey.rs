@@ -48,13 +48,22 @@ pub struct Metric<T> {
 
 impl<T> Metric<T> {
     pub fn measured(value: T) -> Self {
-        Self { value: Some(value), obtainability: Obtainability::Measured }
+        Self {
+            value: Some(value),
+            obtainability: Obtainability::Measured,
+        }
     }
     pub fn platform_limited() -> Self {
-        Self { value: None, obtainability: Obtainability::PlatformLimited }
+        Self {
+            value: None,
+            obtainability: Obtainability::PlatformLimited,
+        }
     }
     pub fn operator_supplied(value: T) -> Self {
-        Self { value: Some(value), obtainability: Obtainability::OperatorSupplied }
+        Self {
+            value: Some(value),
+            obtainability: Obtainability::OperatorSupplied,
+        }
     }
 }
 
@@ -85,13 +94,30 @@ impl RfSample {
     /// Builds a sample from a `RadioSnapshot`, the only always-available
     /// source on this platform. Fields the snapshot cannot carry (from
     /// either the fast or slow path) are explicitly `platform_limited`.
-    pub fn from_radio_snapshot(elapsed_secs: f64, snap: &RadioSnapshot, location_label: Option<String>) -> Self {
+    pub fn from_radio_snapshot(
+        elapsed_secs: f64,
+        snap: &RadioSnapshot,
+        location_label: Option<String>,
+    ) -> Self {
         Self {
             elapsed_secs,
-            channel: snap.channel.map(Metric::measured).unwrap_or_else(Metric::platform_limited),
-            band: snap.band.clone().map(Metric::measured).unwrap_or_else(Metric::platform_limited),
-            rssi_dbm: snap.rssi_dbm.map(Metric::measured).unwrap_or_else(Metric::platform_limited),
-            noise_dbm: snap.noise_dbm.map(Metric::measured).unwrap_or_else(Metric::platform_limited),
+            channel: snap
+                .channel
+                .map(Metric::measured)
+                .unwrap_or_else(Metric::platform_limited),
+            band: snap
+                .band
+                .clone()
+                .map(Metric::measured)
+                .unwrap_or_else(Metric::platform_limited),
+            rssi_dbm: snap
+                .rssi_dbm
+                .map(Metric::measured)
+                .unwrap_or_else(Metric::platform_limited),
+            noise_dbm: snap
+                .noise_dbm
+                .map(Metric::measured)
+                .unwrap_or_else(Metric::platform_limited),
             // None of these are ever obtainable from RadioSnapshot on this
             // platform (ioreg and system_profiler both lack them), so they
             // are unconditionally platform-limited from this constructor.
@@ -193,8 +219,15 @@ pub struct ChangePoint {
 /// this metric; fewer than two returns an empty list with no claim of "no
 /// change" -- that would misrepresent "we don't know" as "we checked and
 /// nothing changed."
-pub fn detect_utilization_change_points(series: &RfTimeSeries, threshold_pct: f64) -> Vec<ChangePoint> {
-    let usable: Vec<&RfSample> = series.samples.iter().filter(|s| s.channel_utilization_pct.value.is_some()).collect();
+pub fn detect_utilization_change_points(
+    series: &RfTimeSeries,
+    threshold_pct: f64,
+) -> Vec<ChangePoint> {
+    let usable: Vec<&RfSample> = series
+        .samples
+        .iter()
+        .filter(|s| s.channel_utilization_pct.value.is_some())
+        .collect();
     if usable.len() < 2 {
         return Vec::new();
     }
@@ -235,16 +268,25 @@ pub struct Correlation {
 /// entries). A change point overlapping zero events is still returned with
 /// an empty `overlapping_events` -- that is itself informative (unexplained
 /// interference), distinct from there being no change points to begin with.
-pub fn correlate_change_points(change_points: &[ChangePoint], events: &[EventWindow]) -> Vec<Correlation> {
+pub fn correlate_change_points(
+    change_points: &[ChangePoint],
+    events: &[EventWindow],
+) -> Vec<Correlation> {
     change_points
         .iter()
         .map(|cp| {
             let overlapping: Vec<String> = events
                 .iter()
-                .filter(|e| cp.to_elapsed_secs >= e.start_elapsed_secs && cp.from_elapsed_secs <= e.end_elapsed_secs)
+                .filter(|e| {
+                    cp.to_elapsed_secs >= e.start_elapsed_secs
+                        && cp.from_elapsed_secs <= e.end_elapsed_secs
+                })
                 .map(|e| e.label.clone())
                 .collect();
-            Correlation { change_point: cp.clone(), overlapping_events: overlapping }
+            Correlation {
+                change_point: cp.clone(),
+                overlapping_events: overlapping,
+            }
         })
         .collect()
 }
@@ -270,10 +312,16 @@ pub fn build_coverage_map(series: &RfTimeSeries) -> Result<Vec<CoveragePoint>, S
     use std::collections::HashMap;
     let mut groups: HashMap<String, Vec<&RfSample>> = HashMap::new();
     for s in &series.samples {
-        let label = s.location_label.clone().unwrap_or_else(|| "unlabeled".to_string());
+        let label = s
+            .location_label
+            .clone()
+            .unwrap_or_else(|| "unlabeled".to_string());
         for bad in FORBIDDEN_SUBSTRINGS {
             if label.contains(bad) {
-                return Err(format!("location label contains forbidden identifier substring '{}'", bad));
+                return Err(format!(
+                    "location label contains forbidden identifier substring '{}'",
+                    bad
+                ));
             }
         }
         groups.entry(label).or_default().push(s);
@@ -282,12 +330,27 @@ pub fn build_coverage_map(series: &RfTimeSeries) -> Result<Vec<CoveragePoint>, S
     let mut points: Vec<CoveragePoint> = groups
         .into_iter()
         .map(|(label, samples)| {
-            let rssi_vals: Vec<f64> = samples.iter().filter_map(|s| s.rssi_dbm.value).map(|v| v as f64).collect();
-            let util_vals: Vec<f64> = samples.iter().filter_map(|s| s.channel_utilization_pct.value).collect();
+            let rssi_vals: Vec<f64> = samples
+                .iter()
+                .filter_map(|s| s.rssi_dbm.value)
+                .map(|v| v as f64)
+                .collect();
+            let util_vals: Vec<f64> = samples
+                .iter()
+                .filter_map(|s| s.channel_utilization_pct.value)
+                .collect();
             CoveragePoint {
                 location_label: label,
-                mean_rssi_dbm: if rssi_vals.is_empty() { None } else { Some(rssi_vals.iter().sum::<f64>() / rssi_vals.len() as f64) },
-                mean_utilization_pct: if util_vals.is_empty() { None } else { Some(util_vals.iter().sum::<f64>() / util_vals.len() as f64) },
+                mean_rssi_dbm: if rssi_vals.is_empty() {
+                    None
+                } else {
+                    Some(rssi_vals.iter().sum::<f64>() / rssi_vals.len() as f64)
+                },
+                mean_utilization_pct: if util_vals.is_empty() {
+                    None
+                } else {
+                    Some(util_vals.iter().sum::<f64>() / util_vals.len() as f64)
+                },
                 sample_count: samples.len(),
             }
         })
@@ -305,9 +368,13 @@ mod tests {
             elapsed_secs: elapsed,
             channel: Metric::platform_limited(),
             band: Metric::platform_limited(),
-            rssi_dbm: rssi.map(Metric::measured).unwrap_or_else(Metric::platform_limited),
+            rssi_dbm: rssi
+                .map(Metric::measured)
+                .unwrap_or_else(Metric::platform_limited),
             noise_dbm: Metric::platform_limited(),
-            channel_utilization_pct: util.map(Metric::operator_supplied).unwrap_or_else(Metric::platform_limited),
+            channel_utilization_pct: util
+                .map(Metric::operator_supplied)
+                .unwrap_or_else(Metric::platform_limited),
             retries_pct: Metric::platform_limited(),
             dfs_radar_event: Metric::platform_limited(),
             neighboring_bss_count: Metric::platform_limited(),
@@ -326,22 +393,51 @@ mod tests {
 
     #[test]
     fn radio_snapshot_conversion_marks_utilization_platform_limited() {
-        let snap = RadioSnapshot { associated: true, band: Some("6GHz".into()), channel: Some(197), width_mhz: Some(80), rssi_dbm: Some(-59), noise_dbm: Some(-94), tx_rate_mbps: Some(680.0), mcs_index: Some(7), phy_mode: Some("802.11ax".into()) };
+        let snap = RadioSnapshot {
+            associated: true,
+            band: Some("6GHz".into()),
+            channel: Some(197),
+            width_mhz: Some(80),
+            rssi_dbm: Some(-59),
+            noise_dbm: Some(-94),
+            tx_rate_mbps: Some(680.0),
+            mcs_index: Some(7),
+            phy_mode: Some("802.11ax".into()),
+        };
         let s = RfSample::from_radio_snapshot(0.0, &snap, None);
         assert_eq!(s.rssi_dbm.value, Some(-59));
-        assert_eq!(s.channel_utilization_pct.obtainability, Obtainability::PlatformLimited);
+        assert_eq!(
+            s.channel_utilization_pct.obtainability,
+            Obtainability::PlatformLimited
+        );
         assert_eq!(s.channel_utilization_pct.value, None);
         assert_eq!(s.retries_pct.obtainability, Obtainability::PlatformLimited);
     }
 
     #[test]
     fn operator_supplied_telemetry_fills_gaps_without_overwriting_measured() {
-        let snap = RadioSnapshot { associated: true, band: Some("6GHz".into()), channel: Some(197), width_mhz: Some(80), rssi_dbm: Some(-59), noise_dbm: Some(-94), tx_rate_mbps: None, mcs_index: None, phy_mode: None };
+        let snap = RadioSnapshot {
+            associated: true,
+            band: Some("6GHz".into()),
+            channel: Some(197),
+            width_mhz: Some(80),
+            rssi_dbm: Some(-59),
+            noise_dbm: Some(-94),
+            tx_rate_mbps: None,
+            mcs_index: None,
+            phy_mode: None,
+        };
         let mut s = RfSample::from_radio_snapshot(0.0, &snap, None);
-        let ext = ExternalTelemetry { channel_utilization_pct: Some(42.0), ..Default::default() };
+        let ext = ExternalTelemetry {
+            channel_utilization_pct: Some(42.0),
+            ..Default::default()
+        };
         s.merge_operator_supplied(&ext);
         assert_eq!(s.channel_utilization_pct.value, Some(42.0));
-        assert_eq!(s.channel_utilization_pct.obtainability, Obtainability::OperatorSupplied);
+        assert_eq!(
+            s.channel_utilization_pct.obtainability,
+            Obtainability::OperatorSupplied
+        );
         // rssi was already measured -- must not be touched by the merge.
         assert_eq!(s.rssi_dbm.value, Some(-59));
         assert_eq!(s.rssi_dbm.obtainability, Obtainability::Measured);
@@ -350,7 +446,10 @@ mod tests {
     #[test]
     fn change_point_detection_requires_at_least_two_usable_samples() {
         let series = RfTimeSeries {
-            plan: SurveyPlan { sample_count: 1, interval_secs: 1.0 },
+            plan: SurveyPlan {
+                sample_count: 1,
+                interval_secs: 1.0,
+            },
             samples: vec![sample(0.0, Some(10.0), None, None)],
         };
         assert!(detect_utilization_change_points(&series, 5.0).is_empty());
@@ -359,7 +458,10 @@ mod tests {
     #[test]
     fn change_point_detected_on_material_utilization_jump() {
         let series = RfTimeSeries {
-            plan: SurveyPlan { sample_count: 3, interval_secs: 60.0 },
+            plan: SurveyPlan {
+                sample_count: 3,
+                interval_secs: 60.0,
+            },
             samples: vec![
                 sample(0.0, Some(5.0), None, None),
                 sample(60.0, Some(8.0), None, None),
@@ -374,15 +476,34 @@ mod tests {
 
     #[test]
     fn correlation_links_change_point_to_overlapping_event_window() {
-        let cp = ChangePoint { metric: "channel_utilization_pct".to_string(), from_elapsed_secs: 60.0, to_elapsed_secs: 120.0, from_value: 8.0, to_value: 55.0 };
-        let events = vec![EventWindow { label: "09:00 training room fills".to_string(), start_elapsed_secs: 90.0, end_elapsed_secs: 200.0 }];
+        let cp = ChangePoint {
+            metric: "channel_utilization_pct".to_string(),
+            from_elapsed_secs: 60.0,
+            to_elapsed_secs: 120.0,
+            from_value: 8.0,
+            to_value: 55.0,
+        };
+        let events = vec![EventWindow {
+            label: "09:00 training room fills".to_string(),
+            start_elapsed_secs: 90.0,
+            end_elapsed_secs: 200.0,
+        }];
         let correlations = correlate_change_points(&[cp], &events);
-        assert_eq!(correlations[0].overlapping_events, vec!["09:00 training room fills".to_string()]);
+        assert_eq!(
+            correlations[0].overlapping_events,
+            vec!["09:00 training room fills".to_string()]
+        );
     }
 
     #[test]
     fn correlation_reports_empty_overlap_distinct_from_no_change_points() {
-        let cp = ChangePoint { metric: "channel_utilization_pct".to_string(), from_elapsed_secs: 60.0, to_elapsed_secs: 120.0, from_value: 8.0, to_value: 55.0 };
+        let cp = ChangePoint {
+            metric: "channel_utilization_pct".to_string(),
+            from_elapsed_secs: 60.0,
+            to_elapsed_secs: 120.0,
+            from_value: 8.0,
+            to_value: 55.0,
+        };
         let correlations = correlate_change_points(&[cp], &[]);
         assert_eq!(correlations.len(), 1);
         assert!(correlations[0].overlapping_events.is_empty());
@@ -391,8 +512,14 @@ mod tests {
     #[test]
     fn coverage_map_never_contains_ssid_bssid_mac() {
         let series = RfTimeSeries {
-            plan: SurveyPlan { sample_count: 2, interval_secs: 1.0 },
-            samples: vec![sample(0.0, Some(10.0), Some(-60), Some("room-a")), sample(1.0, Some(12.0), Some(-62), Some("room-a"))],
+            plan: SurveyPlan {
+                sample_count: 2,
+                interval_secs: 1.0,
+            },
+            samples: vec![
+                sample(0.0, Some(10.0), Some(-60), Some("room-a")),
+                sample(1.0, Some(12.0), Some(-62), Some("room-a")),
+            ],
         };
         let map = build_coverage_map(&series).unwrap();
         let serialized = serde_json::to_string(&map).unwrap();
@@ -404,7 +531,10 @@ mod tests {
     #[test]
     fn coverage_map_rejects_identifying_location_label() {
         let series = RfTimeSeries {
-            plan: SurveyPlan { sample_count: 1, interval_secs: 1.0 },
+            plan: SurveyPlan {
+                sample_count: 1,
+                interval_secs: 1.0,
+            },
             samples: vec![sample(0.0, Some(10.0), Some(-60), Some("MyHomeSSID"))],
         };
         assert!(build_coverage_map(&series).is_err());
@@ -412,7 +542,10 @@ mod tests {
 
     #[test]
     fn survey_plan_duration_is_derived_and_bounded() {
-        let plan = SurveyPlan { sample_count: 10, interval_secs: 30.0 };
+        let plan = SurveyPlan {
+            sample_count: 10,
+            interval_secs: 30.0,
+        };
         assert_eq!(plan.duration_secs(), 300.0);
     }
 }

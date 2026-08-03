@@ -144,7 +144,9 @@ pub enum NetworkVerdict {
     /// Multiple independently known-capable endpoints failed consistently
     /// (handshake-rejected/timeout/filtered) while a control protocol to
     /// the same endpoints succeeded.
-    Filtered { corroborating_endpoints: Vec<String> },
+    Filtered {
+        corroborating_endpoints: Vec<String>,
+    },
     /// Not enough evidence to call it either way; says what's missing.
     Inconclusive { reason: String },
 }
@@ -191,9 +193,15 @@ pub fn resolve_for_preflight(host: &str, forced_ip: Option<IpAddr>) -> Option<Ip
 /// Returns `Err` (-> `Advertisement::Undetermined`) if we couldn't complete
 /// the handshake, get a response, or find a recognizable status line --
 /// never silently turning "couldn't tell" into "confirmed absent".
-fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result<Option<String>, String> {
+fn fetch_alt_svc(
+    host: &str,
+    ip: IpAddr,
+    port: u16,
+    timeout: Duration,
+) -> Result<Option<String>, String> {
     let addr = SocketAddr::new(ip, port);
-    let mut stream = TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("tcp connect: {}", e))?;
+    let mut stream =
+        TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("tcp connect: {}", e))?;
     stream.set_read_timeout(Some(timeout)).ok();
     stream.set_write_timeout(Some(timeout)).ok();
 
@@ -215,7 +223,8 @@ fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result
         "GET / HTTP/1.1\r\nHost: {}\r\nUser-Agent: fraggle-packet-preflight/0.1\r\nConnection: close\r\n\r\n",
         host
     );
-    tls.write_all(request.as_bytes()).map_err(|e| format!("write: {}", e))?;
+    tls.write_all(request.as_bytes())
+        .map_err(|e| format!("write: {}", e))?;
 
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
@@ -233,7 +242,12 @@ fn fetch_alt_svc(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> Result
                     break;
                 }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => break,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                break
+            }
             Err(e) => return Err(format!("read: {}", e)),
         }
     }
@@ -306,15 +320,29 @@ fn negotiate_tls_alpn(
         .build()
     {
         Ok(c) => c,
-        Err(e) => return (EndpointVerdict::HandshakeRejected, None, format!("tls connector build: {}", e)),
+        Err(e) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                format!("tls connector build: {}", e),
+            )
+        }
     };
 
     match connector.connect(host, stream) {
         Ok(tls) => {
-            let negotiated = tls.negotiated_alpn().ok().flatten().map(|b| String::from_utf8_lossy(&b).to_string());
+            let negotiated = tls
+                .negotiated_alpn()
+                .ok()
+                .flatten()
+                .map(|b| String::from_utf8_lossy(&b).to_string());
             let elapsed = start.elapsed();
             if negotiated.as_deref() == Some(wanted) {
-                (EndpointVerdict::Ok, negotiated, format!("negotiated in {:?}", elapsed))
+                (
+                    EndpointVerdict::Ok,
+                    negotiated,
+                    format!("negotiated in {:?}", elapsed),
+                )
             } else {
                 // Peer completed a handshake but picked something else
                 // (or didn't return ALPN at all) -- treat as unsupported
@@ -344,7 +372,12 @@ fn negotiate_tls_alpn(
 
 /// Real QUIC handshake attempt, reporting the ALPN quinn/rustls actually
 /// negotiated (not just "connected").
-async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Duration) -> (EndpointVerdict, Option<String>, String) {
+async fn negotiate_h3_async(
+    host: String,
+    ip: IpAddr,
+    port: u16,
+    timeout: Duration,
+) -> (EndpointVerdict, Option<String>, String) {
     use quinn::{ClientConfig, Endpoint, TransportConfig};
 
     let crypto = match rustls::ClientConfig::builder()
@@ -361,13 +394,25 @@ async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Durati
 
     let quic_crypto = match quinn::crypto::rustls::QuicClientConfig::try_from(crypto) {
         Ok(c) => c,
-        Err(e) => return (EndpointVerdict::HandshakeRejected, None, format!("quic tls config: {}", e)),
+        Err(e) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                format!("quic tls config: {}", e),
+            )
+        }
     };
 
     let mut transport = TransportConfig::default();
     let idle = match Duration::from_millis(timeout.as_millis() as u64).try_into() {
         Ok(v) => v,
-        Err(_) => return (EndpointVerdict::HandshakeRejected, None, "invalid idle timeout".to_string()),
+        Err(_) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                "invalid idle timeout".to_string(),
+            )
+        }
     };
     transport.max_idle_timeout(Some(idle));
 
@@ -377,7 +422,13 @@ async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Durati
     let bind_addr = if ip.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
     let mut endpoint = match Endpoint::client(bind_addr.parse().unwrap()) {
         Ok(e) => e,
-        Err(e) => return (EndpointVerdict::HandshakeRejected, None, format!("endpoint bind: {}", e)),
+        Err(e) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                format!("endpoint bind: {}", e),
+            )
+        }
     };
     endpoint.set_default_client_config(client_config);
 
@@ -386,7 +437,13 @@ async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Durati
 
     let connecting = match endpoint.connect(addr, &host) {
         Ok(c) => c,
-        Err(e) => return (EndpointVerdict::HandshakeRejected, None, format!("connect setup: {}", e)),
+        Err(e) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                format!("connect setup: {}", e),
+            )
+        }
     };
 
     match tokio::time::timeout(timeout, connecting).await {
@@ -400,7 +457,11 @@ async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Durati
             conn.close(0u32.into(), b"preflight complete");
             endpoint.wait_idle().await;
             if alpn.as_deref() == Some("h3") {
-                (EndpointVerdict::Ok, alpn, format!("negotiated in {:?}", elapsed))
+                (
+                    EndpointVerdict::Ok,
+                    alpn,
+                    format!("negotiated in {:?}", elapsed),
+                )
             } else {
                 (
                     EndpointVerdict::Unsupported,
@@ -425,14 +486,32 @@ async fn negotiate_h3_async(host: String, ip: IpAddr, port: u16, timeout: Durati
             };
             (verdict, None, format!("quic handshake failed: {}", msg))
         }
-        Err(_) => (EndpointVerdict::Timeout, None, format!("quic handshake exceeded {:?}", timeout)),
+        Err(_) => (
+            EndpointVerdict::Timeout,
+            None,
+            format!("quic handshake exceeded {:?}", timeout),
+        ),
     }
 }
 
-fn negotiate_h3(host: &str, ip: IpAddr, port: u16, timeout: Duration) -> (EndpointVerdict, Option<String>, String) {
-    let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+fn negotiate_h3(
+    host: &str,
+    ip: IpAddr,
+    port: u16,
+    timeout: Duration,
+) -> (EndpointVerdict, Option<String>, String) {
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
         Ok(rt) => rt,
-        Err(e) => return (EndpointVerdict::HandshakeRejected, None, format!("runtime build: {}", e)),
+        Err(e) => {
+            return (
+                EndpointVerdict::HandshakeRejected,
+                None,
+                format!("runtime build: {}", e),
+            )
+        }
     };
     rt.block_on(negotiate_h3_async(host.to_string(), ip, port, timeout))
 }
@@ -500,7 +579,8 @@ pub fn preflight_one(
 
     match protocol {
         Protocol::Http1 | Protocol::Http2 => {
-            let (verdict, alpn, detail) = negotiate_tls_alpn(host, ip, port, protocol.alpn_token(), timeout);
+            let (verdict, alpn, detail) =
+                negotiate_tls_alpn(host, ip, port, protocol.alpn_token(), timeout);
             EndpointResult {
                 host: host.to_string(),
                 resolved_ip: Some(ip.to_string()),
@@ -522,7 +602,9 @@ pub fn preflight_one(
                 Ok(Some(alt_svc)) if alt_svc_advertises_h3(&alt_svc) => Advertisement::Advertised,
                 Ok(_) => Advertisement::NotAdvertised,
                 Err(direct_err) => match curl_alt_svc(host, timeout.as_secs().max(1)) {
-                    Ok(Some(alt_svc)) if alt_svc_advertises_h3(&alt_svc) => Advertisement::Advertised,
+                    Ok(Some(alt_svc)) if alt_svc_advertises_h3(&alt_svc) => {
+                        Advertisement::Advertised
+                    }
                     Ok(_) => Advertisement::NotAdvertised,
                     Err(_) => {
                         return EndpointResult {
@@ -532,7 +614,10 @@ pub fn preflight_one(
                             advertised: Some(Advertisement::Undetermined),
                             negotiated_alpn: None,
                             verdict: EndpointVerdict::Timeout,
-                            detail: format!("could not determine Alt-Svc advertisement: {}", direct_err),
+                            detail: format!(
+                                "could not determine Alt-Svc advertisement: {}",
+                                direct_err
+                            ),
                             elapsed_ms: start.elapsed().as_millis() as u64,
                         };
                     }
@@ -577,21 +662,23 @@ pub fn preflight_one(
 /// `control_ok_hosts` should list hosts where a control protocol (e.g.
 /// HTTP/2, when testing HTTP/3) succeeded, proving those hosts are reachable
 /// at all on this network.
-pub fn network_verdict(
-    results: &[EndpointResult],
-    control_ok_hosts: &[String],
-) -> NetworkVerdict {
+pub fn network_verdict(results: &[EndpointResult], control_ok_hosts: &[String]) -> NetworkVerdict {
     let known_capable_failures: Vec<&EndpointResult> = results
         .iter()
         .filter(|r| {
             matches!(
                 r.verdict,
-                EndpointVerdict::HandshakeRejected | EndpointVerdict::Timeout | EndpointVerdict::Filtered
+                EndpointVerdict::HandshakeRejected
+                    | EndpointVerdict::Timeout
+                    | EndpointVerdict::Filtered
             )
         })
         .collect();
 
-    let ok_count = results.iter().filter(|r| r.verdict == EndpointVerdict::Ok).count();
+    let ok_count = results
+        .iter()
+        .filter(|r| r.verdict == EndpointVerdict::Ok)
+        .count();
     let unsupported_count = results
         .iter()
         .filter(|r| r.verdict == EndpointVerdict::Unsupported)
@@ -688,9 +775,15 @@ mod tests {
             result("google.com", EndpointVerdict::HandshakeRejected),
             result("mensura.cdn-apple.com", EndpointVerdict::Ok),
         ];
-        let controls = vec!["cloudflare.com".to_string(), "google.com".to_string(), "mensura.cdn-apple.com".to_string()];
+        let controls = vec![
+            "cloudflare.com".to_string(),
+            "google.com".to_string(),
+            "mensura.cdn-apple.com".to_string(),
+        ];
         match network_verdict(&results, &controls) {
-            NetworkVerdict::Filtered { corroborating_endpoints } => {
+            NetworkVerdict::Filtered {
+                corroborating_endpoints,
+            } => {
                 assert_eq!(corroborating_endpoints.len(), 2);
             }
             other => panic!("expected Filtered, got {:?}", other),

@@ -167,11 +167,23 @@ pub fn compute_delta(bracket: &WiredEdgeBracket) -> CounterDelta {
     CounterDelta {
         crc_errors: delta_u64(bracket.before.crc_errors, bracket.after.crc_errors),
         input_discards: delta_u64(bracket.before.input_discards, bracket.after.input_discards),
-        output_discards: delta_u64(bracket.before.output_discards, bracket.after.output_discards),
-        pause_frames_rx: delta_u64(bracket.before.pause_frames_rx, bracket.after.pause_frames_rx),
-        pause_frames_tx: delta_u64(bracket.before.pause_frames_tx, bracket.after.pause_frames_tx),
+        output_discards: delta_u64(
+            bracket.before.output_discards,
+            bracket.after.output_discards,
+        ),
+        pause_frames_rx: delta_u64(
+            bracket.before.pause_frames_rx,
+            bracket.after.pause_frames_rx,
+        ),
+        pause_frames_tx: delta_u64(
+            bracket.before.pause_frames_tx,
+            bracket.after.pause_frames_tx,
+        ),
         queue_drops: delta_u64(bracket.before.queue_drops, bracket.after.queue_drops),
-        link_flap_count: delta_u32(bracket.before.link_flap_count, bracket.after.link_flap_count),
+        link_flap_count: delta_u32(
+            bracket.before.link_flap_count,
+            bracket.after.link_flap_count,
+        ),
     }
 }
 
@@ -181,10 +193,15 @@ pub enum PoeRiskVerdict {
     /// reports reduced-power state -- the field-flagged risk this module
     /// exists to catch, named explicitly rather than left as two
     /// unconnected numbers the operator has to notice themselves.
-    ReducedFunctionalityFromPoe { requested_watts: f64, negotiated_watts: f64 },
+    ReducedFunctionalityFromPoe {
+        requested_watts: f64,
+        negotiated_watts: f64,
+    },
     FullPowerNegotiated,
     /// The evidence needed to rule PoE in or out is absent.
-    Withheld { missing: Vec<String> },
+    Withheld {
+        missing: Vec<String>,
+    },
 }
 
 pub fn assess_poe_risk(snapshot: &WiredEdgeSnapshot) -> PoeRiskVerdict {
@@ -204,13 +221,18 @@ pub fn assess_poe_risk(snapshot: &WiredEdgeSnapshot) -> PoeRiskVerdict {
             m.push("reduced_power_state");
         }
         let chosen: Vec<&'static str> = if m.is_empty() { missing } else { m };
-        return PoeRiskVerdict::Withheld { missing: chosen.into_iter().map(str::to_string).collect() };
+        return PoeRiskVerdict::Withheld {
+            missing: chosen.into_iter().map(str::to_string).collect(),
+        };
     }
     let requested = snapshot.poe_requested_watts.unwrap();
     let negotiated = snapshot.poe_negotiated_watts.unwrap();
     let reduced = snapshot.reduced_power_state.unwrap();
     if reduced && negotiated < requested {
-        PoeRiskVerdict::ReducedFunctionalityFromPoe { requested_watts: requested, negotiated_watts: negotiated }
+        PoeRiskVerdict::ReducedFunctionalityFromPoe {
+            requested_watts: requested,
+            negotiated_watts: negotiated,
+        }
     } else {
         PoeRiskVerdict::FullPowerNegotiated
     }
@@ -219,10 +241,14 @@ pub fn assess_poe_risk(snapshot: &WiredEdgeSnapshot) -> PoeRiskVerdict {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum WiredEdgeVerdict {
     Healthy,
-    Degraded { detail: String },
+    Degraded {
+        detail: String,
+    },
     /// The bundle refuses a conclusion when required telemetry is absent --
     /// mirrors `CircuitVerdict::Refused` (`circuit_workflow.rs`).
-    Refused { missing: Vec<String> },
+    Refused {
+        missing: Vec<String>,
+    },
 }
 
 /// Judges a bracketed wired-edge snapshot. Refuses when required fields are
@@ -266,7 +292,11 @@ pub fn judge_wired_edge(bracket: &WiredEdgeBracket) -> WiredEdgeVerdict {
             problems.push(format!("{f} link flap(s)"));
         }
     }
-    if let PoeRiskVerdict::ReducedFunctionalityFromPoe { requested_watts, negotiated_watts } = assess_poe_risk(&bracket.after) {
+    if let PoeRiskVerdict::ReducedFunctionalityFromPoe {
+        requested_watts,
+        negotiated_watts,
+    } = assess_poe_risk(&bracket.after)
+    {
         problems.push(format!(
             "AP negotiated only {negotiated_watts:.1}W of {requested_watts:.1}W requested and reports reduced-power state"
         ));
@@ -275,7 +305,9 @@ pub fn judge_wired_edge(bracket: &WiredEdgeBracket) -> WiredEdgeVerdict {
     if problems.is_empty() {
         WiredEdgeVerdict::Healthy
     } else {
-        WiredEdgeVerdict::Degraded { detail: problems.join("; ") }
+        WiredEdgeVerdict::Degraded {
+            detail: problems.join("; "),
+        }
     }
 }
 
@@ -311,7 +343,10 @@ mod tests {
     fn a_missing_snapshot_field_refuses_and_names_it() {
         let mut before = full_snapshot();
         before.crc_errors = None;
-        let bracket = WiredEdgeBracket { before, after: full_snapshot() };
+        let bracket = WiredEdgeBracket {
+            before,
+            after: full_snapshot(),
+        };
         match judge_wired_edge(&bracket) {
             WiredEdgeVerdict::Refused { missing } => {
                 assert!(missing.iter().any(|m| m == "before:crc_errors"));
@@ -322,7 +357,10 @@ mod tests {
 
     #[test]
     fn no_movement_is_healthy() {
-        let bracket = WiredEdgeBracket { before: full_snapshot(), after: full_snapshot() };
+        let bracket = WiredEdgeBracket {
+            before: full_snapshot(),
+            after: full_snapshot(),
+        };
         assert_eq!(judge_wired_edge(&bracket), WiredEdgeVerdict::Healthy);
     }
 
@@ -330,7 +368,10 @@ mod tests {
     fn new_crc_errors_are_reported_as_degraded() {
         let mut after = full_snapshot();
         after.crc_errors = Some(12);
-        let bracket = WiredEdgeBracket { before: full_snapshot(), after };
+        let bracket = WiredEdgeBracket {
+            before: full_snapshot(),
+            after,
+        };
         match judge_wired_edge(&bracket) {
             WiredEdgeVerdict::Degraded { detail } => assert!(detail.contains("12 new CRC errors")),
             other => panic!("expected Degraded, got {other:?}"),
@@ -359,7 +400,10 @@ mod tests {
         snap.poe_negotiated_watts = Some(25.5);
         snap.reduced_power_state = Some(true);
         match assess_poe_risk(&snap) {
-            PoeRiskVerdict::ReducedFunctionalityFromPoe { requested_watts, negotiated_watts } => {
+            PoeRiskVerdict::ReducedFunctionalityFromPoe {
+                requested_watts,
+                negotiated_watts,
+            } => {
                 assert_eq!(requested_watts, 40.0);
                 assert_eq!(negotiated_watts, 25.5);
             }
@@ -369,7 +413,10 @@ mod tests {
 
     #[test]
     fn full_power_is_not_flagged_as_a_risk() {
-        assert_eq!(assess_poe_risk(&full_snapshot()), PoeRiskVerdict::FullPowerNegotiated);
+        assert_eq!(
+            assess_poe_risk(&full_snapshot()),
+            PoeRiskVerdict::FullPowerNegotiated
+        );
     }
 
     #[test]
@@ -377,7 +424,9 @@ mod tests {
         let mut snap = full_snapshot();
         snap.reduced_power_state = None;
         match assess_poe_risk(&snap) {
-            PoeRiskVerdict::Withheld { missing } => assert!(missing.iter().any(|m| m == "reduced_power_state")),
+            PoeRiskVerdict::Withheld { missing } => {
+                assert!(missing.iter().any(|m| m == "reduced_power_state"))
+            }
             other => panic!("expected Withheld, got {other:?}"),
         }
     }
@@ -387,7 +436,10 @@ mod tests {
         let mut after = full_snapshot();
         after.poe_negotiated_watts = Some(25.5);
         after.reduced_power_state = Some(true);
-        let bracket = WiredEdgeBracket { before: full_snapshot(), after };
+        let bracket = WiredEdgeBracket {
+            before: full_snapshot(),
+            after,
+        };
         match judge_wired_edge(&bracket) {
             WiredEdgeVerdict::Degraded { detail } => assert!(detail.contains("reduced-power")),
             other => panic!("expected Degraded, got {other:?}"),

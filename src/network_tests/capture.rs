@@ -93,9 +93,7 @@ pub struct CaptureMetadata {
 pub enum CaptureError {
     #[error("tcpdump not found on this system (looked for tcpdump on PATH)")]
     ToolMissing,
-    #[error(
-        "capture requires elevated privilege: {detail}. Re-run as: sudo {command}"
-    )]
+    #[error("capture requires elevated privilege: {detail}. Re-run as: sudo {command}")]
     PrivilegeRequired { detail: String, command: String },
     #[error("failed to start tcpdump: {0}")]
     SpawnFailed(String),
@@ -252,7 +250,9 @@ pub fn run_bounded_capture(opts: &CaptureOptions) -> Result<CaptureMetadata, Cap
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    let total_bytes = std::fs::metadata(&opts.output_path).map(|m| m.len()).unwrap_or(0);
+    let total_bytes = std::fs::metadata(&opts.output_path)
+        .map(|m| m.len())
+        .unwrap_or(0);
     let mut output_files = vec![opts.output_path.display().to_string()];
     if opts.rotate_file_mb.is_some() {
         output_files = list_rotated_files(&opts.output_path);
@@ -276,7 +276,10 @@ pub fn run_bounded_capture(opts: &CaptureOptions) -> Result<CaptureMetadata, Cap
 /// tcpdump's `-C`/`-W` rotation names files `<base><N>` starting at 1.
 fn list_rotated_files(base: &PathBuf) -> Vec<String> {
     let dir = base.parent().unwrap_or_else(|| std::path::Path::new("."));
-    let stem = base.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let stem = base
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
     let mut found = Vec::new();
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -370,7 +373,9 @@ mod tests {
 
     #[test]
     fn privilege_error_detected_from_linux_wording() {
-        assert!(is_privilege_error("eth0: You don't have permission to capture on that device"));
+        assert!(is_privilege_error(
+            "eth0: You don't have permission to capture on that device"
+        ));
         assert!(is_privilege_error("socket: Operation not permitted"));
     }
 

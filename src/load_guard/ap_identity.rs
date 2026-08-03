@@ -35,7 +35,8 @@ fn salt_path() -> Option<PathBuf> {
 /// process state. The file is created mode 0600 so only this user's
 /// processes can read it back out.
 pub fn load_or_create_salt() -> Result<String, String> {
-    let path = salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
+    let path =
+        salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
     if let Ok(existing) = std::fs::read_to_string(&path) {
         let trimmed = existing.trim().to_string();
         if !trimmed.is_empty() {
@@ -66,8 +67,10 @@ fn generate_salt() -> Result<String, String> {
     // OS CSPRNG on macOS/Linux.
     use std::io::Read;
     let mut bytes = [0u8; 16];
-    let mut f = std::fs::File::open("/dev/urandom").map_err(|e| format!("failed to open /dev/urandom: {e}"))?;
-    f.read_exact(&mut bytes).map_err(|e| format!("failed to read entropy: {e}"))?;
+    let mut f = std::fs::File::open("/dev/urandom")
+        .map_err(|e| format!("failed to open /dev/urandom: {e}"))?;
+    f.read_exact(&mut bytes)
+        .map_err(|e| format!("failed to read entropy: {e}"))?;
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
@@ -166,28 +169,59 @@ mod tests {
 
     #[test]
     fn same_label_same_band_is_same_ap_same_radio() {
-        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
-        let b = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
+        let a = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
+        let b = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
         assert_eq!(compare(&Some(a), &Some(b)), ApComparison::SameApSameRadio);
     }
 
     #[test]
     fn same_label_different_band_is_same_ap_different_radio() {
-        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
-        let b = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("5GHz".to_string()), channel: Some(100) };
-        assert_eq!(compare(&Some(a), &Some(b)), ApComparison::SameApDifferentRadio);
+        let a = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
+        let b = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("5GHz".to_string()),
+            channel: Some(100),
+        };
+        assert_eq!(
+            compare(&Some(a), &Some(b)),
+            ApComparison::SameApDifferentRadio
+        );
     }
 
     #[test]
     fn different_label_is_different_ap() {
-        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
-        let b = ApIdentity { label: "ap-cafef00d".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
+        let a = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
+        let b = ApIdentity {
+            label: "ap-cafef00d".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
         assert_eq!(compare(&Some(a), &Some(b)), ApComparison::DifferentAp);
     }
 
     #[test]
     fn missing_identity_on_either_side_is_unavailable_not_guessed() {
-        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
+        let a = ApIdentity {
+            label: "ap-deadbeef".to_string(),
+            band: Some("6GHz".to_string()),
+            channel: Some(37),
+        };
         assert_eq!(compare(&Some(a), &None), ApComparison::Unavailable);
         assert_eq!(compare(&None, &None), ApComparison::Unavailable);
     }
@@ -230,7 +264,8 @@ mod tests {
         // needed) before this asserts on its permissions -- this is not
         // conditional on a prior run having already created it.
         if let (Ok(_), Some(path)) = (load_or_create_salt(), salt_path()) {
-            let meta = std::fs::metadata(&path).expect("salt file must exist after load_or_create_salt");
+            let meta =
+                std::fs::metadata(&path).expect("salt file must exist after load_or_create_salt");
             let mode = meta.permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "salt file must be 0600, got {mode:o}");
         }

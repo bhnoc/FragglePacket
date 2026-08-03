@@ -88,7 +88,9 @@ pub fn parse_getpacket(text: &str) -> DhcpLease {
             if let Some(v) = rest.split(':').nth(1) {
                 let v = v.trim();
                 let hex = v.split_whitespace().last().unwrap_or("");
-                lease.lease_seconds = hex.strip_prefix("0x").and_then(|h| u32::from_str_radix(h, 16).ok());
+                lease.lease_seconds = hex
+                    .strip_prefix("0x")
+                    .and_then(|h| u32::from_str_radix(h, 16).ok());
             }
         } else if let Some(rest) = line.strip_prefix("server_identifier") {
             if let Some(v) = rest.split(':').nth(1) {
@@ -119,7 +121,9 @@ pub fn parse_getpacket(text: &str) -> DhcpLease {
 pub enum DhcpReadError {
     #[error("failed to run ipconfig: {0}")]
     CommandFailed(String),
-    #[error("no DHCP lease found on interface {0} (not DHCP-configured, or no lease currently held)")]
+    #[error(
+        "no DHCP lease found on interface {0} (not DHCP-configured, or no lease currently held)"
+    )]
     NoLease(String),
 }
 
@@ -165,7 +169,10 @@ pub fn request_fresh_lease(
         .output()
         .map_err(|e| format!("failed to release lease: {e}"))?;
     if !release.status.success() {
-        return Err(format!("ipconfig set {interface} NONE failed: {}", String::from_utf8_lossy(&release.stderr)));
+        return Err(format!(
+            "ipconfig set {interface} NONE failed: {}",
+            String::from_utf8_lossy(&release.stderr)
+        ));
     }
 
     let renew = Command::new("ipconfig")
@@ -173,18 +180,27 @@ pub fn request_fresh_lease(
         .output()
         .map_err(|e| format!("failed to request new lease: {e}"))?;
     if !renew.status.success() {
-        return Err(format!("ipconfig set {interface} DHCP failed: {}", String::from_utf8_lossy(&renew.stderr)));
+        return Err(format!(
+            "ipconfig set {interface} DHCP failed: {}",
+            String::from_utf8_lossy(&renew.stderr)
+        ));
     }
 
     let deadline = std::time::Instant::now() + timeout;
     loop {
         if let Ok(lease) = read_existing_lease(interface) {
             if lease.message_type == Some(DhcpMessageType::Ack) {
-                return Ok(FreshLeaseTiming { discover_to_address_ms: start.elapsed().as_millis() as u64, lease });
+                return Ok(FreshLeaseTiming {
+                    discover_to_address_ms: start.elapsed().as_millis() as u64,
+                    lease,
+                });
             }
         }
         if std::time::Instant::now() >= deadline {
-            return Err(format!("no ACK observed on {interface} within {:?}", timeout));
+            return Err(format!(
+                "no ACK observed on {interface} within {:?}",
+                timeout
+            ));
         }
         std::thread::sleep(Duration::from_millis(200));
     }
@@ -213,9 +229,13 @@ pub fn evaluate_pool_headroom(telemetry: &Option<PoolTelemetry>) -> PoolHeadroom
         };
     };
     match (t.addresses_total, t.addresses_in_use) {
-        (Some(total), Some(in_use)) => PoolHeadroomVerdict::Headroom { free: total.saturating_sub(in_use), total },
+        (Some(total), Some(in_use)) => PoolHeadroomVerdict::Headroom {
+            free: total.saturating_sub(in_use),
+            total,
+        },
         _ => PoolHeadroomVerdict::Unavailable {
-            reason: "pool telemetry supplied but missing addresses_total/addresses_in_use".to_string(),
+            reason: "pool telemetry supplied but missing addresses_total/addresses_in_use"
+                .to_string(),
         },
     }
 }
@@ -279,7 +299,11 @@ end (none):\n";
         assert_eq!(lease.router, Some("10.220.250.1".to_string()));
         assert_eq!(
             lease.domain_name_servers,
-            vec!["172.16.16.16".to_string(), "172.16.16.17".to_string(), "208.67.222.222".to_string()]
+            vec![
+                "172.16.16.16".to_string(),
+                "172.16.16.17".to_string(),
+                "208.67.222.222".to_string()
+            ]
         );
         assert_eq!(lease.domain_name, Some("internal.example.com".to_string()));
     }
@@ -307,7 +331,10 @@ end (none):\n";
 
     #[test]
     fn pool_headroom_unavailable_with_no_telemetry() {
-        assert!(matches!(evaluate_pool_headroom(&None), PoolHeadroomVerdict::Unavailable { .. }));
+        assert!(matches!(
+            evaluate_pool_headroom(&None),
+            PoolHeadroomVerdict::Unavailable { .. }
+        ));
     }
 
     #[test]
@@ -319,25 +346,38 @@ end (none):\n";
         };
         assert_eq!(
             evaluate_pool_headroom(&Some(t)),
-            PoolHeadroomVerdict::Headroom { free: 14, total: 254 }
+            PoolHeadroomVerdict::Headroom {
+                free: 14,
+                total: 254
+            }
         );
     }
 
     #[test]
     fn pool_headroom_unavailable_with_partial_telemetry() {
-        let t = PoolTelemetry { scope_label: Some("vlan-100".to_string()), ..Default::default() };
-        assert!(matches!(evaluate_pool_headroom(&Some(t)), PoolHeadroomVerdict::Unavailable { .. }));
+        let t = PoolTelemetry {
+            scope_label: Some("vlan-100".to_string()),
+            ..Default::default()
+        };
+        assert!(matches!(
+            evaluate_pool_headroom(&Some(t)),
+            PoolHeadroomVerdict::Unavailable { .. }
+        ));
     }
 
     #[test]
     fn single_sample_countdown_is_unknown_not_false() {
-        let s = LeaseCountdownSample { sampled_lease_seconds: vec![3600] };
+        let s = LeaseCountdownSample {
+            sampled_lease_seconds: vec![3600],
+        };
         assert_eq!(s.appears_counting_down(), None);
     }
 
     #[test]
     fn changing_samples_show_countdown() {
-        let s = LeaseCountdownSample { sampled_lease_seconds: vec![3600, 3595] };
+        let s = LeaseCountdownSample {
+            sampled_lease_seconds: vec![3600, 3595],
+        };
         assert_eq!(s.appears_counting_down(), Some(true));
     }
 

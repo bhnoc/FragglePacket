@@ -57,7 +57,11 @@ pub fn run(args: &FirstHopArgs) {
             "Probing gateway={} via interface={}{}",
             gateway,
             interface.as_deref().unwrap_or("(unknown)"),
-            if is_tunnel { " [TUNNEL -- this is not a physical L2 gateway]".yellow() } else { "".normal() }
+            if is_tunnel {
+                " [TUNNEL -- this is not a physical L2 gateway]".yellow()
+            } else {
+                "".normal()
+            }
         );
     }
 
@@ -90,20 +94,36 @@ pub fn run(args: &FirstHopArgs) {
 fn print_human(report: &FirstHopReport) {
     println!();
     println!("{}", "== First-Hop Isolation ==".cyan().bold());
-    println!("  interface: {}{}", report.interface.as_deref().unwrap_or("?"),
-        if report.interface_is_tunnel { " (tunnel)".yellow().to_string() } else { "".to_string() });
+    println!(
+        "  interface: {}{}",
+        report.interface.as_deref().unwrap_or("?"),
+        if report.interface_is_tunnel {
+            " (tunnel)".yellow().to_string()
+        } else {
+            "".to_string()
+        }
+    );
     println!("  gateway:   {}", report.gateway);
     println!(
         "  icmp:      {}/{} received, loss={:.1}%",
-        report.icmp.received, report.icmp.sent, report.icmp.loss_percent()
+        report.icmp.received,
+        report.icmp.sent,
+        report.icmp.loss_percent()
     );
     match report.icmp.state {
         IcmpState::Responding => println!("  state:     {}", "RESPONDING".green().bold()),
         IcmpState::Suppressed => println!(
             "  state:     {}",
-            "ICMP SUPPRESSED (policy, not packet loss -- confirmed reachable by non-ICMP fallback)".yellow().bold()
+            "ICMP SUPPRESSED (policy, not packet loss -- confirmed reachable by non-ICMP fallback)"
+                .yellow()
+                .bold()
         ),
-        IcmpState::Lost => println!("  state:     {}", "LOST (no ICMP reply, no fallback corroboration)".red().bold()),
+        IcmpState::Lost => println!(
+            "  state:     {}",
+            "LOST (no ICMP reply, no fallback corroboration)"
+                .red()
+                .bold()
+        ),
     }
     if let Some(fb) = &report.fallback {
         println!();

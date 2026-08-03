@@ -52,19 +52,27 @@ pub struct RadioDiagnostic {
 const RETRY_LIMITATION: &str = "retry counters are not exposed by any known unprivileged or privileged macOS CLI path (system_profiler, ioreg, or wdutil info); this platform genuinely cannot report them, not a zero measurement";
 const WMM_LIMITATION: &str = "WMM access-category state is not exposed by any known unprivileged or privileged macOS CLI path on this platform";
 
-pub fn build_diagnostic(base: RadioSnapshot, privileged: Result<WdutilFields, WdutilError>) -> RadioDiagnostic {
+pub fn build_diagnostic(
+    base: RadioSnapshot,
+    privileged: Result<WdutilFields, WdutilError>,
+) -> RadioDiagnostic {
     let rf_quality = classify_rf(&base);
     let mut platform_limitations = vec![RETRY_LIMITATION.to_string(), WMM_LIMITATION.to_string()];
 
     let (channel_utilization_pct, privilege_note) = match &privileged {
         Ok(f) => {
             if f.cca_percent.is_none() {
-                platform_limitations.push("channel utilization (CCA%) was not present in this wdutil info output".to_string());
+                platform_limitations.push(
+                    "channel utilization (CCA%) was not present in this wdutil info output"
+                        .to_string(),
+                );
             }
             (f.cca_percent, None)
         }
         Err(e) => {
-            platform_limitations.push(format!("channel utilization (CCA%) requires elevated wdutil access: {e}"));
+            platform_limitations.push(format!(
+                "channel utilization (CCA%) requires elevated wdutil access: {e}"
+            ));
             let note = match e {
                 WdutilError::PrivilegeRequired { command } => Some(format!("re-run as: {command}")),
                 _ => Some(e.to_string()),
@@ -84,7 +92,12 @@ pub fn build_diagnostic(base: RadioSnapshot, privileged: Result<WdutilFields, Wd
             f.mcs_index.or(base.mcs_index),
             f.tx_rate_mbps.or(base.tx_rate_mbps),
         ),
-        Err(_) => (base.rssi_dbm, base.noise_dbm, base.mcs_index, base.tx_rate_mbps),
+        Err(_) => (
+            base.rssi_dbm,
+            base.noise_dbm,
+            base.mcs_index,
+            base.tx_rate_mbps,
+        ),
     };
 
     let snr_db = match (rssi_dbm, noise_dbm) {
@@ -115,7 +128,8 @@ pub fn build_diagnostic(base: RadioSnapshot, privileged: Result<WdutilFields, Wd
 /// privileged `wdutil` read. Never fails outright if the privileged read is
 /// unavailable -- the unprivileged data still stands, with the gap noted.
 pub fn diagnose_live() -> RadioDiagnostic {
-    let base = crate::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
+    let base =
+        crate::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
     let privileged = wdutil::snapshot_live();
     build_diagnostic(base, privileged)
 }
@@ -143,7 +157,10 @@ mod tests {
         let diag = build_diagnostic(strong_snapshot(), Err(WdutilError::ToolMissing));
         assert_eq!(diag.retries, None);
         assert_eq!(diag.wmm_access_category, None);
-        assert!(diag.platform_limitations.iter().any(|l| l.contains("retry")));
+        assert!(diag
+            .platform_limitations
+            .iter()
+            .any(|l| l.contains("retry")));
         assert!(diag.platform_limitations.iter().any(|l| l.contains("WMM")));
     }
 
@@ -151,7 +168,9 @@ mod tests {
     fn missing_privileged_source_notes_privilege_requirement_not_a_silent_gap() {
         let diag = build_diagnostic(
             strong_snapshot(),
-            Err(WdutilError::PrivilegeRequired { command: "sudo wdutil info".to_string() }),
+            Err(WdutilError::PrivilegeRequired {
+                command: "sudo wdutil info".to_string(),
+            }),
         );
         assert!(diag.privilege_note.is_some());
         assert!(diag.privilege_note.unwrap().contains("sudo wdutil info"));

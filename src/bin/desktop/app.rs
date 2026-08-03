@@ -1,11 +1,14 @@
 //! Main application component
 
+use crate::components::{
+    Dashboard, FuzzingPanel, HistoryPanel, HttpsPanel, LogsPanel, PathPanel, ProbesPanel,
+    ReportPanel, Simulator, TestPanel,
+};
+use crate::state::test_runner::TestUpdate;
+use crate::state::{AppState, LogLevel, PanelId, ToastType};
+use crate::window_manager::{reattach_panel, use_reattach_listener};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use crate::state::{AppState, PanelId, ToastType, LogLevel};
-use crate::state::test_runner::TestUpdate;
-use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel, ProbesPanel, ReportPanel};
-use crate::window_manager::{reattach_panel, use_reattach_listener};
 
 /// Suggested re-launch hint shown in the privileges banner. Linux uses setcap
 /// or sudo, macOS uses sudo, Windows path is unused because we assume admin.
@@ -51,7 +54,9 @@ pub fn App() -> Element {
                 ToastType::Warning,
             );
         } else if privileged {
-            state.write().log(LogLevel::Info, "Running with elevated privileges");
+            state
+                .write()
+                .log(LogLevel::Info, "Running with elevated privileges");
         }
     });
 
@@ -63,13 +68,18 @@ pub fn App() -> Element {
                     state.write().testing.set(true);
                     state.write().progress.set(0.0);
                     state.write().reset_cancel();
-                    state.write().test_start_time.set(Some(std::time::Instant::now()));
+                    state
+                        .write()
+                        .test_start_time
+                        .set(Some(std::time::Instant::now()));
                     let msg = match category {
                         Some(cat) => format!("Running {} test on {}...", cat.as_str(), target),
                         None => format!("Running all tests on {}...", target),
                     };
                     state.write().status_message.set(msg.clone());
-                    state.write().log(LogLevel::Info, format!("=== {} ===", msg));
+                    state
+                        .write()
+                        .log(LogLevel::Info, format!("=== {} ===", msg));
                     state.write().current_test_name.set(String::new());
                 }
                 TestUpdate::Result { result, .. } => {
@@ -91,13 +101,17 @@ pub fn App() -> Element {
                     let cli_command = result.metadata.get("cli_command").cloned();
 
                     // Build metrics list
-                    let metrics: Vec<(String, String)> = result.metrics.iter()
+                    let metrics: Vec<(String, String)> = result
+                        .metrics
+                        .iter()
                         .map(|(k, v)| (k.clone(), format!("{:.2}", v)))
                         .collect();
 
                     // Build details from metadata (excluding cli_command)
                     let details: Option<String> = {
-                        let other_meta: Vec<String> = result.metadata.iter()
+                        let other_meta: Vec<String> = result
+                            .metadata
+                            .iter()
                             .filter(|(k, _)| !k.starts_with("cli_"))
                             .map(|(k, v)| format!("{}: {}", k, v))
                             .collect();
@@ -109,7 +123,8 @@ pub fn App() -> Element {
                     };
 
                     // Create detailed log entry
-                    let mut entry = crate::state::LogEntry::new(level, format!("{}: {:?}", test_name, status));
+                    let mut entry =
+                        crate::state::LogEntry::new(level, format!("{}: {:?}", test_name, status));
                     if let Some(cmd) = cli_command {
                         entry = entry.with_cli_command(cmd);
                     }
@@ -135,21 +150,31 @@ pub fn App() -> Element {
                     state.write().testing.set(false);
                     state.write().progress.set(1.0);
                     state.write().current_test_name.set(String::new());
-                    state.write().status_message.set(format!("Tests completed for {}", target));
-                    state.write().log(LogLevel::Success, format!("=== Completed: {} ===", target));
+                    state
+                        .write()
+                        .status_message
+                        .set(format!("Tests completed for {}", target));
+                    state
+                        .write()
+                        .log(LogLevel::Success, format!("=== Completed: {} ===", target));
                     state.write().add_toast(
                         format!("Tests completed for {}", target),
-                        ToastType::Success
+                        ToastType::Success,
                     );
                 }
                 TestUpdate::Failed { target, error } => {
                     state.write().testing.set(false);
                     state.write().current_test_name.set(String::new());
-                    state.write().status_message.set(format!("Test failed: {}", error));
-                    state.write().log(LogLevel::Error, format!("FAILED: {} - {}", target, error));
+                    state
+                        .write()
+                        .status_message
+                        .set(format!("Test failed: {}", error));
+                    state
+                        .write()
+                        .log(LogLevel::Error, format!("FAILED: {} - {}", target, error));
                     state.write().add_toast(
                         format!("Test failed for {}: {}", target, error),
-                        ToastType::Error
+                        ToastType::Error,
                     );
                 }
             }
@@ -174,10 +199,7 @@ pub fn App() -> Element {
 }
 
 /// Render the currently active panel with detach button
-fn render_active_panel(
-    state: Signal<AppState>,
-    update_tx: Coroutine<TestUpdate>,
-) -> Element {
+fn render_active_panel(state: Signal<AppState>, update_tx: Coroutine<TestUpdate>) -> Element {
     let active = *state.read().active_panel.read();
 
     // Read the global signal DIRECTLY to create reactive dependency

@@ -13,7 +13,8 @@ use colored::*;
 use std::io::Read;
 
 use fraggle_packet::network_tests::platform_matrix::{
-    attribute_difference, power_save_observability, Attribution, ClientCapability, MatrixResult, PhyGeneration, PowerSaveState,
+    attribute_difference, power_save_observability, Attribution, ClientCapability, MatrixResult,
+    PhyGeneration, PowerSaveState,
 };
 
 #[derive(clap::Args, Debug)]
@@ -71,7 +72,9 @@ fn parse_phy(s: &str) -> PhyGeneration {
 fn load_compare(path: &str) -> Result<MatrixResult, String> {
     let text = if path == "-" {
         let mut buf = String::new();
-        std::io::stdin().read_to_string(&mut buf).map_err(|e| e.to_string())?;
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| e.to_string())?;
         buf
     } else {
         std::fs::read_to_string(path).map_err(|e| e.to_string())?
@@ -141,11 +144,20 @@ pub fn run(args: &PlatformMatrixArgs) {
                         "  {} attributable to single varying axis: {} (delta {})",
                         "OK".green().bold(),
                         axis,
-                        delta_mbps.map(|d| format!("{:.1} Mbps", d)).unwrap_or_else(|| "unavailable".to_string())
+                        delta_mbps
+                            .map(|d| format!("{:.1} Mbps", d))
+                            .unwrap_or_else(|| "unavailable".to_string())
                     );
                 }
-                Attribution::ConfoundedEntangled { varying_axes, reason } => {
-                    println!("  {} {}", "CONFOUNDED -- attribution withheld:".red().bold(), reason);
+                Attribution::ConfoundedEntangled {
+                    varying_axes,
+                    reason,
+                } => {
+                    println!(
+                        "  {} {}",
+                        "CONFOUNDED -- attribution withheld:".red().bold(),
+                        reason
+                    );
                     println!("  varying axes: {}", varying_axes.join(", "));
                 }
                 Attribution::NoVariation => {

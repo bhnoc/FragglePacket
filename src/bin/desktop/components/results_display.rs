@@ -6,7 +6,7 @@
 //! - Other results: Generic key/value display
 
 use dioxus::prelude::*;
-use fraggle_packet::framework::{TestResult, TestStatus, TestCategory, DiagnosisSeverity};
+use fraggle_packet::framework::{DiagnosisSeverity, TestCategory, TestResult, TestStatus};
 
 /// Display a list of test results with specialized visualizations
 pub fn render_results(results: &[TestResult]) -> Element {
@@ -78,19 +78,61 @@ fn render_result_card(result: &TestResult) -> Element {
 /// Render HTTPS waterfall chart
 fn render_https_waterfall(result: &TestResult) -> Element {
     let stages: Vec<(&str, f64, bool)> = vec![
-        ("DNS", result.metrics.get("dns_time_ms").copied().unwrap_or(0.0), true),
-        ("TCP Connect", result.metrics.get("tcp_connect_time_ms").copied().unwrap_or(0.0),
-         result.metadata.get("tcp_success").map(|s| s == "true").unwrap_or(true)),
-        ("TLS Handshake", result.metrics.get("tls_handshake_time_ms").copied().unwrap_or(0.0),
-         result.metadata.get("tls_success").map(|s| s == "true").unwrap_or(true)),
-        ("TTFB", result.metrics.get("ttfb_ms").copied().unwrap_or(0.0), true),
-        ("Total", result.metrics.get("total_time_ms").copied().unwrap_or(0.0), true),
+        (
+            "DNS",
+            result.metrics.get("dns_time_ms").copied().unwrap_or(0.0),
+            true,
+        ),
+        (
+            "TCP Connect",
+            result
+                .metrics
+                .get("tcp_connect_time_ms")
+                .copied()
+                .unwrap_or(0.0),
+            result
+                .metadata
+                .get("tcp_success")
+                .map(|s| s == "true")
+                .unwrap_or(true),
+        ),
+        (
+            "TLS Handshake",
+            result
+                .metrics
+                .get("tls_handshake_time_ms")
+                .copied()
+                .unwrap_or(0.0),
+            result
+                .metadata
+                .get("tls_success")
+                .map(|s| s == "true")
+                .unwrap_or(true),
+        ),
+        (
+            "TTFB",
+            result.metrics.get("ttfb_ms").copied().unwrap_or(0.0),
+            true,
+        ),
+        (
+            "Total",
+            result.metrics.get("total_time_ms").copied().unwrap_or(0.0),
+            true,
+        ),
     ];
 
-    let max_time = stages.iter().map(|(_, t, _)| *t).fold(0.0_f64, f64::max).max(1.0);
+    let max_time = stages
+        .iter()
+        .map(|(_, t, _)| *t)
+        .fold(0.0_f64, f64::max)
+        .max(1.0);
 
     // Get HTTP status if available
-    let http_status = result.metadata.get("http_status").cloned().unwrap_or_default();
+    let http_status = result
+        .metadata
+        .get("http_status")
+        .cloned()
+        .unwrap_or_default();
 
     rsx! {
         div { class: "result-visualization",
@@ -135,7 +177,9 @@ fn render_path_hops(result: &TestResult) -> Element {
         let rtt_key = format!("hop_{}_rtt", i);
         if let Some(addr) = result.metadata.get(&addr_key) {
             let rtt = result.metrics.get(&rtt_key).copied().unwrap_or(0.0);
-            let mtu = result.metadata.get(&format!("hop_{}_mtu", i))
+            let mtu = result
+                .metadata
+                .get(&format!("hop_{}_mtu", i))
                 .cloned()
                 .unwrap_or_else(|| "1500".to_string());
             hops.push((i as u32, addr.clone(), rtt, mtu));
@@ -189,12 +233,16 @@ fn render_path_hops(result: &TestResult) -> Element {
 
 /// Render generic metrics and metadata
 fn render_generic_metrics(result: &TestResult) -> Element {
-    let metrics: Vec<_> = result.metrics.iter()
-        .filter(|(k, _)| !k.starts_with("hop_"))  // Skip hop data for generic view
+    let metrics: Vec<_> = result
+        .metrics
+        .iter()
+        .filter(|(k, _)| !k.starts_with("hop_")) // Skip hop data for generic view
         .map(|(k, v)| (k.clone(), *v))
         .collect();
-    let metadata: Vec<_> = result.metadata.iter()
-        .filter(|(k, _)| !k.starts_with("cli_") && !k.starts_with("hop_"))  // Skip cli commands and hop data
+    let metadata: Vec<_> = result
+        .metadata
+        .iter()
+        .filter(|(k, _)| !k.starts_with("cli_") && !k.starts_with("hop_")) // Skip cli commands and hop data
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
 

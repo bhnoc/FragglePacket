@@ -74,7 +74,10 @@ pub fn run(args: &CaptureArgs) {
             } else {
                 println!("{}", "Capture complete".green().bold());
                 println!("  stop reason:   {:?}", meta.stop_reason);
-                println!("  duration:      {:.1}s (requested {}s)", meta.actual_duration_secs, meta.requested_duration_secs);
+                println!(
+                    "  duration:      {:.1}s (requested {}s)",
+                    meta.actual_duration_secs, meta.requested_duration_secs
+                );
                 println!("  bytes written: {}", meta.total_bytes_written);
                 println!("  files:         {}", meta.output_files.join(", "));
             }
