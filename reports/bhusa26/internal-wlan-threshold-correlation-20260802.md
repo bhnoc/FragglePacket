@@ -105,6 +105,23 @@ Run window: 2026-08-03 01:03:36Z–01:13:39Z. PV04, PV10, PV11, and PV12 each co
 
 Thirty-nine of forty simultaneous UDP streams returned valid receiver results, delivered the offered rate within normal generator variance, and reported zero lost datagrams; PV04's 200 Mbps reverse object timed out and is invalid rather than zero. UDP-loaded gateway averages remained 3.4–5.3 ms except PV11, which ranged 3.7–18.0 ms. TCP was different: PV10 became 118.3 Mbps asymmetric at 200 Mbps, PV04 and PV12 crossed the threshold at 225 Mbps, and PV11 crossed it at 125 Mbps. Directional TCP controls were clean at the requested maximum for PV04, PV10, and PV12, while PV11 was already below its 175 Mbps request. The failure direction changed between phases and PV12 recovered to 162.5/170.4 Mbps at 275 Mbps after collapsing to 246.4/70.5 at 250 Mbps. This is not a monotonic hard capacity ceiling; it is a repeatable loss of stable bidirectional TCP capacity under concurrency. The clean simultaneous UDP delivery also argues against the radio simply being unable to carry the aggregate bitrate, although it does not identify which TCP, queue, or scheduler interaction is responsible.
 
+## PV10 TCP flow-count and DSCP matrix
+
+Run window: 2026-08-03 02:25:55Z–02:30:02Z. On the full-power, 5 Gbps-uplink PV10 AP, the test held the target at 250 Mbps in each direction and compared one versus four TCP flows and DSCP 0 versus EF. Each condition had adjacent directional controls and two simultaneous trials in reversed order. The node captured gateway latency, `ss`, `nstat`, qdisc/link counters, and `iw` station deltas; 86 Arista observations covered load and three minutes of recovery.
+
+| Condition | Simultaneous trial 1 up/down | Simultaneous trial 2 up/down | Mean directional difference | Gateway average range | `TCPRcvCollapsed` total |
+|---|---:|---:|---:|---:|---:|
+| 1 flow, DSCP 0 | 118.2 / 181.1 Mbps | 89.6 / 238.5 Mbps | 105.8 Mbps | 37.8–61.6 ms | 175 |
+| 4 flows, DSCP 0 | 77.4 / 243.5 Mbps | 93.7 / 248.5 Mbps | 160.5 Mbps | 42.8–56.6 ms | 223 |
+| 1 flow, DSCP EF | 193.8 / 96.9 Mbps | 117.9 / 191.6 Mbps | 85.3 Mbps | 24.8–37.0 ms | 240 |
+| 4 flows, DSCP EF | 69.4 / 229.1 Mbps | 80.8 / 242.5 Mbps | 160.7 Mbps | 74.5–90.9 ms | 305 |
+
+Every directional upload control delivered 242.3–249.4 Mbps and every directional download control delivered 250.0–250.3 Mbps, with 4.6–11.3 ms average gateway latency. All eight simultaneous trials exceeded the 40 Mbps collapse threshold and raised gateway average latency to 24.8–90.9 ms. Four flows did not recover capacity; instead, both four-flow conditions consistently became upload-limited. EF did not consistently recover either direction. Therefore, the result does not support a single-flow-only congestion-window problem or a simple DSCP/WMM cure. The four-flow EF latency was worse than four-flow DSCP 0 in both trials, but two trials are insufficient to attribute that interaction to WMM classification.
+
+The client root qdisc recorded no drops, signal stayed -57 to -58 dBm, and negotiated HE rates stayed about 413–459 Mbps at 40 MHz. The client remained on one AP/channel, the AP remained active at full power and 5 Gbps, and exact-window Client Events and Related AP Events both returned zero records. Arista fields were visibly cached: client retry and AP utilization changed in delayed steps rather than tracking the five-second query cadence.
+
+Linux `TcpExtTCPRcvCollapsed` increased in seven of eight simultaneous phases—943 freed socket buffers in total—but remained zero through all eight directional controls. The [Linux kernel SNMP counter documentation](https://www.kernel.org/doc/html/latest/networking/snmp_counter.html) defines this as socket buffers freed while collapsing the receive and out-of-order queues during receive-socket memory pressure. This is the strongest new client-side symptom, but it is not sufficient as a sole cause because one collapsed simultaneous trial recorded zero. It points to receive-path pressure or delayed draining during duplex traffic and justifies testing the iperf process model, block size, socket behavior, per-core softirq load, and driver receive path before assigning the entire failure to the AP.
+
 ## Effective Arista configuration and event evidence
 
 The read-only integration was extended using Arista's published [CV-CUE OpenAPI index](https://apihelp.wifi.arista.com/data/wm/wm-openapi-root.json), then used only with documented GET routes. Each probe's current client record was joined to its location policy, actual AP template, active AP radio, and matching SSID profile. The four locations use different profile identifiers but returned the same relevant settings. The active association on every AP was radio 2—not one of the AX-only template radios—and radio 2 is configured for Wi-Fi 7 (`BE`) operation while serving these HE/Wi-Fi 6 clients.
@@ -132,8 +149,8 @@ The internal results remove public iperf admission, Internet transit, firewall e
 
 The best next tests are:
 
-1. Without any network-team change, use full-power/5 Gbps PV10 for a two-run TCP matrix at a fixed 250 Mbps aggregate per direction: one versus four parallel flows, then DSCP 0 versus EF. Keep aggregate rate constant and collect gateway ping, `ss -ti`, `nstat`, qdisc/link counters, `iw` station deltas, and synchronized Arista samples. This separates a per-flow/TCP-ACK effect from a per-client aggregate/WMM queue effect.
-2. Repeat only the discriminating case on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
+1. Without any network-team change, repeat PV10 using iperf3's native `--bidir` mode versus the current two-process/two-listener method, then compare 16K, 64K, and 128K block sizes at the same one-flow 250 Mbps target. Capture per-core CPU/softirq, socket memory, and `TCPRcvCollapsed`. This tests whether receiver draining or the harness process model is creating or amplifying the symptom.
+2. Repeat only the discriminating receiver-path case on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
 3. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
 4. On one controlled AP, repeat the same client and script with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
 5. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
@@ -144,6 +161,7 @@ The best next tests are:
 
 - Sanitized probe evidence remains temporarily on the management node under the run IDs `fleet-internal-20260803T0020Z` and `he250-internal-20260803T004103Z`.
 - Adaptive-knee probe evidence remains temporarily on the management node under `he-knee-internal-20260803T010336Z`; its synchronized local Arista sample contains 188 sanitized observations. Raw credentials, SSIDs, client/AP identifiers, and controller responses were not added to the repository.
+- PV10 flow/QoS evidence remains temporarily on the management node under `tcp-flow-qos-20260803T022516Z`; the synchronized Arista sample contains 86 sanitized observations.
 - Three HE 250 Mbps directional TCP objects hit bounded timeouts; they are not represented as zero.
 - Several iperf3 3.9 TCP controls exceeded the JSON safety bound during the 100 Mbps fleet run; UDP and simultaneous results remain independently valid.
 - Controller performance fields are not phase-resolution logs. Causal claims require time-aligned AP/client events or an authorized over-the-air capture.
