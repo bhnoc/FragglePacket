@@ -15,8 +15,13 @@ internal-server testing then reproduced the distributed impairment without
 Internet transit, NAT, firewall egress, or dual-WAN selection. The trigger
 scales with client efficiency: many VHT probes fail around 50–100 Mbps, HE
 probes show duplex-capacity pressure around 200–250 Mbps, and the newer laptop
-reproduces around 350 Mbps. The remaining fault domain is the client-facing
-WLAN datapath, scheduling, airtime, aggregation, or queue behavior. MSS
+reproduces around 350 Mbps. Native bidirectional and application tests showed
+that the original paired-process harness exaggerated the directional collapse,
+but real capacity plateaus, first-hop latency, and application-flow starvation
+remain. Disabling Wi-Fi 7/802.11be on the controlled AP did not change the
+result, ruling out Wi-Fi 7 mode as a necessary cause. The remaining fault
+domain is the client-facing WLAN datapath, scheduling, airtime, aggregation,
+queue behavior, shared AP firmware paths, or client-driver behavior. MSS
 behavior did not support a blanket clamp.
 
 ## Committed reports

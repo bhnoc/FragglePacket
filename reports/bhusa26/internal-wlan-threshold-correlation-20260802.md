@@ -160,6 +160,38 @@ One original paired 64 KiB trial was excluded after its reverse process returned
 
 The controller supplied 130 observations through 03:26:21Z. PC13 remained on one AP, channel 153 at 40 MHz, with -46 to -44 dBm controller-reported signal, 2% client retry, 1% contention/interference, one associated client, and zero connection failures. The AP remained active on firmware 21.3.0M-13 at fixed 18 dBm; its wired link was 1 Gbps and its 40 W request was negotiated down to 25.5 W PoE+. Exact-window Client Events and Related AP Events both returned zero records. Reduced AP power remains a fleet concern, but it cannot explain the method-dependent difference on this unchanged AP, and the observed 134.7 Mbps maximum combined delivery was far below its 1 Gbps wired link.
 
+## PC13 native capacity knee and application reproduction
+
+Run window: 2026-08-03 03:32:31Z–03:50Z. A version-safe native `--bidir` sweep used validated 64 KiB results and a different qualified internal listener for every phase. Two repeated-listener resets and one short-duration result were excluded. The test delivered essentially the full request through 60 Mbps in each direction. At 70 Mbps, combined delivery began to flatten while gateway latency doubled; from 80 through 100 Mbps, combined delivery stayed near 134–142 Mbps while latency continued rising.
+
+| Requested per direction | Valid runs | Mean upload / download | Mean combined delivery | Idle gateway average | Loaded gateway average |
+|---:|---:|---:|---:|---:|---:|
+| 25 Mbps | 1 | 24.7 / 24.6 Mbps | 49.3 Mbps | 3.05 ms | 3.73 ms |
+| 40 Mbps | 1 | 39.7 / 39.5 Mbps | 79.2 Mbps | 2.15 ms | 5.29 ms |
+| 50 Mbps | 1 | 49.5 / 49.4 Mbps | 99.0 Mbps | 1.63 ms | 6.26 ms |
+| 60 Mbps | 2 | 59.3 / 59.9 Mbps | 119.1 Mbps | 1.79 ms | 8.05 ms |
+| 70 Mbps | 3 | 66.6 / 67.2 Mbps | 133.8 Mbps | 1.76 ms | 16.80 ms |
+| 80 Mbps | 1 | 70.0 / 71.8 Mbps | 141.8 Mbps | 1.84 ms | 25.38 ms |
+| 90 Mbps | 1 | 67.3 / 66.9 Mbps | 134.2 Mbps | 1.96 ms | 27.03 ms |
+| 100 Mbps | 1 | 70.9 / 71.4 Mbps | 142.3 Mbps | 1.87 ms | 27.51 ms |
+
+The capacity/latency knee is therefore between 60 and 70 Mbps per direction on this VHT client under current conditions. This is not a directional collapse: native iperf divided the available capacity evenly. It is a real shared-capacity plateau with increasing first-hop queue delay.
+
+The same knee then reproduced with application traffic against Apple's measurement service. Four concurrent HTTP/2 downloads were paired with four rate-limited HTTPS uploads. At 60 Mbps requested in each direction, two trials averaged 61.4 Mbps download and 58.8 Mbps upload; gateway latency rose from 1.80 ms idle to 36.73 ms loaded and peaked at 203.15 ms, with one of 150 loaded pings lost. At 70 Mbps, download held at 71.7 Mbps while upload fell to 45.7 Mbps—24.3 Mbps below its request—and loaded gateway latency averaged 56.46 ms with a 232.59 ms peak. The 70 Mbps behavior repeated in both trials: upload delivered 47.3 and 44.1 Mbps while download delivered 71.5 and 71.8 Mbps.
+
+| Application phase | Runs | Mean download | Mean upload | Loaded gateway average | Highest gateway sample |
+|---|---:|---:|---:|---:|---:|
+| HTTP/2 download-only control, 70 Mbps | 1 | 71.8 Mbps | — | 19.46 ms | 170.58 ms |
+| HTTPS upload-only control, 70 Mbps | 1 | — | 70.2 Mbps | 4.66 ms | 34.51 ms |
+| Concurrent HTTP/2 download + HTTPS upload, 60+60 | 2 | 61.4 Mbps | 58.8 Mbps | 36.73 ms | 203.15 ms |
+| Concurrent HTTP/2 download + HTTPS upload, 70+70 | 2 | 71.7 Mbps | 45.7 Mbps | 56.46 ms | 232.59 ms |
+| HTTP/3 download-only controls | 2 | 18.7–20.1 Mbps | — | 4.02 ms | 57.09 ms |
+| HTTP/3 download + HTTPS upload at 60 or 70 | 4 | 14.8 Mbps mean | 60.1–70.3 Mbps | 11.73 ms | 241.59 ms |
+
+The HTTP/3 test used four real H3 streams with negotiated QUIC v1/H3 and HTTP 200 responses. Both bracketing download-only controls delivered 18.7–20.1 Mbps. All four concurrent-upload trials were below that control range at 11.8–18.6 Mbps, averaging 14.8 Mbps, a 23.8% reduction. Because this was a public CDN endpoint with lower and variable capacity, it corroborates an application coexistence penalty but does not define the local WLAN's maximum. The repeated HTTP/2/HTTPS result is the stronger rate-controlled proof that the user-visible problem survives outside the old iperf process model.
+
+Two hundred controller observations covered the native sweep and application phases. PC13 stayed on one AP and channel 153/40 MHz with -45 to -44 dBm controller signal, zero reported retry, one associated client, and zero connection failures. The AP remained active at 18 dBm, 25.5 W PoE+, and 1 Gbps. Controller contention changed from 0 to 77 in one delayed step during the application run and stayed there; this is consistent with cached publication and cannot be assigned to an individual phase. Exact-window Client Events and Related AP Events again returned zero records.
+
 ## Effective Arista configuration and event evidence
 
 The read-only integration was extended using Arista's published [CV-CUE OpenAPI index](https://apihelp.wifi.arista.com/data/wm/wm-openapi-root.json), then used only with documented GET routes. Each probe's current client record was joined to its location policy, actual AP template, active AP radio, and matching SSID profile. The four locations use different profile identifiers but returned the same relevant settings. The active association on every AP was radio 2—not one of the AX-only template radios—and radio 2 is configured for Wi-Fi 7 (`BE`) operation while serving these HE/Wi-Fi 6 clients.
@@ -167,7 +199,7 @@ The read-only integration was extended using Arista's published [CV-CUE OpenAPI 
 | Configuration surface | Effective value on all four tested APs | Investigative relevance |
 |---|---|---|
 | Platform / software | C-460; 21.3.0M-13 | Common implementation and firmware across the reproduced cases |
-| Active radio | 5 GHz radio 2; protocol `BE`; actual 40 MHz; auto channel; fixed 18 dBm | Directly supports testing Wi-Fi 7 backward-compatibility behavior while holding channel, width, and power fixed |
+| Active radio | 5 GHz radio 2; protocol `BE`; actual 40 MHz; auto channel; fixed 18 dBm | A subsequent same-client test with Wi-Fi 7/BE disabled reproduced the same degradation, ruling out BE mode as a necessary trigger |
 | Multi-user features | Downlink OFDMA on; uplink OFDMA off; downlink and uplink MU-MIMO off | Uplink OFDMA/MU-MIMO are already eliminated as current causes; downlink OFDMA remains testable |
 | Wi-Fi 7/airtime features | MRU on; BSS coloring on; spatial reuse on with OBSS-PD -77 dBm; preamble puncturing off | MRU and spatial reuse are plausible one-change-at-a-time A/B candidates |
 | Aggregation / thresholds | Frame aggregation and A-MSDU on; RTS 2347; fragmentation 2346; ignore-low-RSSI off | No unusual low RTS/fragmentation cutoff or low-RSSI discard policy was found |
@@ -181,20 +213,19 @@ Exact-window `Client Events` and `Related AP Events` queries returned zero recor
 
 A subsequent live association inventory found 19 active trusted probes on 19 different AP hashes; PV05 and PV06 were absent from the client API at that moment. Consequently, no stationary same-AP Precog pair was available for a valid aggressor/victim experiment. This does not imply the APs have only one client or that peer impact is absent—it only means the controlled probes could not test it without moving a probe or adding another authorized client.
 
+The operator subsequently disabled Wi-Fi 7/802.11be operation on the controlled AP and repeated the full same-client baseline. The degradation remained. That completed A/B rules out Wi-Fi 7/BE mode and Wi-Fi 7 backward compatibility as necessary causes of this incident. It does not rule out behavior shared by both AX and BE modes, such as generic C-460 scheduling, airtime, aggregation, WMM queues, client-driver behavior, or firmware code used by both configurations.
+
 ## Current interpretation
 
-The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. Receiver-path A/Bs on both HE PV10 and VHT PC13 materially narrow the earlier interpretation: the dramatic synthetic one-direction collapse is not clean evidence of an AP defect because it largely disappears when the same client, AP, target, and valid block sizes use native bidirectional iperf. The strongest current explanation is PHY-scaled half-duplex WLAN saturation, amplified into directional unfairness by the two-process/two-listener harness and expressed differently by the two client stacks. PV10 raised receive-collapse counters; PC13 did not. Real loaded latency and shared-capacity limits remain. The common Wi-Fi 7 radio configuration is still a useful controlled A/B surface, but it is no longer the first test and is not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
+The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. Receiver-path A/Bs on both HE PV10 and VHT PC13 show that the old paired-process harness exaggerated directional collapse, but the native knee and HTTP/2/HTTPS reproduction prove the user-impacting capacity and latency problem is real. The strongest current explanation is PHY-scaled half-duplex WLAN saturation, amplified into directional unfairness by concurrent application flows and expressed differently by the two client stacks. PV10 raised receive-collapse counters; PC13 did not. Wi-Fi 7/BE mode is ruled out as a necessary cause because disabling it did not change the result. The remaining fault domain includes generic C-460/AP scheduling, airtime and aggregation efficiency, WMM/queue behavior, shared AX/BE firmware paths, and client-driver behavior. The data does not support a single bad AP, channel, weak-signal threshold, controller contention threshold, or legacy-only defect.
 
 The best next tests are:
 
-1. Sweep native `--bidir` at equal per-direction requests of 100, 125, 150, 175, 200, 225, and 250 Mbps on PV10, with interleaved idle controls. This locates the combined-throughput plateau and gateway-latency knee without the paired-process artifact.
-2. Repeat only the discriminating native and paired cases on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
-3. Run an application-representative HTTPS/HTTP3 or controlled file-transfer duplex test across the same rate knee. This determines whether real multi-connection traffic experiences the paired harness's unfairness.
-4. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
-5. On one controlled AP, repeat the same client and native sweep with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
-6. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
-7. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
-8. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
+1. Repeat the native knee and application test on PV10 and the newer laptop at their normalized trigger rates. This confirms whether the same 60-to-70-style latency knee scales consistently with each client's usable PHY capacity.
+2. On one full-power AP and one reduced-power AP, run the same client at a normalized sub-knee and knee load while collecting AP switch-port queue drops/errors, PoE negotiation, radio airtime, and interface counters. This separates a fleet concern from a necessary cause.
+3. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
+4. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. The current read role cannot retrieve audit history, and cached performance values are not phase-resolution evidence.
+5. Use an authorized over-the-air capture plus AP/client packet capture at 60 and 70 Mbps per direction to compare block acknowledgements, retries, TXOP occupancy, contention, aggregation, and TCP ACK timing immediately below and above the proven application knee.
 
 ## Evidence and limitations
 
@@ -203,6 +234,7 @@ The best next tests are:
 - PV10 flow/QoS evidence remains temporarily on the management node under `tcp-flow-qos-20260803T022516Z`; the synchronized Arista sample contains 86 sanitized observations.
 - PV10 receiver-path evidence remains temporarily on the management node under `receiver-path-20260803T024209Z`; the synchronized Arista sample contains 130 sanitized observations.
 - PC13 receiver-path evidence remains temporarily on the management node under `receiver-path-pc13-20260803T031527Z`; its synchronized Arista sample contains 130 sanitized observations. One failed paired listener result and both invalid native 128 KiB results were excluded rather than converted to zero throughput.
+- PC13 native-knee evidence remains temporarily on the management node under `pc13-native-knee-20260803T033217Z` and `pc13-native-knee2-20260803T0337Z`; application evidence remains under `pc13-app-knee-20260803T0343Z` and `pc13-app-h3-closing-20260803T0349Z`. The synchronized Arista sample contains 200 sanitized observations. The HTTP/3 client used user-scoped aioquic 1.3.0 on PC13.
 - Three HE 250 Mbps directional TCP objects hit bounded timeouts; they are not represented as zero.
 - Several iperf3 3.9 TCP controls exceeded the JSON safety bound during the 100 Mbps fleet run; UDP and simultaneous results remain independently valid.
 - Controller performance fields are not phase-resolution logs. Causal claims require time-aligned AP/client events or an authorized over-the-air capture.
