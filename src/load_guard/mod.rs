@@ -15,6 +15,9 @@ pub mod radio_diagnostic;
 pub mod route;
 pub mod tcp_vs_udp;
 pub mod wdutil;
+pub mod roaming;
+pub mod multiclient_fairness;
+pub mod wired_control;
 
 pub use ap_identity::{compare as compare_ap_identity, label_for_bssid, load_or_create_salt, ApComparison, ApIdentity};
 pub use budget::{AbortThresholds, BudgetError, LoadBudget, RunMode};
@@ -34,3 +37,9 @@ pub use guard::{
 pub use radio::{classify_rf, RadioSnapshot, RfQuality};
 pub use route::{detect_live as detect_default_route, RouteInfo};
 pub use wdutil::{parse_wdutil_info, snapshot_live as wdutil_snapshot_live, WdutilError, WdutilFields};
+pub use roaming::{build_transition, classify_transition, IdentityContinuity, RoamTransition, TransitionKind};
+pub use multiclient_fairness::{
+    evaluate_cross_client, jain_fairness_index, shared_listener_confound, windows_overlap, ClientRole,
+    CrossClientVerdict, PhaseMark, RoleDescriptor,
+};
+pub use wired_control::{attribute as attribute_wired_vs_wifi, FaultAttribution, PathResult};

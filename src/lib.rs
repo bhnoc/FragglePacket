@@ -5,4 +5,5 @@ pub mod diagnosis;
 pub mod framework;
 pub mod probe;
 pub mod load_guard;
+pub mod redact;
 

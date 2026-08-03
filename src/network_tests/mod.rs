@@ -60,6 +60,7 @@ pub mod fleet_orchestrator;
 pub mod probe_preflight;
 pub mod clock_guard;
 pub mod policy_manifest;
+pub mod run_confidence;
 pub mod circuit_workflow;
 pub mod reference_endpoint;
 

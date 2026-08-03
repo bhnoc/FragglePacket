@@ -176,6 +176,12 @@ pub enum Commands {
     ClockGuard(commands::clock_guard::ClockGuardArgs),
     /// Expected-policy and service-reachability manifest: probes only allowlisted targets and flags drift from declared allow/deny policy (GAP-065)
     PolicyManifest(commands::policy_manifest::PolicyManifestArgs),
+    /// Controlled roaming/session-continuity test: privacy-safe AP transitions, handoff duration, and VLAN/public-identity continuity (GAP-050)
+    Roaming(commands::roaming::RoamingArgs),
+    /// Coordinated multi-client capacity/fairness: refuses a cross-client verdict until both role descriptors exist and their phase windows overlap (GAP-051/GAP-067)
+    MulticlientFairness(commands::multiclient_fairness::MulticlientFairnessArgs),
+    /// Matched wired-versus-Wi-Fi fault-domain control: withholds WLAN attribution when the two paths' public egress identities differ (GAP-030)
+    WiredControl(commands::wired_control::WiredControlArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -257,6 +263,9 @@ pub fn dispatch(args: Args) {
         Some(Commands::ProbePreflight(a)) => commands::probe_preflight::run(&a),
         Some(Commands::ClockGuard(a)) => commands::clock_guard::run(&a),
         Some(Commands::PolicyManifest(a)) => commands::policy_manifest::run(&a),
+        Some(Commands::Roaming(a)) => commands::roaming::run(&a),
+        Some(Commands::MulticlientFairness(a)) => commands::multiclient_fairness::run(&a),
+        Some(Commands::WiredControl(a)) => commands::wired_control::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

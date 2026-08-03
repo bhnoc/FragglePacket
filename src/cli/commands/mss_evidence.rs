@@ -8,6 +8,7 @@ use std::time::Duration;
 use fraggle_packet::network_tests::mss_evidence::{
     cluster_destination_mss, ingest_syn_mss, ClusterVerdict, DestinationMss, MiddleboxVerdict,
 };
+use fraggle_packet::redact::RedactionPolicy;
 
 #[derive(clap::Args, Debug)]
 pub struct MssEvidenceArgs {
@@ -57,6 +58,11 @@ pub struct MssEvidenceArgs {
 
     #[arg(long)]
     pub json: bool,
+
+    /// GAP-018: by default, IP addresses and MAC/BSSID-shaped strings in
+    /// human-readable output are redacted. Pass this to see raw values.
+    #[arg(long)]
+    pub retain_identifiers: bool,
 }
 
 fn parse_destination(raw: &str) -> Option<DestinationMss> {
@@ -67,6 +73,7 @@ fn parse_destination(raw: &str) -> Option<DestinationMss> {
 
 pub fn run(args: &MssEvidenceArgs) {
     let mut ran_something = false;
+    let policy = RedactionPolicy::from_retain_flag(args.retain_identifiers);
 
     if let Some(path) = &args.ingest {
         ran_something = true;
@@ -75,28 +82,30 @@ pub fn run(args: &MssEvidenceArgs) {
                 if args.json {
                     println!("{}", serde_json::to_string_pretty(&report).unwrap());
                 } else {
-                    println!("{}", format!("== GAP-010 MSS evidence: {} ==", report.source).cyan().bold());
-                    println!(
-                        "  flows: {} total, {} with both SYN directions observed",
+                    let mut buf = String::new();
+                    buf.push_str(&format!("== GAP-010 MSS evidence: {} ==\n", report.source));
+                    buf.push_str(&format!(
+                        "  flows: {} total, {} with both SYN directions observed\n",
                         report.flows_total, report.flows_with_both_directions
-                    );
+                    ));
                     for (flow, attribution) in report.flows.iter().zip(report.attributions.iter()) {
-                        println!(
-                            "  {}:{} <-> {}:{}",
+                        buf.push_str(&format!(
+                            "  {}:{} <-> {}:{}\n",
                             flow.local_ip, flow.local_port, flow.peer_ip, flow.peer_port
-                        );
-                        println!(
-                            "    local_advertised={:?} peer_advertised={:?} both_directions={}",
+                        ));
+                        buf.push_str(&format!(
+                            "    local_advertised={:?} peer_advertised={:?} both_directions={}\n",
                             flow.local_advertised, flow.peer_advertised, flow.both_directions_observed
-                        );
+                        ));
                         let verdict_str = match attribution.verdict {
-                            MiddleboxVerdict::NoRewriteEvidence => "no-rewrite-evidence".green(),
-                            MiddleboxVerdict::Ambiguous => "ambiguous".yellow(),
-                            MiddleboxVerdict::InsufficientEvidence => "insufficient-evidence".yellow(),
+                            MiddleboxVerdict::NoRewriteEvidence => "no-rewrite-evidence",
+                            MiddleboxVerdict::Ambiguous => "ambiguous",
+                            MiddleboxVerdict::InsufficientEvidence => "insufficient-evidence",
                         };
-                        println!("    verdict={} confidence={:?}", verdict_str, attribution.confidence);
-                        println!("    {}", attribution.explanation.dimmed());
+                        buf.push_str(&format!("    verdict={} confidence={:?}\n", verdict_str, attribution.confidence));
+                        buf.push_str(&format!("    {}\n", attribution.explanation));
                     }
+                    print!("{}", policy.apply(&buf));
                 }
             }
             Err(e) => {
