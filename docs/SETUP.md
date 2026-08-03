@@ -101,3 +101,11 @@ macOS does not offer setcap; relaunch with `sudo` when raw-socket features are n
 ./start.sh --tui            # Terminal UI
 ./target/release/fraggle-packet test github.com
 ```
+
+## Continuous integration
+
+Automated CI and test coverage are configured in `.github/workflows/test.yml`. On every pull request and push to `main`, GitHub Actions runs:
+- Rust formatting and Clippy lints
+- Complete workspace unit and integration tests (`cargo test --workspace --all-targets`)
+- Fast plumbing smoke checks (`harness/smoke.sh`)
+- Code coverage reporting via `cargo-llvm-cov`

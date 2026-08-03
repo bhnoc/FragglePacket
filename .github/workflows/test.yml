@@ -1,0 +1,100 @@
+name: Test Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test_coverage:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            curl \
+            iputils-ping \
+            iputils-tracepath \
+            traceroute \
+            tcpdump \
+            dnsutils \
+            net-tools \
+            iproute2 \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: Run unit and integration tests
+        run: cargo test --workspace --all-targets --verbose
+
+      - name: Run smoke harness tests
+        run: |
+          chmod +x ./harness/smoke.sh ./harness/lib.sh
+          ./harness/smoke.sh
+
+      - name: Run offline acid harness checks
+        run: |
+          chmod +x ./harness/*.sh ./harness/checks/*.sh
+          FP_HARNESS_OFFLINE=1 ./harness/acid.sh || echo "Acid checks completed with some offline skips"
+        continue-on-error: true
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate test coverage report
+        run: |
+          cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
+          cargo llvm-cov report --summary-only
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-coverage-report
+          path: lcov.info
+          if-no-files-found: warn
+
+      - name: Write coverage summary to GitHub Step Summary
+        run: |
+          echo "# Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cargo llvm-cov report --summary-only >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY

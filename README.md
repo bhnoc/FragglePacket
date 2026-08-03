@@ -208,6 +208,10 @@ cargo test
 ./target/release/fraggle-desktop
 ```
 
+## Continuous integration and test coverage
+
+Automated test coverage and verification run in GitHub Actions on every pull request targeting `main` and on pushes to `main` via `.github/workflows/test.yml`. The workflow executes unit tests across all workspace crates, runs the `harness/smoke.sh` baseline checks, and generates LCOV coverage reports via `cargo-llvm-cov`.
+
 ## Documentation
 
 | Page | Covers |
