@@ -210,7 +210,7 @@ cargo test
 
 ## Continuous integration and test coverage
 
-Automated test coverage and verification run in GitHub Actions on every pull request targeting `main` and on pushes to `main` via `.github/workflows/test.yml`. The workflow executes unit tests across all workspace crates, runs the `harness/smoke.sh` baseline checks, and generates LCOV coverage reports via `cargo-llvm-cov`.
+Automated test coverage and verification run in GitHub Actions on every pull request targeting `main` and on pushes to `main` via `.github/workflows/test.yml`. The workflow builds the release binaries, runs the 589-test suite, the `harness/smoke.sh` baseline checks, and the full offline `harness/acid.sh` ratchet, then generates LCOV coverage reports via `cargo-llvm-cov`. Formatting is advisory; tests, smoke, and acid all fail the build. See [docs/SETUP.md](docs/SETUP.md) for which steps gate and why.
 
 ## Documentation
 

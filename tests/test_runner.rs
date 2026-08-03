@@ -258,18 +258,16 @@ fn probe_tcp(addr: &SocketAddr, payload_size: usize, timeout: Duration) -> bool 
                 // If we get EMSGSIZE on next operation, MTU is too large
                 thread::sleep(Duration::from_millis(50));
                 
-                // Try to read - if we get EMSGSIZE, MTU exceeded
+                // Try to read - if we get EMSGSIZE, MTU exceeded. Only EMSGSIZE
+                // disproves the size; a timeout, a peer close (Ok(0)), or any
+                // other error says nothing about it either way, so all of those
+                // read as "not disproven". The byte count is deliberately
+                // ignored rather than unhandled: nothing here inspects payload.
                 let mut buf = [0u8; 1];
                 match stream.read(&mut buf) {
-                    Ok(_) => true,  // Got response, MTU works
-                    Err(e) => {
-                        if e.raw_os_error() == Some(libc::EMSGSIZE) {
-                            false  // MTU exceeded
-                        } else {
-                            // Other error - assume it worked (timeout is OK)
-                            true
-                        }
-                    }
+                    Ok(0) => true,
+                    Ok(_n) => true,
+                    Err(e) => e.raw_os_error() != Some(libc::EMSGSIZE),
                 }
             } else {
                 false

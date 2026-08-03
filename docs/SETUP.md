@@ -105,7 +105,15 @@ macOS does not offer setcap; relaunch with `sudo` when raw-socket features are n
 ## Continuous integration
 
 Automated CI and test coverage are configured in `.github/workflows/test.yml`. On every pull request and push to `main`, GitHub Actions runs:
-- Rust formatting and Clippy lints
-- Complete workspace unit and integration tests (`cargo test --workspace --all-targets`)
-- Fast plumbing smoke checks (`harness/smoke.sh`)
-- Code coverage reporting via `cargo-llvm-cov`
+
+| Step | Fails the build? |
+| --- | --- |
+| `cargo fmt --all -- --check` | No — advisory. The tree carries ~2,200 rustfmt diffs; gating on them would make every PR red for pre-existing reasons. |
+| `cargo clippy --all-targets` | Only on hard errors. The ~190 existing warnings do not block, but deny-by-default lints (e.g. `unused_io_amount`) do, because those are bugs rather than style. |
+| `cargo build --release` | Yes. The harness runs the release binary directly. |
+| `cargo test --all-targets` | Yes — 589 tests. |
+| `harness/smoke.sh` | Yes. |
+| `harness/acid.sh` (with `FP_HARNESS_OFFLINE=1`) | Yes — this is the ratchet, so it is deliberately allowed to break the build. |
+| `cargo-llvm-cov` coverage report | Yes, on report failure; the LCOV artifact is uploaded either way. |
+
+Note `cargo test --workspace` does not apply here: this is a single crate with no `[workspace]` section, so `--workspace` is a no-op at best and misleading at worst.

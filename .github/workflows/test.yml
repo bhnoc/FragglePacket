@@ -55,34 +55,46 @@ jobs:
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
+      # Formatting and warning-level lints are REPORTED, not enforced: the tree
+      # currently carries ~2,200 rustfmt diffs and ~190 clippy warnings. Gating
+      # on those today would make every PR red for pre-existing reasons, which
+      # trains people to ignore CI. Clippy still fails on hard errors
+      # (deny-by-default lints like unused_io_amount) because those are bugs.
+      - name: Check formatting (advisory)
         run: cargo fmt --all -- --check
         continue-on-error: true
 
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-        continue-on-error: true
+      - name: Run clippy (warnings advisory, errors fail the build)
+        run: cargo clippy --all-targets
+
+      # The harness runs target/release/fraggle-packet directly and exits 2 when
+      # it is absent (harness/lib.sh require_bin), so build before smoke/acid.
+      - name: Build release binaries
+        run: cargo build --release
 
       - name: Run unit and integration tests
-        run: cargo test --workspace --all-targets --verbose
+        run: cargo test --all-targets --verbose
 
       - name: Run smoke harness tests
         run: |
           chmod +x ./harness/smoke.sh ./harness/lib.sh
           ./harness/smoke.sh
 
+      # acid.sh is the project's quality ratchet -- "only grows, never shrinks".
+      # It must be able to fail the build, so there is no continue-on-error and
+      # no `|| echo` swallowing a RED result. Checks that need live network
+      # self-skip under FP_HARNESS_OFFLINE, so red here is a real regression.
       - name: Run offline acid harness checks
         run: |
           chmod +x ./harness/*.sh ./harness/checks/*.sh
-          FP_HARNESS_OFFLINE=1 ./harness/acid.sh || echo "Acid checks completed with some offline skips"
-        continue-on-error: true
+          FP_HARNESS_OFFLINE=1 ./harness/acid.sh
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate test coverage report
         run: |
-          cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
+          cargo llvm-cov --all-targets --lcov --output-path lcov.info
           cargo llvm-cov report --summary-only
 
       - name: Upload coverage report artifact
@@ -94,7 +106,7 @@ jobs:
 
       - name: Write coverage summary to GitHub Step Summary
         run: |
-          echo "# Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cargo llvm-cov report --summary-only >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "# Test Coverage Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov report --summary-only >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
