@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use fraggle_packet::load_guard::{
     compute_delta, real_sources_for_interface, CounterDelta, CounterSource, DeltaQualification,
-    LoadBudget, LoadGuard, PhaseTick, Validity,
+    LoadBudget, LoadGuard, PhaseTick, RadioSnapshot, RadioSource, Validity,
 };
 
 /// GAP-035: pairs the counter delta with the phase's own radio-validity
@@ -48,8 +48,31 @@ pub struct CounterDeltasArgs {
     #[arg(long)]
     pub inject_wrap: bool,
 
+    /// For the demo/test harness only: never call system_profiler/ioreg --
+    /// use synthetic strong-RF radio state for every sample. Keeps the
+    /// harness fast and deterministic (system_profiler costs ~8s/call, paid
+    /// twice per real run); a real run should never pass this. Marks the
+    /// report's radio source as synthetic (GAP-027's provenance rule), so
+    /// this can never be mistaken for a real RF measurement.
+    #[arg(long)]
+    pub fake_radio: bool,
+
     #[arg(long)]
     pub json: bool,
+}
+
+fn strong_snapshot() -> RadioSnapshot {
+    RadioSnapshot {
+        associated: true,
+        phy_mode: Some("802.11ax".into()),
+        band: Some("6GHz".into()),
+        channel: Some(197),
+        width_mhz: Some(80),
+        rssi_dbm: Some(-55),
+        noise_dbm: Some(-92),
+        tx_rate_mbps: Some(900.0),
+        mcs_index: Some(9),
+    }
 }
 
 pub fn run(args: &CounterDeltasArgs) {
@@ -74,7 +97,17 @@ pub fn run(args: &CounterDeltasArgs) {
     // GAP-035: real radio bracketing, not a stubbed-unavailable source --
     // this phase now participates in roam/RF invalidation like every other
     // load command, instead of always landing on Invalid(RadioUnavailable).
-    let (radio, radio_fast, _unused_counters) = real_sources_for_interface(&interface);
+    // --fake-radio (harness-only) substitutes a synthetic strong-RF source
+    // so the harness never pays system_profiler's ~8s/call cost.
+    let (radio, radio_fast, _unused_counters) = if args.fake_radio {
+        (
+            RadioSource::new(|| Ok(strong_snapshot())),
+            RadioSource::new(|| Ok(strong_snapshot())),
+            CounterSource::new(|| Err("counter-deltas: unused when --fake-radio is set".to_string())),
+        )
+    } else {
+        real_sources_for_interface(&interface)
+    };
     let iface_for_counters = interface.clone();
     let inject_wrap = args.inject_wrap;
     let call_count = std::sync::atomic::AtomicUsize::new(0);
@@ -90,7 +123,7 @@ pub fn run(args: &CounterDeltasArgs) {
     });
 
     let guard = match LoadGuard::new(budget, interface.clone(), false, radio, counters) {
-        Ok(g) => g.with_fast_radio_source(radio_fast),
+        Ok(g) => g.with_fast_radio_source(radio_fast).with_synthetic_radio_marker(args.fake_radio),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);

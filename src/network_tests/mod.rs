@@ -42,6 +42,13 @@ pub mod platform_matrix;
 pub mod counter_liveness;
 pub mod phy_normalized;
 pub mod ap_compat_matrix;
+pub mod media_quality;
+pub mod vpn_matrix;
+pub mod nat_capacity;
+pub mod ecn_aqm;
+pub mod crypto_min;
+pub mod stun;
+pub mod ecmp_nat;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

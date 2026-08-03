@@ -27,7 +27,7 @@ check_contains "counter-deltas advertises --interface/--assume-isolated/--inject
 check_fails "counter-deltas with no --interface refuses to run" \
     "$BIN" counter-deltas --rate-mbps 1 --duration-secs 1
 
-cd_json() { "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 "$@" --json 2>/dev/null | sed -n '/^{/,$p'; }
+cd_json() { "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --fake-radio "$@" --json 2>/dev/null | sed -n '/^{/,$p'; }
 json_get() { python3 -c '
 import json, sys
 d = json.load(sys.stdin)
@@ -107,12 +107,12 @@ fi
 
 # --- host/driver error field must never be named/labeled as remote loss ---
 check_lacks "human output never labels host/driver errors as remote loss" "remote_loss" \
-    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --assume-isolated
+    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --assume-isolated --fake-radio
 check_contains "human output distinguishes host/driver errors from remote loss explicitly" \
     "not a remote-loss measurement" \
-    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --assume-isolated
+    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --assume-isolated --fake-radio
 
 # --- withheld delta reads as "none", never a fabricated rate ---
 check_contains "withheld delta's human output states none, not a fabricated rate" \
     "normalized: none" \
-    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1
+    "$BIN" counter-deltas --interface en0 --rate-mbps 1 --duration-secs 1 --fake-radio

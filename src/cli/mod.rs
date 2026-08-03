@@ -138,6 +138,18 @@ pub enum Commands {
     RadioDiagnostic(commands::radio_diagnostic::RadioDiagnosticArgs),
     /// Stable, privacy-safe salted AP/radio identity derived from BSSID without storing or displaying it (GAP-024)
     ApIdentity(commands::ap_identity::ApIdentityArgs),
+    /// Firewall/NAT/session-state capacity matrix: authorization-gated disruptive probing, safe-by-default idle-mapping observation (GAP-054)
+    NatCapacity(commands::nat_capacity::NatCapacityArgs),
+    /// VPN/encapsulation compatibility matrix: credential-free protocol reachability and real effective MTU/MSS measurement (GAP-060)
+    VpnMatrix(commands::vpn_matrix::VpnMatrixArgs),
+    /// Synthetic RTP/WebRTC media-quality probe: setup/ICE, burst-derived concealment/freeze risk, MOS-style estimate (GAP-052)
+    MediaQuality(commands::media_quality::MediaQualityArgs),
+    /// ECN/AQM capability and CE-mark counting with classic-ECN-vs-L4S distinction (GAP-023)
+    EcnAqm(commands::ecn_aqm::EcnAqmArgs),
+    /// Repeated STUN binding requests with validation/RTT, mapped-address change detection, and TURN allocation checks (GAP-005)
+    StunTurn(commands::stun::StunTurnArgs),
+    /// Multi-uplink ECMP/LAG hash and NAT-affinity diagnostic via fixed-5-tuple port sweeps (GAP-028)
+    EcmpNat(commands::ecmp_nat::EcmpNatArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -200,6 +212,12 @@ pub fn dispatch(args: Args) {
         Some(Commands::ApCompatMatrix(a)) => commands::ap_compat_matrix::run(&a),
         Some(Commands::RadioDiagnostic(a)) => commands::radio_diagnostic::run(&a),
         Some(Commands::ApIdentity(a)) => commands::ap_identity::run(&a),
+        Some(Commands::NatCapacity(a)) => commands::nat_capacity::run(&a),
+        Some(Commands::VpnMatrix(a)) => commands::vpn_matrix::run(&a),
+        Some(Commands::MediaQuality(a)) => commands::media_quality::run(&a),
+        Some(Commands::EcnAqm(a)) => commands::ecn_aqm::run(&a),
+        Some(Commands::StunTurn(a)) => commands::stun::run(&a),
+        Some(Commands::EcmpNat(a)) => commands::ecmp_nat::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }
