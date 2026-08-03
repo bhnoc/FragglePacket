@@ -122,6 +122,25 @@ The client root qdisc recorded no drops, signal stayed -57 to -58 dBm, and negot
 
 Linux `TcpExtTCPRcvCollapsed` increased in seven of eight simultaneous phases—943 freed socket buffers in total—but remained zero through all eight directional controls. The [Linux kernel SNMP counter documentation](https://www.kernel.org/doc/html/latest/networking/snmp_counter.html) defines this as socket buffers freed while collapsing the receive and out-of-order queues during receive-socket memory pressure. This is the strongest new client-side symptom, but it is not sufficient as a sole cause because one collapsed simultaneous trial recorded zero. It points to receive-path pressure or delayed draining during duplex traffic and justifies testing the iperf process model, block size, socket behavior, per-core softirq load, and driver receive path before assigning the entire failure to the AP.
 
+## PV10 receiver-path and process-model A/B
+
+Run window: 2026-08-03 02:43:56Z–02:48:50Z. The same PV10 client then compared the original two-process/two-listener method with iperf3's native `--bidir` mode at a fixed 250 Mbps request in each direction. Each method was tested twice at 16, 64, and 128 KiB. Eighteen phases captured directional controls, gateway latency, per-core CPU, softirq and softnet counters, iwlwifi interrupts, socket memory, `nstat`, qdisc/link counters, and negotiated station state. Arista supplied 130 observations through 02:54:41Z, including almost six minutes of recovery.
+
+| Method / block | Trial 1 upload / download | Trial 2 upload / download | Mean directional difference | Mean combined throughput | `TCPRcvCollapsed` total |
+|---|---:|---:|---:|---:|---:|
+| Paired processes, 16 KiB | 75.9 / 250.0 Mbps | 164.9 / 151.5 Mbps | 93.8 Mbps | 321.2 Mbps | 171 |
+| Paired processes, 64 KiB | 113.2 / 215.3 Mbps | 115.2 / 208.4 Mbps | 97.7 Mbps | 326.0 Mbps | 158 |
+| Paired processes, 128 KiB | 106.1 / 211.5 Mbps | 71.8 / 242.0 Mbps | 137.7 Mbps | 315.7 Mbps | 183 |
+| Native `--bidir`, 16 KiB | 171.4 / 135.2 Mbps | 148.1 / 154.9 Mbps | 21.5 Mbps | 304.8 Mbps | 0 |
+| Native `--bidir`, 64 KiB | 172.2 / 129.5 Mbps | 150.0 / 157.0 Mbps | 24.9 Mbps | 304.4 Mbps | 0 |
+| Native `--bidir`, 128 KiB | 153.7 / 153.5 Mbps | 159.6 / 137.9 Mbps | 11.0 Mbps | 302.4 Mbps | 0 |
+
+The six directional controls delivered 242.7–258.9 Mbps with 6.0–7.9 ms average gateway latency and zero `TCPRcvCollapsed`. All six paired-process trials raised that counter by 70–102, while all six native trials left it at zero. Native bidirectional mode also removed the extreme directional unfairness: only one native trial narrowly crossed the working 40 Mbps threshold at 42.8 Mbps, compared with five of six paired trials at 93.2–174.2 Mbps. Changing the block size did not materially alter either method. Native combined throughput was exceptionally stable at 302.4–304.8 Mbps; paired combined throughput was 315.7–326.0 Mbps but was frequently divided unfairly.
+
+No phase recorded a softnet or client qdisc drop. The busiest observed core did not saturate, negotiated HE rates remained about 413–459 Mbps at 40 MHz, and signal remained -57 to -58 dBm. Native loaded gateway averages still rose to 15.0–25.4 ms, so the WLAN retained a real shared-capacity and queue-delay limit even when it did not collapse directionally. With approximately 303 Mbps of stable native aggregate TCP against a requested 500 Mbps on a half-duplex radio, the simplest current explanation is PHY-scaled airtime saturation plus method-specific process/socket unfairness in the paired harness. That is an inference, not proof that every attendee symptom was a test artifact: multi-process applications can still encounter unfairness, and the observed loaded latency remains operationally relevant.
+
+PV10 remained associated to the same full-power, 5 Gbps-uplink AP on channel 140 at 40 MHz. Controller signal was -52 to -50 dBm, the radio reported one associated client, failure count remained zero, and exact-window Client Events and Related AP Events returned zero records. Retry and contention values changed only in delayed, coarse steps and then remained unchanged through recovery, confirming that these controller snapshots cannot identify which individual test phase caused a change.
+
 ## Effective Arista configuration and event evidence
 
 The read-only integration was extended using Arista's published [CV-CUE OpenAPI index](https://apihelp.wifi.arista.com/data/wm/wm-openapi-root.json), then used only with documented GET routes. Each probe's current client record was joined to its location policy, actual AP template, active AP radio, and matching SSID profile. The four locations use different profile identifiers but returned the same relevant settings. The active association on every AP was radio 2—not one of the AX-only template radios—and radio 2 is configured for Wi-Fi 7 (`BE`) operation while serving these HE/Wi-Fi 6 clients.
@@ -145,23 +164,25 @@ A subsequent live association inventory found 19 active trusted probes on 19 dif
 
 ## Current interpretation
 
-The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The evidence supports a client-facing WLAN duplex-capacity mechanism whose trigger scales with effective PHY/client efficiency. Likely components remain per-client scheduling, aggregation efficiency, WMM/queue behavior, airtime allocation, driver behavior, or an interaction among them. The common Wi-Fi 7 radio configuration is now the highest-yield controlled A/B surface, not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
+The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The receiver-path A/B materially narrows the earlier interpretation: the dramatic synthetic one-direction collapse is not clean evidence of an AP defect because it largely disappears when the same client, AP, target, and block sizes use native bidirectional iperf. The strongest current explanation is PHY-scaled half-duplex WLAN saturation near 300 Mbps combined TCP, amplified into directional unfairness and receive-queue collapse by the two-process/two-listener harness. Real loaded latency and shared-capacity limits remain. The common Wi-Fi 7 radio configuration is still a useful controlled A/B surface, but it is no longer the first test and is not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
 
 The best next tests are:
 
-1. Without any network-team change, repeat PV10 using iperf3's native `--bidir` mode versus the current two-process/two-listener method, then compare 16K, 64K, and 128K block sizes at the same one-flow 250 Mbps target. Capture per-core CPU/softirq, socket memory, and `TCPRcvCollapsed`. This tests whether receiver draining or the harness process model is creating or amplifying the symptom.
-2. Repeat only the discriminating receiver-path case on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
-3. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
-4. On one controlled AP, repeat the same client and script with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
-5. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
-6. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
-7. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
+1. Sweep native `--bidir` at equal per-direction requests of 100, 125, 150, 175, 200, 225, and 250 Mbps on PV10, with interleaved idle controls. This locates the combined-throughput plateau and gateway-latency knee without the paired-process artifact.
+2. Repeat only the discriminating native and paired cases on one low-power/1 Gbps AP. A matching result further weakens power/uplink as the common cause; a materially different result identifies an aggravating factor.
+3. Run an application-representative HTTPS/HTTP3 or controlled file-transfer duplex test across the same rate knee. This determines whether real multi-connection traffic experiences the paired harness's unfairness.
+4. When two authorized clients naturally share an AP, run alternating victim-only controls and aggressor-loaded trials to distinguish 1:1 from 1:many impact. The current stationary Precog population cannot perform this test because every visible probe is on a different AP.
+5. On one controlled AP, repeat the same client and native sweep with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
+6. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
+7. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
+8. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
 
 ## Evidence and limitations
 
 - Sanitized probe evidence remains temporarily on the management node under the run IDs `fleet-internal-20260803T0020Z` and `he250-internal-20260803T004103Z`.
 - Adaptive-knee probe evidence remains temporarily on the management node under `he-knee-internal-20260803T010336Z`; its synchronized local Arista sample contains 188 sanitized observations. Raw credentials, SSIDs, client/AP identifiers, and controller responses were not added to the repository.
 - PV10 flow/QoS evidence remains temporarily on the management node under `tcp-flow-qos-20260803T022516Z`; the synchronized Arista sample contains 86 sanitized observations.
+- PV10 receiver-path evidence remains temporarily on the management node under `receiver-path-20260803T024209Z`; the synchronized Arista sample contains 130 sanitized observations.
 - Three HE 250 Mbps directional TCP objects hit bounded timeouts; they are not represented as zero.
 - Several iperf3 3.9 TCP controls exceeded the JSON safety bound during the 100 Mbps fleet run; UDP and simultaneous results remain independently valid.
 - Controller performance fields are not phase-resolution logs. Causal claims require time-aligned AP/client events or an authorized over-the-air capture.
