@@ -162,6 +162,8 @@ pub enum Commands {
     CircuitCompare(commands::circuit_compare::CircuitCompareArgs),
     /// Reference-endpoint calibration and client-result acceptance: the endpoint can invalidate a client's measurement (GAP-053)
     ReferenceEndpoint(commands::reference_endpoint::ReferenceEndpointArgs),
+    /// Capacity/latency-knee discovery: distinguishes a capacity plateau from directional unfairness and withholds an established claim without cross-method reproduction (GAP-070)
+    CapacityKnee(commands::capacity_knee::CapacityKneeArgs),
     /// Privileged-operation inventory and failure classification: preserve the error, name the exact command, offer an unprivileged path (GAP-016)
     PrivilegeStatus(commands::privilege_status::PrivilegeStatusArgs),
     /// Affected-site vs known-good-control A/B workflow: forced protocol, IP pinning, repeated samples, redirect-aware verdict (GAP-012)
@@ -268,6 +270,7 @@ pub fn dispatch(args: Args) {
         Some(Commands::Ipv6Validate(a)) => commands::ipv6_validate::run(&a),
         Some(Commands::CircuitCompare(a)) => commands::circuit_compare::run(&a),
         Some(Commands::ReferenceEndpoint(a)) => commands::reference_endpoint::run(&a),
+        Some(Commands::CapacityKnee(a)) => commands::capacity_knee::run(&a),
         Some(Commands::PrivilegeStatus(a)) => commands::privilege_status::run(&a),
         Some(Commands::SiteAb(a)) => commands::site_ab::run(&a),
         Some(Commands::SecondNetwork(a)) => commands::second_network::run(&a),

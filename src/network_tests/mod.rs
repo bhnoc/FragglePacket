@@ -67,6 +67,7 @@ pub mod wired_edge;
 pub mod resilience;
 pub mod site_ab;
 pub mod second_network;
+pub mod capacity_knee;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

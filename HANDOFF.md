@@ -20,82 +20,54 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 
 ## Where this stands
 
-67 gaps closed and locked: GAP-001 through GAP-066, plus GAP-072. The acid suite
-is at 998 checks over 535 unit tests, and every check was proven to fail against
-the broken state before being trusted.
+**Every gap in `docs/GAP_LIST.md` is closed.** GAP-001 through GAP-066, plus
+GAP-069, GAP-070, and GAP-072. The acid suite is at 1048 checks over 570 unit
+tests, and every check was proven to fail against the broken state before being
+trusted.
 
-**Five gaps remain open**, added to `docs/GAP_LIST.md` after this build began:
+GAP-067, GAP-068, and GAP-071 were **dropped as out of scope**, not implemented.
+They required a CV-CUE/Arista connector inside the tool: 1Password credential
+retrieval, `launchpad.wifi.arista.com` tenant discovery, `/wifi/api/*` routes,
+and vendor `Version` headers. FragglePacket is vendor-agnostic and must stay
+that way. The `arista-ops` skill already owns that access, and `wired_edge.rs`
+and `ap_compat_matrix.rs` already ingest operator-supplied AP and switch
+telemetry as vendor-neutral `Option` fields, so the diagnosis-shaped parts were
+covered without the coupling. See the "Resolved" table in the gap list.
 
-| Gap | Priority | Why it is not covered |
-| --- | --- | --- |
-| GAP-067 | P1 | Secure CV-CUE/Arista telemetry connector. Needs 1Password retrieval, tenant discovery, session cookies. The `arista-ops` skill covers read-only access; nothing was built. |
-| GAP-068 | P1 | CV-CUE historical performance and event import. Depends on GAP-067's connector. |
-| GAP-069 | **P0** | Process-model equivalence and receive-path artifact guard. PV10 evidence at 250 Mbps per direction. |
-| GAP-070 | **P0** | Native capacity/latency-knee discovery with application cross-validation. PC13 evidence. |
-| GAP-071 | P1 | Effective WLAN configuration snapshot, cross-AP diff, and visibility-gap report. |
+The two P0s closed last were both about distrusting our own measurements:
 
-GAP-069 and GAP-070 are P0, meaning current output can still produce a
-materially false diagnosis in those two areas. They should be the next work.
+- **GAP-069** found that the paired two-process harness can manufacture a
+  directional collapse that looks like a network fault. On PV10, native
+  `--bidir` stayed balanced with zero receive-collapse events while the paired
+  method went severely asymmetric with 70-102 collapses, at similar combined
+  throughput. `independent-rates` is a paired-process design, so part of the
+  investigation's headline directional collapse may be harness artifact.
+  `process-model` now withholds a verdict unless a collapse reproduces across
+  both models.
+- **GAP-070** separates a capacity plateau from directional unfairness and
+  refuses to call a knee established unless a second method reproduces it and
+  the endpoint did not drift underneath the sweep.
 
-Note on numbering: I filed a gap as GAP-067 mid-session and the user
-independently added GAP-067 through GAP-071. Mine was renumbered to **GAP-072**
-and the references in `multiclient_fairness.rs`, `src/cli/mod.rs`, and gate 064
-were updated. Check for ID collisions before filing a new gap.
+## Endpoint registry
 
-## Contract
+`harness/fixtures/endpoints/public-iperf.json` records the iperf3 endpoints the
+investigation actually used, including the ports that **failed**:
+`speedtest.xmission.com:5201` admitted upload, `iperf.soute.xmission.com:5201`
+admitted reverse download, port 5200 refused, and 5202-5206 failed admission or
+sat at zero intervals until the safety timeout. Recording the failures is the
+point: that is the GAP-045 shape where eight of twenty-one probes never
+established a connection after port-open checks passed, and scoring them zero
+would have implicated nine working clients.
 
-```
-Goal:       Every GAP-001..066 acceptance line implemented as a working CLI capability.
-Acceptance: Each gap's acceptance criteria met, exercised via CLI, locked by a check in acid.
-Done:       build clean + smoke green + acid green covering every shipped gap + docs/CLI.md current.
-```
+It also carries the caveats a consumer needs: the two directions traverse
+different public paths, each listener accepts one test at a time, old-client
+reverse UDP has a 0.6-1.0% endpoint loss floor, a Colorado endpoint returned a
+duration-inconsistent summary, and opening-to-closing baseline drift was severe.
+Client source ports 40010-40019 are recorded as explicitly **not** listeners;
+they held 5-tuples stable across ECMP hash buckets.
 
-## Harnesses
-
-```
-./harness/smoke.sh          # build, every subcommand answers --help, cargo test --lib. Run BEFORE each unit of work.
-./harness/acid.sh           # all locking checks. Run AFTER. Ratchet: only grows.
-./harness/acid.sh 001 019   # filter to specific check files
-FP_HARNESS_OFFLINE=1 ...    # skip checks needing live network
-```
-
-Add a gap's locking check as `harness/checks/<gap-number>-<slug>.sh`. It is
-sourced, not executed, so it inherits the helpers in `harness/lib.sh`:
-`check_ok`, `check_fails`, `check_contains`, `check_lacks`, `check_json_field`,
-`pass`, `fail`, `skip`, `note`, plus `$BIN`, `$FIXTURE_DIR`, `$GOLDEN_DIR`,
-`$WORK_DIR`, and `net_guard`. One file per gap so parallel agents never collide.
-
-Every locking check must be proven to fail against the broken state before it is
-trusted. Restoring afterwards has two traps, both of which cost real time here:
-
-- **Never restore from a `cp` backup.** A backup taken after the sabotage
-  preserves the sabotage. Use `git checkout -- <file>` for a tracked file.
-- **Never `git add -N` a brand-new file and then `git checkout --` it.**
-  Intent-to-add stages an *empty* blob, so the checkout restores emptiness and
-  silently deletes the whole file. The build then fails on unresolved imports
-  rather than on anything to do with the sabotage, which makes it look unrelated.
-  For a new file, either `git add` it properly (staging the real content) before
-  sabotaging, or keep the sabotage to a one-line edit you undo by hand and verify
-  with `git diff`.
-
-`acid.sh` preflights `cargo test --release --lib` and fails fast, naming the
-broken tests. Most check files open with a cargo-test assertion, so without that
-preflight two failing unit tests reported as 55 gate failures and buried the real
-regressions.
-
-Two suite-wide invariants sit above the per-gap gates:
-
-- `010-no-leftover-sabotage.sh` — catches sabotage markers and CLI args shadowed
-  by hardcoded literals, after a forgotten red/green revert shipped
-  `let fake_radio = false; // BROKEN` and silently disabled a flag.
-- `020-synthetic-provenance.sh` and `021-no-unreferenced-figures.sh` — enforce
-  that fabricated state declares itself and that a derived figure never outlives
-  its evidence. See the failure-mode section below.
-
-**Concurrency footgun:** with several agents editing at once, a unit test can
-fail intermittently because its source file is being rewritten mid-run. Before
-debugging an unexplained flake, check `git status` and file mtimes. This cost
-real time once already.
+Still unwired: no command reads that registry yet. Operators pass endpoints by
+hand, so the known-bad ports are not automatically avoided.
 
 ## The recurring failure mode: a number with no referent
 
