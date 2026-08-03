@@ -37,6 +37,11 @@ pub mod flow_dscp_matrix;
 pub mod listener_admission;
 pub mod listener_lease;
 pub mod throughput_tuner;
+pub mod rf_survey;
+pub mod platform_matrix;
+pub mod counter_liveness;
+pub mod phy_normalized;
+pub mod ap_compat_matrix;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

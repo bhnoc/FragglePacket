@@ -5,6 +5,8 @@ use colored::*;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use fraggle_packet::load_guard::guard::RadioTimeline;
+use fraggle_packet::load_guard::radio::RadioSnapshot;
 use fraggle_packet::load_guard::{tcp_result, udp_result, TcpVsUdpComparison};
 use fraggle_packet::network_tests::iperf::{parse_iperf_json, IperfParseError, IperfResult};
 
@@ -98,6 +100,7 @@ fn load_fixture(name: &str) -> Result<IperfResult, IperfParseError> {
 }
 
 pub fn run(args: &TcpVsUdpArgs) {
+    let mut radio_timeline: Option<RadioTimeline> = None;
     let (tcp_parsed, udp_parsed, endpoint, data_source) = if args.inject_fixture {
         (
             load_fixture("tcp-forward-3.21.json"),
@@ -131,8 +134,15 @@ pub fn run(args: &TcpVsUdpArgs) {
                 std::process::exit(1);
             }
         };
+        // GAP-035: snapshot radio state before and after the two sessions.
+        // Neither iperf3 call runs through LoadGuard (they're bare
+        // subprocess calls, not a LoadPhase), so this command brackets them
+        // directly rather than silently skipping radio coverage.
+        let before_radio = fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
         let tcp = run_iperf(&server, args.tcp_port, &local_ip, &interface, args.rate_mbps, args.duration_secs, false);
         let udp = run_iperf(&server, args.udp_port, &local_ip, &interface, args.rate_mbps, args.duration_secs, true);
+        let after_radio = fraggle_packet::load_guard::radio::snapshot_live().unwrap_or_else(|_| RadioSnapshot::unavailable());
+        radio_timeline = Some(RadioTimeline { before: before_radio, during: Vec::new(), after: after_radio });
         (tcp, udp, server, "live")
     };
 
@@ -142,6 +152,8 @@ pub fn run(args: &TcpVsUdpArgs) {
         udp: udp_result(args.udp_port, args.rate_mbps, &udp_parsed),
     };
 
+    let radio_validity = radio_validity_for(&radio_timeline);
+
     if args.json {
         println!(
             "{}",
@@ -149,12 +161,31 @@ pub fn run(args: &TcpVsUdpArgs) {
                 "comparison": comparison,
                 "achieved_mbps_delta": comparison.achieved_mbps_delta(),
                 "data_source": data_source,
+                "radio_validity": radio_validity,
             }))
             .unwrap()
         );
         return;
     }
-    print_human(&comparison, data_source);
+    print_human(&comparison, data_source, &radio_validity);
+}
+
+/// `None` when no radio bracketing ran at all (e.g. --inject-fixture),
+/// distinct from `Some("stable")` -- a fixture-driven run makes no claim
+/// about any radio state, real or otherwise.
+fn radio_validity_for(timeline: &Option<RadioTimeline>) -> String {
+    match timeline {
+        None => "not-applicable (fixture-driven run, no radio bracketed)".to_string(),
+        Some(t) => {
+            if !t.before.associated || !t.after.associated {
+                "invalid: radio state unavailable".to_string()
+            } else if t.roamed() {
+                "invalid: association roamed during the phase".to_string()
+            } else {
+                "stable".to_string()
+            }
+        }
+    }
 }
 
 fn fmt_mbps(v: Option<f64>) -> String {
@@ -165,10 +196,11 @@ fn fmt_pct(v: Option<f64>) -> String {
     v.map(|v| format!("{v:.3}%")).unwrap_or_else(|| "unavailable".to_string())
 }
 
-fn print_human(comparison: &TcpVsUdpComparison, data_source: &str) {
+fn print_human(comparison: &TcpVsUdpComparison, data_source: &str, radio_validity: &str) {
     println!();
     println!("{}", "== TCP vs UDP ==".cyan().bold());
     println!("  endpoint: {} source={}", comparison.endpoint, data_source);
+    println!("  radio validity: {radio_validity}");
     println!(
         "  TCP: usable={} achieved={} {}",
         comparison.tcp.usable,

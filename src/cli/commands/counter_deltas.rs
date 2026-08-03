@@ -6,9 +6,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fraggle_packet::load_guard::{
-    compute_delta, CounterDelta, CounterSource, DeltaQualification, LoadBudget, LoadGuard,
-    PhaseTick, RadioSource,
+    compute_delta, real_sources_for_interface, CounterDelta, CounterSource, DeltaQualification,
+    LoadBudget, LoadGuard, PhaseTick, Validity,
 };
+
+/// GAP-035: pairs the counter delta with the phase's own radio-validity
+/// verdict, so a caller cannot read a counter delta as attributable to a
+/// stable radio state when the phase actually roamed or hit weak RF.
+#[derive(serde::Serialize)]
+struct CounterDeltasReport {
+    #[serde(flatten)]
+    delta: CounterDelta,
+    radio_validity: Validity,
+}
 
 #[derive(clap::Args, Debug)]
 pub struct CounterDeltasArgs {
@@ -61,7 +71,10 @@ pub fn run(args: &CounterDeltasArgs) {
         std::process::exit(2);
     }
 
-    let radio = RadioSource::new(|| Err("counter-deltas: radio not sampled".to_string()));
+    // GAP-035: real radio bracketing, not a stubbed-unavailable source --
+    // this phase now participates in roam/RF invalidation like every other
+    // load command, instead of always landing on Invalid(RadioUnavailable).
+    let (radio, radio_fast, _unused_counters) = real_sources_for_interface(&interface);
     let iface_for_counters = interface.clone();
     let inject_wrap = args.inject_wrap;
     let call_count = std::sync::atomic::AtomicUsize::new(0);
@@ -77,7 +90,7 @@ pub fn run(args: &CounterDeltasArgs) {
     });
 
     let guard = match LoadGuard::new(budget, interface.clone(), false, radio, counters) {
-        Ok(g) => g,
+        Ok(g) => g.with_fast_radio_source(radio_fast),
         Err(e) => {
             eprintln!("{} budget rejected: {}", "✗".red(), e);
             std::process::exit(2);
@@ -115,18 +128,29 @@ pub fn run(args: &CounterDeltasArgs) {
         )
     };
 
+    let out = CounterDeltasReport { delta: counter_delta, radio_validity: report.validity };
+
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&counter_delta).unwrap());
+        println!("{}", serde_json::to_string_pretty(&out).unwrap());
         return;
     }
-    print_human(&counter_delta);
+    print_human(&out);
 }
 
-fn print_human(delta: &CounterDelta) {
+fn print_human(out: &CounterDeltasReport) {
+    let delta = &out.delta;
     println!();
     println!("{}", "== Interface Counter Delta ==".cyan().bold());
     println!("  interface: {}", delta.interface);
     println!("  elapsed_secs: {:.2}", delta.elapsed_secs);
+    match &out.radio_validity {
+        Validity::Valid => println!("  radio validity: {}", "stable".green().bold()),
+        Validity::Invalid(reason) => println!(
+            "  radio validity: {} ({}) -- this counter delta cannot be attributed to a stable radio state",
+            "INVALID".red().bold(),
+            reason
+        ),
+    }
     match &delta.qualification {
         DeltaQualification::Clean => println!("  qualification: {}", "clean".green().bold()),
         DeltaQualification::CounterWrappedOrReset => println!(

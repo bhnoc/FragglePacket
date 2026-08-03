@@ -124,6 +124,20 @@ pub enum Commands {
     ThroughputTuner(commands::throughput_tuner::ThroughputTunerArgs),
     /// Version/direction-aware iperf3 JSON parsing and explicit-allowlist endpoint capability discovery (GAP-039/GAP-036)
     IperfAnalyze(commands::iperf_analyze::IperfAnalyzeArgs),
+    /// Bounded time-series RF survey with platform-limited metric qualification and change-point correlation (GAP-055)
+    RfSurvey(commands::rf_survey::RfSurveyArgs),
+    /// Privacy-safe cross-platform/power-save capability matrix with confound-aware attribution (GAP-063)
+    PlatformMatrix(commands::platform_matrix::PlatformMatrixArgs),
+    /// Bracket a known packet stimulus to prove a counter is live, and refuse a zero-drop verdict without corroboration (GAP-043)
+    CounterLiveness(commands::counter_liveness::CounterLivenessArgs),
+    /// PHY-normalized fleet comparison: offered load as a fraction of each client's own PHY capacity (GAP-042)
+    PhyNormalized(commands::phy_normalized::PhyNormalizedArgs),
+    /// AP-generation/radio-mode/client-capability compatibility matrix; refuses a verdict until required comparison cells are present (GAP-037)
+    ApCompatMatrix(commands::ap_compat_matrix::ApCompatMatrixArgs),
+    /// Wi-Fi radio/retry diagnostic with safe elevation and explicit platform-limitation reporting (GAP-011)
+    RadioDiagnostic(commands::radio_diagnostic::RadioDiagnosticArgs),
+    /// Stable, privacy-safe salted AP/radio identity derived from BSSID without storing or displaying it (GAP-024)
+    ApIdentity(commands::ap_identity::ApIdentityArgs),
 }
 
 pub fn dispatch(args: Args) {
@@ -179,6 +193,13 @@ pub fn dispatch(args: Args) {
         Some(Commands::ListenerLease(a)) => commands::listener_lease::run(&a),
         Some(Commands::ThroughputTuner(a)) => commands::throughput_tuner::run(&a),
         Some(Commands::IperfAnalyze(a)) => commands::iperf_analyze::run(&a),
+        Some(Commands::RfSurvey(a)) => commands::rf_survey::run(&a),
+        Some(Commands::PlatformMatrix(a)) => commands::platform_matrix::run(&a),
+        Some(Commands::CounterLiveness(a)) => commands::counter_liveness::run(&a),
+        Some(Commands::PhyNormalized(a)) => commands::phy_normalized::run(&a),
+        Some(Commands::ApCompatMatrix(a)) => commands::ap_compat_matrix::run(&a),
+        Some(Commands::RadioDiagnostic(a)) => commands::radio_diagnostic::run(&a),
+        Some(Commands::ApIdentity(a)) => commands::ap_identity::run(&a),
         None => {
             let _ = crate::tui_app::run_tui();
         }

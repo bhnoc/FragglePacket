@@ -269,6 +269,22 @@ impl CounterSource {
     }
 }
 
+/// GAP-035: the real radio/counter sources every load-generating command
+/// should use, one call. Before this existed, several Sprint 4 commands
+/// (`size-rate-matrix`, `flow-dscp-matrix`, `counter-deltas`) wired a
+/// `RadioSource` that always returned `RadioSnapshot::unavailable()` or an
+/// error -- their phases ran with no real roam/RF detection at all, only
+/// ever landing on `Invalid(RadioUnavailable)`. Returns
+/// `(full_detail_source, fast_source, counter_source)` for
+/// `LoadGuard::new(...).with_fast_radio_source(fast)`.
+pub fn real_sources_for_interface(interface: &str) -> (RadioSource, RadioSource, CounterSource) {
+    let full = RadioSource::new(|| crate::load_guard::radio::snapshot_live());
+    let fast = RadioSource::new(|| crate::load_guard::radio::snapshot_fast());
+    let iface = interface.to_string();
+    let counters = CounterSource::new(move || crate::load_guard::counters::snapshot_live(&iface));
+    (full, fast, counters)
+}
+
 pub struct LoadGuard {
     pub budget: LoadBudget,
     pub interface: String,

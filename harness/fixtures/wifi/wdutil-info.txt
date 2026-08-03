@@ -1,0 +1,28 @@
+WIFI
+    MAC Address            : 02:00:00:00:00:01
+    SSID                   : <redacted>
+    BSSID                  : 02:00:00:00:00:01
+    NetworkServiceID       : <redacted>
+    RSSI                   : -53 dBm
+    CCA                    : 0 %
+    Noise                  : -93 dBm
+    Tx Rate                : 1200.0 Mbps
+    Security               : WPA3 Personal
+    PHY Mode               : 802.11ax
+    MCS Index              : 11
+    Guard Interval         : 1600
+    NSS                    : 2
+    Channel                : 6 GHz channel 5 / 80 MHz
+    Country Code           : US
+    IPv4 Config Method     : DHCP
+    IPv4 Address           : <redacted>
+    IPv4 Router            : <redacted>
+    IPv6 Address           : None
+    Sniffer Supported      : Yes
+    Supports Wi-Fi 6E      : Yes
+
+BLUETOOTH
+    Power                  : On
+    Paired Devices         : 3
+    Device 1               : AirPods Pro (redacted-for-this-fixture)
+    Device 2               : Magic Keyboard (redacted-for-this-fixture)
