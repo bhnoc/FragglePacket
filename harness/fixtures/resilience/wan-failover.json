@@ -1,0 +1,11 @@
+{
+  "change": {"component_label": "WAN-A uplink", "action_description": "unplugged"},
+  "samples": [
+    {"session_id": 1, "session_alive": true, "route_identity": "via-wan-a", "nat_identity": "203.0.113.5", "state_resynchronized": null},
+    {"session_id": 1, "session_alive": false, "route_identity": null, "nat_identity": null, "state_resynchronized": null},
+    {"session_id": 1, "session_alive": true, "route_identity": "via-wan-b", "nat_identity": "203.0.113.5", "state_resynchronized": true},
+    {"session_id": 2, "session_alive": false, "route_identity": null, "nat_identity": null, "state_resynchronized": null}
+  ],
+  "outage_started_secs": 5.0,
+  "outage_ended_secs": 8.3
+}

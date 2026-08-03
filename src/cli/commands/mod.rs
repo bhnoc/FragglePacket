@@ -68,3 +68,8 @@ pub mod clock_guard;
 pub mod policy_manifest;
 pub mod circuit_compare;
 pub mod reference_endpoint;
+pub mod privilege_status;
+pub mod site_ab;
+pub mod second_network;
+pub mod wired_edge;
+pub mod resilience;

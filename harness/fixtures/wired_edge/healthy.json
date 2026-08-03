@@ -1,0 +1,4 @@
+{
+  "before": {"hashed_chassis_label":"AP-8b464c93","switch_port_id":"Ethernet46","lldp_identity_verified":true,"poe_class":"PoePlus","poe_requested_watts":40.0,"poe_negotiated_watts":40.0,"reduced_power_state":false,"link_speed_mbps":5000,"link_duplex":"Full","lacp_member_state":null,"vlan_id":100,"native_vlan_tag_consistent":true,"crc_errors":0,"input_discards":0,"output_discards":0,"pause_frames_rx":0,"pause_frames_tx":0,"queue_drops":0,"link_flap_count":0},
+  "after": {"hashed_chassis_label":"AP-8b464c93","switch_port_id":"Ethernet46","lldp_identity_verified":true,"poe_class":"PoePlus","poe_requested_watts":40.0,"poe_negotiated_watts":40.0,"reduced_power_state":false,"link_speed_mbps":5000,"link_duplex":"Full","lacp_member_state":null,"vlan_id":100,"native_vlan_tag_consistent":true,"crc_errors":0,"input_discards":0,"output_discards":0,"pause_frames_rx":0,"pause_frames_tx":0,"queue_drops":0,"link_flap_count":0}
+}

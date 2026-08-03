@@ -2,6 +2,7 @@ pub mod dns;
 pub mod icmp;
 pub mod pmtu_evidence;
 pub mod preflight;
+pub mod privilege_status;
 pub mod quic;
 pub mod resolve;
 pub mod tcp;

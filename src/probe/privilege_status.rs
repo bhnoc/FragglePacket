@@ -145,3 +145,67 @@ mod tests {
         assert!(!stderr_names_a_permission_problem("no such device: bogus0"));
     }
 }
+
+/// Inventory of the privileged operations this project performs, each paired
+/// with the unprivileged path that still yields something useful.
+///
+/// GAP-016 asks not only that a denial be actionable but that the run
+/// "continue with unprivileged alternatives". Declaring them in one place means
+/// a new privileged call site has an obvious slot to name its fallback, rather
+/// than each site deciding independently whether to degrade or refuse.
+pub struct PrivilegedOp {
+    pub what: &'static str,
+    pub required_command: &'static str,
+    pub unprivileged_alternative: Option<&'static str>,
+}
+
+pub const BPF_CAPTURE: PrivilegedOp = PrivilegedOp {
+    what: "live packet capture (BPF device)",
+    required_command: "sudo /usr/sbin/tcpdump -i <iface> -s <snaplen> -w <out.pcap>",
+    unprivileged_alternative: Some("fraggle-packet pcap-report <existing.pcap>"),
+};
+
+pub const TCP_TRACEROUTE: PrivilegedOp = PrivilegedOp {
+    what: "TCP traceroute (raw socket)",
+    required_command: "sudo traceroute -T -p 443 <target>",
+    unprivileged_alternative: Some(
+        "fraggle-packet provider-path, which uses unprivileged TCP connect timing",
+    ),
+};
+
+pub const RA_LISTEN: PrivilegedOp = PrivilegedOp {
+    what: "router-advertisement capture (raw ICMPv6)",
+    required_command: "sudo tcpdump -i <iface> -n 'icmp6 && ip6[40] == 134'",
+    unprivileged_alternative: Some(
+        "fraggle-packet ipv6-validate, which infers RA presence from a configured SLAAC address",
+    ),
+};
+
+pub const WDUTIL_INFO: PrivilegedOp = PrivilegedOp {
+    what: "full Wi-Fi radio state (wdutil)",
+    required_command: "sudo wdutil info",
+    unprivileged_alternative: Some(
+        "fraggle-packet radio-diagnostic via system_profiler, which omits retry and WMM counters",
+    ),
+};
+
+pub fn all_ops() -> Vec<&'static PrivilegedOp> {
+    vec![&BPF_CAPTURE, &TCP_TRACEROUTE, &RA_LISTEN, &WDUTIL_INFO]
+}
+
+#[cfg(test)]
+mod op_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn every_declared_op_names_a_command_and_an_unprivileged_path() {
+        for op in all_ops() {
+            assert!(!op.required_command.is_empty(), "{} has no command", op.what);
+            assert!(
+                op.unprivileged_alternative.is_some(),
+                "{} offers no unprivileged path, so a denial would leave the operator stuck",
+                op.what
+            );
+        }
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "change": {"component_label": "core switch 2", "action_description": "rebooted"},
+  "samples": [
+    {"session_id": 1, "session_alive": true, "route_identity": null, "nat_identity": null, "state_resynchronized": null}
+  ],
+  "outage_started_secs": null,
+  "outage_ended_secs": null
+}

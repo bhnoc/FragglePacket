@@ -162,6 +162,16 @@ pub enum Commands {
     CircuitCompare(commands::circuit_compare::CircuitCompareArgs),
     /// Reference-endpoint calibration and client-result acceptance: the endpoint can invalidate a client's measurement (GAP-053)
     ReferenceEndpoint(commands::reference_endpoint::ReferenceEndpointArgs),
+    /// Privileged-operation inventory and failure classification: preserve the error, name the exact command, offer an unprivileged path (GAP-016)
+    PrivilegeStatus(commands::privilege_status::PrivilegeStatusArgs),
+    /// Affected-site vs known-good-control A/B workflow: forced protocol, IP pinning, repeated samples, redirect-aware verdict (GAP-012)
+    SiteAb(commands::site_ab::SiteAbArgs),
+    /// Second-network control workflow: save/compare a connection fingerprint and test bundle across a network switch (GAP-013)
+    SecondNetwork(commands::second_network::SecondNetworkArgs),
+    /// Wired edge/AP-uplink/LLDP/PoE health bundle: read-only ingest, refuses a conclusion without telemetry (GAP-058)
+    WiredEdge(commands::wired_edge::WiredEdgeArgs),
+    /// Controlled resilience/failover validation: observes and labels an operator-performed component change, never initiates one (GAP-062)
+    Resilience(commands::resilience::ResilienceArgs),
     /// Authentication/captive-portal/policy-assignment workflow: separately timed phases, portal detection without login automation (GAP-049)
     AuthPortal(commands::auth_portal::AuthPortalArgs),
     /// Infrastructure dependency health bundle: DNS/NTP/cert/OCSP/controller checks distinguishing blocked-by-policy from unhealthy (GAP-059)
@@ -256,6 +266,11 @@ pub fn dispatch(args: Args) {
         Some(Commands::Ipv6Validate(a)) => commands::ipv6_validate::run(&a),
         Some(Commands::CircuitCompare(a)) => commands::circuit_compare::run(&a),
         Some(Commands::ReferenceEndpoint(a)) => commands::reference_endpoint::run(&a),
+        Some(Commands::PrivilegeStatus(a)) => commands::privilege_status::run(&a),
+        Some(Commands::SiteAb(a)) => commands::site_ab::run(&a),
+        Some(Commands::SecondNetwork(a)) => commands::second_network::run(&a),
+        Some(Commands::WiredEdge(a)) => commands::wired_edge::run(&a),
+        Some(Commands::Resilience(a)) => commands::resilience::run(&a),
         Some(Commands::AuthPortal(a)) => commands::auth_portal::run(&a),
         Some(Commands::DependencyHealth(a)) => commands::dependency_health::run(&a),
         Some(Commands::MulticastIsolation(a)) => commands::multicast_isolation::run(&a),

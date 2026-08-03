@@ -135,13 +135,11 @@ fn tcpdump_binary() -> Option<String> {
 
 /// True when a line of tcpdump stderr indicates missing capture privilege
 /// rather than some other failure (bad interface name, bad filter, etc).
-/// Matches the macOS BPF-device wording and the common Linux permission
-/// wording; both name a permission problem explicitly.
+/// Delegates to the shared classifier (GAP-016) so every elevated path in
+/// this codebase recognizes the same wording rather than each maintaining
+/// its own copy that can drift out of sync.
 fn is_privilege_error(stderr: &str) -> bool {
-    let lower = stderr.to_lowercase();
-    lower.contains("permission denied")
-        || lower.contains("operation not permitted")
-        || lower.contains("you don't have permission to capture")
+    crate::probe::privilege_status::stderr_names_a_permission_problem(stderr)
 }
 
 fn build_command(opts: &CaptureOptions) -> (String, Vec<String>) {
