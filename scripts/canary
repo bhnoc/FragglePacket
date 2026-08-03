@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec "$(dirname "$0")/canary.py" "$@"
+exec python3 "$(dirname "$0")/canary.py" "$@"

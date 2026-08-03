@@ -112,6 +112,8 @@ a second aggressor with a live dashboard, not a silent observer.
 - No lab server is hardcoded; you must name the iperf target.
 - Host, interface, port, and rate strings are validated before subprocess use.
 - Subprocesses use argv lists (`shell=False`).
+- Temporary result directories are created via `tempfile.mkdtemp` with secure
+  `0700` permissions so network evidence stays private to the local user.
 - The tool generates real network load — only point it at listeners you own or
   are authorized to test.
 

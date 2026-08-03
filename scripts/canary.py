@@ -16,6 +16,7 @@ import math
 import os
 import random
 import re
+import select
 import shutil
 import signal
 import subprocess
@@ -564,7 +565,12 @@ def run_iperf_udp(
     if not raw:
         err_lines = out_err.read_text().strip().splitlines()
         raise RuntimeError(err_lines[-1] if err_lines else f"iperf3 udp failed rc={proc.returncode}")
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        err_text = out_err.read_text().strip()
+        detail = err_text or raw[:200]
+        raise RuntimeError(f"iperf3 udp returned non-JSON output: {detail}") from exc
     if data.get("error"):
         raise RuntimeError(data["error"])
     if proc.returncode != 0:
@@ -602,7 +608,12 @@ def run_iperf_tcp(
     if not raw:
         err_lines = out_err.read_text().strip().splitlines()
         raise RuntimeError(err_lines[-1] if err_lines else f"iperf3 tcp failed rc={proc.returncode}")
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        err_text = out_err.read_text().strip()
+        detail = err_text or raw[:200]
+        raise RuntimeError(f"iperf3 tcp returned non-JSON output: {detail}") from exc
     if data.get("error"):
         raise RuntimeError(data["error"])
     if proc.returncode != 0:
@@ -775,8 +786,15 @@ def ping_worker(state: State) -> None:
 
     assert proc.stdout is not None
     try:
-        for line in proc.stdout:
-            if state.stop.is_set():
+        # Poll stdout so shutdown can interrupt between ping intervals.
+        while not state.stop.is_set():
+            ready, _, _ = select.select([proc.stdout], [], [], 0.25)
+            if not ready:
+                if proc.poll() is not None:
+                    break
+                continue
+            line = proc.stdout.readline()
+            if not line:
                 break
             ms = parse_ping_line(line)
             if ms is None:
@@ -851,15 +869,10 @@ def run_udp_simultaneous(state: State, results: Path, run_id: int) -> None:
     down_err = results / f"udp-sim-download-{run_id}.stderr"
 
     ping_target = cfg.ping_target or state.gateway
-    ping_proc = subprocess.Popen(
-        [
-            "ping", "--apple-time", "-b", cfg.iface, "-n",
-            "-i", str(cfg.ping_interval), "-c", str(cfg.loaded_ping_count),
-            ping_target,
-        ],
-        stdout=ping_out.open("w"),
-        stderr=ping_err.open("w"),
-    )
+    up_result: list = []
+    down_result: list = []
+    up_exc: list = []
+    down_exc: list = []
 
     def up():
         return run_iperf_udp(cfg, state.local_ip, False, cfg.simultaneous_seconds, up_json, up_err)
@@ -867,24 +880,29 @@ def run_udp_simultaneous(state: State, results: Path, run_id: int) -> None:
     def down():
         return run_iperf_udp(cfg, state.local_ip, True, cfg.simultaneous_seconds, down_json, down_err)
 
-    up_result: list = []
-    down_result: list = []
-    up_exc: list = []
-    down_exc: list = []
-
     def wrap(fn, bucket, err_bucket):
         try:
             bucket.append(fn())
         except Exception as exc:  # noqa: BLE001
             err_bucket.append(exc)
 
-    t_up = threading.Thread(target=wrap, args=(up, up_result, up_exc))
-    t_down = threading.Thread(target=wrap, args=(down, down_result, down_exc))
-    t_up.start()
-    t_down.start()
-    t_up.join()
-    t_down.join()
-    ping_proc.wait(timeout=cfg.loaded_ping_count * cfg.ping_interval + 30)
+    with ping_out.open("w") as out_fh, ping_err.open("w") as err_fh:
+        ping_proc = subprocess.Popen(
+            [
+                "ping", "--apple-time", "-b", cfg.iface, "-n",
+                "-i", str(cfg.ping_interval), "-c", str(cfg.loaded_ping_count),
+                ping_target,
+            ],
+            stdout=out_fh,
+            stderr=err_fh,
+        )
+        t_up = threading.Thread(target=wrap, args=(up, up_result, up_exc))
+        t_down = threading.Thread(target=wrap, args=(down, down_result, down_exc))
+        t_up.start()
+        t_down.start()
+        t_up.join()
+        t_down.join()
+        ping_proc.wait(timeout=cfg.loaded_ping_count * cfg.ping_interval + 30)
     gw_loss = parse_ping_loss_pct(ping_out.read_text(errors="replace"))
 
     if up_exc:
@@ -933,16 +951,6 @@ def run_tcp_simultaneous(state: State, results: Path, run_id: int) -> None:
     down_err = results / f"tcp-sim-download-{run_id}.stderr"
 
     ping_target = cfg.ping_target or state.gateway
-    ping_proc = subprocess.Popen(
-        [
-            "ping", "--apple-time", "-b", cfg.iface, "-n",
-            "-i", str(cfg.ping_interval), "-c", str(cfg.loaded_ping_count),
-            ping_target,
-        ],
-        stdout=ping_out.open("w"),
-        stderr=ping_err.open("w"),
-    )
-
     up_result: list = []
     down_result: list = []
     up_exc: list = []
@@ -954,31 +962,41 @@ def run_tcp_simultaneous(state: State, results: Path, run_id: int) -> None:
         except Exception as exc:  # noqa: BLE001
             err_bucket.append(exc)
 
-    t_up = threading.Thread(
-        target=wrap,
-        args=(
-            lambda: run_iperf_tcp(
-                cfg, state.local_ip, False, cfg.simultaneous_seconds, up_json, up_err
+    with ping_out.open("w") as out_fh, ping_err.open("w") as err_fh:
+        ping_proc = subprocess.Popen(
+            [
+                "ping", "--apple-time", "-b", cfg.iface, "-n",
+                "-i", str(cfg.ping_interval), "-c", str(cfg.loaded_ping_count),
+                ping_target,
+            ],
+            stdout=out_fh,
+            stderr=err_fh,
+        )
+        t_up = threading.Thread(
+            target=wrap,
+            args=(
+                lambda: run_iperf_tcp(
+                    cfg, state.local_ip, False, cfg.simultaneous_seconds, up_json, up_err
+                ),
+                up_result,
+                up_exc,
             ),
-            up_result,
-            up_exc,
-        ),
-    )
-    t_down = threading.Thread(
-        target=wrap,
-        args=(
-            lambda: run_iperf_tcp(
-                cfg, state.local_ip, True, cfg.simultaneous_seconds, down_json, down_err
+        )
+        t_down = threading.Thread(
+            target=wrap,
+            args=(
+                lambda: run_iperf_tcp(
+                    cfg, state.local_ip, True, cfg.simultaneous_seconds, down_json, down_err
+                ),
+                down_result,
+                down_exc,
             ),
-            down_result,
-            down_exc,
-        ),
-    )
-    t_up.start()
-    t_down.start()
-    t_up.join()
-    t_down.join()
-    ping_proc.wait(timeout=cfg.loaded_ping_count * cfg.ping_interval + 30)
+        )
+        t_up.start()
+        t_down.start()
+        t_up.join()
+        t_down.join()
+        ping_proc.wait(timeout=cfg.loaded_ping_count * cfg.ping_interval + 30)
     gw_loss = parse_ping_loss_pct(ping_out.read_text(errors="replace"))
 
     if up_exc:
@@ -1376,6 +1394,7 @@ def ui_loop(stdscr, state: State) -> None:
 
     while not state.stop.is_set():
         now = time.time()
+        # Hold the lock only long enough to mutate + copy primitives/histories.
         with state.lock:
             evaluate_ping(state)
             if now - last_quip_roll > 1.0:
@@ -1391,49 +1410,86 @@ def ui_loop(stdscr, state: State) -> None:
                 up_hist = list(state.udp_up_hist)
                 down_hist = list(state.udp_down_hist)
                 extra_unit = "loss%"
-            snap = {
-                "mode": state.mode,
-                "status": state.status,
-                "protocol": state.protocol,
-                "suite_step": state.suite_step,
-                "quip": state.quip,
-                "ping": list(state.ping_hist),
-                "ping_avg": list(state.ping_avg_hist),
-                "up": up_hist,
-                "down": down_hist,
-                "extra_unit": extra_unit,
-                "last_ping": state.last_ping_ms,
-                "last_ping_avg_5s": state.last_ping_avg_5s,
-                "ping_trend": state.ping_trend,
-                "last_up": state.last_up_mbps,
-                "last_up_extra": state.last_up_extra,
-                "last_down": state.last_down_mbps,
-                "last_down_extra": state.last_down_extra,
-                "iperf_label": state.last_iperf_label,
-                "baseline": state.baseline,
-                "events": list(state.events),
-                "errors": list(state.errors),
-                "loss_runs": list(state.loss_runs),
-                "total_packets_lost": state.total_packets_lost,
-                "gateway": state.gateway,
-                "ping_target": state.cfg.ping_target or state.gateway,
-                "local_ip": state.local_ip,
-                "task": state.task,
-                "task_phase": state.task_phase,
-                "task_started": state.task_started,
-                "task_ends_at": state.task_ends_at,
-                "ping_count": state.ping_count,
-                "probe_count": state.probe_count,
-                "calibrate_for": state.cfg.calibrate_seconds,
-                "started_at": started_at,
-                "results_dir": str(state.results_dir) if state.results_dir else "",
-                "summary_lines": state.summary_text.splitlines() if state.summary_text else [],
-                "round_id": state.round_id,
-                "server": state.cfg.server,
-                "rate": state.cfg.rate,
-                "fine_dog": state.fine_dog,
-                "fine_reason": state.fine_reason,
-            }
+            mode = state.mode
+            status = state.status
+            suite_step = state.suite_step
+            quip = state.quip
+            ping_hist = list(state.ping_hist)
+            ping_avg_hist = list(state.ping_avg_hist)
+            last_ping = state.last_ping_ms
+            last_ping_avg_5s = state.last_ping_avg_5s
+            ping_trend = state.ping_trend
+            last_up = state.last_up_mbps
+            last_up_extra = state.last_up_extra
+            last_down = state.last_down_mbps
+            last_down_extra = state.last_down_extra
+            iperf_label = state.last_iperf_label
+            baseline = state.baseline
+            events = list(state.events)
+            errors = list(state.errors)
+            loss_runs = list(state.loss_runs)
+            total_packets_lost = state.total_packets_lost
+            gateway = state.gateway
+            ping_target = state.cfg.ping_target or state.gateway
+            local_ip = state.local_ip
+            task = state.task
+            task_phase = state.task_phase
+            task_started = state.task_started
+            task_ends_at = state.task_ends_at
+            ping_count = state.ping_count
+            probe_count = state.probe_count
+            calibrate_for = state.cfg.calibrate_seconds
+            results_dir = str(state.results_dir) if state.results_dir else ""
+            summary_text = state.summary_text
+            round_id = state.round_id
+            server = state.cfg.server
+            rate = state.cfg.rate
+            fine_dog = state.fine_dog
+            fine_reason = state.fine_reason
+
+        snap = {
+            "mode": mode,
+            "status": status,
+            "protocol": proto,
+            "suite_step": suite_step,
+            "quip": quip,
+            "ping": ping_hist,
+            "ping_avg": ping_avg_hist,
+            "up": up_hist,
+            "down": down_hist,
+            "extra_unit": extra_unit,
+            "last_ping": last_ping,
+            "last_ping_avg_5s": last_ping_avg_5s,
+            "ping_trend": ping_trend,
+            "last_up": last_up,
+            "last_up_extra": last_up_extra,
+            "last_down": last_down,
+            "last_down_extra": last_down_extra,
+            "iperf_label": iperf_label,
+            "baseline": baseline,
+            "events": events,
+            "errors": errors,
+            "loss_runs": loss_runs,
+            "total_packets_lost": total_packets_lost,
+            "gateway": gateway,
+            "ping_target": ping_target,
+            "local_ip": local_ip,
+            "task": task,
+            "task_phase": task_phase,
+            "task_started": task_started,
+            "task_ends_at": task_ends_at,
+            "ping_count": ping_count,
+            "probe_count": probe_count,
+            "calibrate_for": calibrate_for,
+            "started_at": started_at,
+            "results_dir": results_dir,
+            "summary_lines": summary_text.splitlines() if summary_text else [],
+            "round_id": round_id,
+            "server": server,
+            "rate": rate,
+            "fine_dog": fine_dog,
+            "fine_reason": fine_reason,
+        }
 
         try:
             h, w = stdscr.getmaxyx()
