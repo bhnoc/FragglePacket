@@ -21,7 +21,7 @@ behavior did not support a blanket clamp.
 
 ## Committed reports
 
-- `internal-wlan-threshold-correlation-20260802.md` — corrected internal 100 Mbps fleet baseline, 250 Mbps HE threshold test, and Arista correlation
+- `internal-wlan-threshold-correlation-20260802.md` — internal fleet baselines, adaptive HE knee sweep, and effective Arista radio/SSID/event correlation
 - `network-performance-investigation-report-20260802.md` — executive evidence, exclusions, root-cause assessment, and decisive next test
 - `COMPARISON.md` — living non-2.4 GHz result and hypothesis matrix
 - `location-a-baseline-20260801.md` — room WLAN baseline

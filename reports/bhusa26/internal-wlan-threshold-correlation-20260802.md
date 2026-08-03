@@ -92,20 +92,55 @@ During the 250 Mbps HE run, each node produced 38 sanitized controller samples. 
 
 These are observational correlations from slowly updated controller fields, not phase-level causal measurements. They rule out a simple current-retry, contention, or AP-utilization threshold that explains all HE outcomes.
 
+## Adaptive HE knee sweep
+
+Run window: 2026-08-03 01:03:36Z–01:13:39Z. PV04, PV10, PV11, and PV12 each completed four directional controls and ten simultaneous UDP/TCP phases, for 56 controlled load phases and 96 iperf traffic objects. The controller supplied 47 synchronized samples per client (188 total) through 01:15:47Z. PV04, PV10, and PV12 were offered 150, 200, 225, 250, and 275 Mbps in each direction. PV11 used 75, 100, 125, 150, and 175 Mbps because its directional ceiling was lower. Under the working definition requested for this analysis, a collapse is a simultaneous TCP directional difference greater than 40 Mbps.
+
+| Node | Directional TCP up/down at maximum rate | First >40 Mbps simultaneous asymmetry | Worst simultaneous TCP up/down | Highest TCP-loaded gateway average | Channel / width | Controller signal range |
+|---|---:|---:|---:|---:|---:|---:|
+| PV04 | 275.3 / 279.6 Mbps at 275 | 225 Mbps | 195.4 / 74.3 Mbps at 275 | 93.9 ms | 153 / 40 MHz | -56 to -52 dBm |
+| PV10 | 276.4 / 276.1 Mbps at 275 | 200 Mbps | 38.3 / 275.9 Mbps at 275 | 39.9 ms | 140 / 40 MHz | -51 to -48 dBm |
+| PV11 | 113.8 / 149.6 Mbps at 175 | 125 Mbps | 13.2 / 136.1 Mbps at 150 | 86.0 ms | 116 / 40 MHz | -64 to -61 dBm |
+| PV12 | 275.0 / 277.5 Mbps at 275 | 225 Mbps | 246.4 / 70.5 Mbps at 250 | 54.4 ms | 140 / 40 MHz | -49 to -46 dBm |
+
+Thirty-nine of forty simultaneous UDP streams returned valid receiver results, delivered the offered rate within normal generator variance, and reported zero lost datagrams; PV04's 200 Mbps reverse object timed out and is invalid rather than zero. UDP-loaded gateway averages remained 3.4–5.3 ms except PV11, which ranged 3.7–18.0 ms. TCP was different: PV10 became 118.3 Mbps asymmetric at 200 Mbps, PV04 and PV12 crossed the threshold at 225 Mbps, and PV11 crossed it at 125 Mbps. Directional TCP controls were clean at the requested maximum for PV04, PV10, and PV12, while PV11 was already below its 175 Mbps request. The failure direction changed between phases and PV12 recovered to 162.5/170.4 Mbps at 275 Mbps after collapsing to 246.4/70.5 at 250 Mbps. This is not a monotonic hard capacity ceiling; it is a repeatable loss of stable bidirectional TCP capacity under concurrency. The clean simultaneous UDP delivery also argues against the radio simply being unable to carry the aggregate bitrate, although it does not identify which TCP, queue, or scheduler interaction is responsible.
+
+## Effective Arista configuration and event evidence
+
+The read-only integration was extended using Arista's published [CV-CUE OpenAPI index](https://apihelp.wifi.arista.com/data/wm/wm-openapi-root.json), then used only with documented GET routes. Each probe's current client record was joined to its location policy, actual AP template, active AP radio, and matching SSID profile. The four locations use different profile identifiers but returned the same relevant settings. The active association on every AP was radio 2—not one of the AX-only template radios—and radio 2 is configured for Wi-Fi 7 (`BE`) operation while serving these HE/Wi-Fi 6 clients.
+
+| Configuration surface | Effective value on all four tested APs | Investigative relevance |
+|---|---|---|
+| Platform / software | C-460; 21.3.0M-13 | Common implementation and firmware across the reproduced cases |
+| Active radio | 5 GHz radio 2; protocol `BE`; actual 40 MHz; auto channel; fixed 18 dBm | Directly supports testing Wi-Fi 7 backward-compatibility behavior while holding channel, width, and power fixed |
+| Multi-user features | Downlink OFDMA on; uplink OFDMA off; downlink and uplink MU-MIMO off | Uplink OFDMA/MU-MIMO are already eliminated as current causes; downlink OFDMA remains testable |
+| Wi-Fi 7/airtime features | MRU on; BSS coloring on; spatial reuse on with OBSS-PD -77 dBm; preamble puncturing off | MRU and spatial reuse are plausible one-change-at-a-time A/B candidates |
+| Aggregation / thresholds | Frame aggregation and A-MSDU on; RTS 2347; fragmentation 2346; ignore-low-RSSI off | No unusual low RTS/fragmentation cutoff or low-RSSI discard policy was found |
+| SSID traffic policy | Shaping values zero; per-user control enabled with upload/download limits zero; WMM on; voice priority with ceiling behavior; WMM admission off | No explicit rate cap was found; QoS/queue treatment remains relevant under duplex load |
+| Steering / mobility | Device-level client steering on at -65 dBm; SSID smart steering and load balancing off; 11v transition off; MLO off | PV11 operated near the steering threshold, but all four clients stayed on one AP/channel and logged no transition |
+| Wired AP uplink | PV04/PV11/PV12: 25.5 W PoE+, low-power flag, 1 Gbps; PV10: 40 W four-pair PoE, no low-power flag, 5 Gbps; single LAN1, no LAG | Power/uplink differences may aggravate rooms, but PV10's full-power 5 Gbps AP also collapsed, excluding them as the sole fleet-wide cause |
+
+Arista's [radio settings guide](https://www.arista.com/en/ug-cv-cue/cv-cue-radio-settings) documents the OFDMA, MU-MIMO, channel, spatial reuse, and aggregation controls; the [SSID settings guide](https://www.arista.com/en/ug-cv-cue/cv-cue-ssid-settings?print=1&tmpl=component) documents shaping, per-user limits, WMM/QoS, and steering. The [C-460 datasheet](https://www.arista.com/assets/data/pdf/Datasheets/Arista-C-460-Datasheet.pdf) specifies full-function 802.3bt Class 6 power and reduced operation on 802.3at, making the three low-power flags actionable even though they do not explain PV10.
+
+Exact-window `Client Events` and `Related AP Events` queries returned zero records for all four probes. No client changed AP or channel, no connection-failure counter changed, and every AP remained active. Current and historical inference and snapshot routes were also reachable, but did not expose a named cause for these short phases. This is a visibility limitation, not proof that no radio/queue event occurred: Arista's [client monitoring guide](https://www.arista.com/en/ug-cv-cue/cv-cue-monitor-wi-fi) describes the event surfaces, while system audit-log access requires a higher role. The present read key receives `403 ERROR_CODE_OP_NOT_PERMITTED` for audit-log and audit-filter endpoints, so a CV-CUE Superuser must export Device and Location Based Settings changes for the window.
+
 ## Current interpretation
 
-The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The evidence supports a client-facing WLAN duplex-capacity mechanism whose trigger scales with effective PHY/client efficiency. Likely components remain per-client scheduling, aggregation efficiency, WMM/queue behavior, airtime allocation, driver behavior, or an interaction among them. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
+The internal results remove public iperf admission, Internet transit, firewall egress, NAT, and dual-WAN selection from the failing path. The evidence supports a client-facing WLAN duplex-capacity mechanism whose trigger scales with effective PHY/client efficiency. Likely components remain per-client scheduling, aggregation efficiency, WMM/queue behavior, airtime allocation, driver behavior, or an interaction among them. The common Wi-Fi 7 radio configuration is now the highest-yield controlled A/B surface, not a proven cause. The data does not support a single bad AP, channel, weak-signal threshold, power mode, controller contention threshold, or legacy-only defect.
 
 The best next tests are:
 
-1. Repeat PV04, PV10, PV11, and PV12 at 150/200/225/250/275 Mbps to locate each direction-specific knee rather than relying on one fixed rate.
-2. Place a passive observer on the same AP as the aggressor to determine whether impairment is 1:1 or 1:many.
-3. Export phase-aligned CV-CUE client and related-AP events for PC16, PC17, PC1, PV04, PV10, and PV11.
-4. Compare one client across naturally different APs/channels, then compare matched adapters on the same AP, to separate client/driver behavior from AP-local scheduling.
+1. On one controlled AP, repeat the same client and script with radio 2 changed from `BE` to `AX`, while fixing channel, 40 MHz width, and 18 dBm power. Restore the original setting after the comparison.
+2. If the protocol A/B changes the result, return to `BE` and disable only one feature per run in this order: MRU, spatial reuse, then downlink OFDMA. Uplink OFDMA and both MU-MIMO directions are already off.
+3. Repeat on one full-power/5 Gbps AP and one low-power/1 Gbps AP. Separately correct the 25.5 W AP power negotiation and compare before/after; do not conflate that remediation with the radio-feature A/B.
+4. Put a passive monitor and an unaffected victim on the aggressor's exact channel/AP. Run victim gateway latency and a low-rate TCP control while the aggressor crosses its threshold to distinguish 1:1 from 1:many impact.
+5. Have a CV-CUE Superuser export the exact-window Device and Location Based Settings audit logs. Simultaneously collect AP switch-port queue drops/errors, PoE negotiation, and interface counters from the network side.
+6. If those remain clean, use an authorized over-the-air capture plus AP/client packet capture to compare block acknowledgements, retries, TXOP occupancy, contention, and TCP ACK timing across the clean and collapsed phases.
 
 ## Evidence and limitations
 
 - Sanitized probe evidence remains temporarily on the management node under the run IDs `fleet-internal-20260803T0020Z` and `he250-internal-20260803T004103Z`.
+- Adaptive-knee probe evidence remains temporarily on the management node under `he-knee-internal-20260803T010336Z`; its synchronized local Arista sample contains 188 sanitized observations. Raw credentials, SSIDs, client/AP identifiers, and controller responses were not added to the repository.
 - Three HE 250 Mbps directional TCP objects hit bounded timeouts; they are not represented as zero.
 - Several iperf3 3.9 TCP controls exceeded the JSON safety bound during the 100 Mbps fleet run; UDP and simultaneous results remain independently valid.
 - Controller performance fields are not phase-resolution logs. Causal claims require time-aligned AP/client events or an authorized over-the-air capture.
