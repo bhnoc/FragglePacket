@@ -12,11 +12,11 @@ UI or TUI work in scope. Sprint loop: build, test, commit, push, next sprint.
 | 2 | measurement primitives 002, 003, 004, 009, 021, 022, 044 | **done, pushed** (fdb6c96) |
 | 3 | capture/PCAP/MSS 007, 008, 010, 026, 066 | **done, pushed** (1edc17c) |
 | 4 | iperf3 load matrix 006, 031-034, 036, 039, 040, 045, 046 | **done, pushed** (fdb6c96) |
-| 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | in progress |
-| 6 | STUN/NAT/ECN/media 005, 023, 028, 052, 054, 060 | not started |
-| 7 | DNS/IPv6/DHCP/auth 014, 015, 048, 049, 056, 057, 059, 061 | not started |
-| 8 | fleet orchestration 029, 038, 041, 053, 064, 065 | not started |
-| 9 | workflows/redaction/reporting 012, 013, 016-018, 020, 030, 050, 051, 058, 062 | not started |
+| 5 | Wi-Fi radio 011, 024, 035, 037, 042, 043, 055, 063 | **done, pushed** (11c7a5d) |
+| 6 | STUN/NAT/ECN/media 005, 023, 028, 052, 054, 060 | **done, pushed** (267e0ee) |
+| 7 | DNS/IPv6/DHCP/auth 014, 015, 048, 049, 056, 057, 059, 061 | **done, pushed** (d50fe8b) |
+| 8 | fleet orchestration 029, 038, 041, 053, 064, 065 | **done, pushed** (a16114f) |
+| 9 | workflows/redaction/reporting 012, 013, 016-018, 020, 030, 050, 051, 058, 062 | in progress (final sprint) |
 
 ## Contract
 
