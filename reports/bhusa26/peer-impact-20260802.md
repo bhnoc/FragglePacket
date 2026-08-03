@@ -49,3 +49,6 @@ The reusable harness is
 Its recommended design is one client in `MODE=load` and the peer in
 `MODE=observe`, followed by a role swap. This isolates harm to the passive peer
 without making both clients aggressors.
+
+For a second load client with a live dashboard (simultaneous aggressor), see
+[`scripts/canary`](../../scripts/canary) and [`docs/CANARY.md`](../../docs/CANARY.md).
