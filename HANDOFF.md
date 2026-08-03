@@ -66,8 +66,18 @@ duration-inconsistent summary, and opening-to-closing baseline drift was severe.
 Client source ports 40010-40019 are recorded as explicitly **not** listeners;
 they held 5-tuples stable across ECMP hash buckets.
 
-Still unwired: no command reads that registry yet. Operators pass endpoints by
-hand, so the known-bad ports are not automatically avoided.
+`fraggle-packet endpoints` reads it. `--check host:port` refuses a known-bad
+endpoint with a non-zero exit so a script cannot proceed past one;
+`--provider X --allowlist` emits a lease allowlist with the six known-bad ports
+excluded by construction; `--provider X --purpose upload|download` selects a
+verified listener and prints the caveats that apply to its results. The registry
+is compiled into the binary, so the command works with no arguments, and
+`--registry <file>` substitutes a different one.
+
+Adding a provider means appending to `harness/fixtures/endpoints/public-iperf.json`.
+Record the ports that FAILED alongside the ones that worked: that is what stops
+them being retried and, more importantly, what stops an admission failure being
+recorded as a zero-throughput measurement.
 
 ## The recurring failure mode: a number with no referent
 

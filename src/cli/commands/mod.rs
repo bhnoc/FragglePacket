@@ -75,3 +75,4 @@ pub mod wired_edge;
 pub mod resilience;
 pub mod process_model;
 pub mod capacity_knee;
+pub mod endpoints;

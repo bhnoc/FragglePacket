@@ -164,6 +164,8 @@ pub enum Commands {
     ReferenceEndpoint(commands::reference_endpoint::ReferenceEndpointArgs),
     /// Capacity/latency-knee discovery: distinguishes a capacity plateau from directional unfairness and withholds an established claim without cross-method reproduction (GAP-070)
     CapacityKnee(commands::capacity_knee::CapacityKneeArgs),
+    /// Known iperf3 endpoints and the ports recorded as failing, so a known-bad endpoint is never retried or scored as zero throughput
+    Endpoints(commands::endpoints::EndpointsArgs),
     /// Privileged-operation inventory and failure classification: preserve the error, name the exact command, offer an unprivileged path (GAP-016)
     PrivilegeStatus(commands::privilege_status::PrivilegeStatusArgs),
     /// Affected-site vs known-good-control A/B workflow: forced protocol, IP pinning, repeated samples, redirect-aware verdict (GAP-012)
@@ -271,6 +273,7 @@ pub fn dispatch(args: Args) {
         Some(Commands::CircuitCompare(a)) => commands::circuit_compare::run(&a),
         Some(Commands::ReferenceEndpoint(a)) => commands::reference_endpoint::run(&a),
         Some(Commands::CapacityKnee(a)) => commands::capacity_knee::run(&a),
+        Some(Commands::Endpoints(a)) => commands::endpoints::run(&a),
         Some(Commands::PrivilegeStatus(a)) => commands::privilege_status::run(&a),
         Some(Commands::SiteAb(a)) => commands::site_ab::run(&a),
         Some(Commands::SecondNetwork(a)) => commands::second_network::run(&a),
