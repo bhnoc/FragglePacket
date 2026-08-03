@@ -33,7 +33,7 @@ behavior did not support a blanket clamp.
 - `wired-control-20260802.md` — matched wired H2/H3, UDP/TCP, and egress control
 - `wifi-duplex-threshold-20260802.md` — packet-size, rate-threshold, port, flow, and DSCP characterization
 - `precog-distributed-wireless-20260802.md` — distributed VHT-versus-HE wireless cohort controls
-- `peer-impact-20260802.md` — coordinated UDP/TCP same-AP 1:1-versus-1:many experiment
+- `peer-impact-20260802.md` — coordinated UDP/TCP same-AP 1:1-versus-1:many experiment (companion TUI: [`docs/CANARY.md`](../../docs/CANARY.md))
 - `wired-remote-room-control-20260802.md` — matched UDP/TCP wired control from a separate room and VLAN
 - `wifi-diagnostics-20260801-235547.txt` — sanitized RF/platform snapshot
 - `tcp-traceroute-20260801-235547.txt` — TCP/443 path sample
