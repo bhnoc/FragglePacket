@@ -1,0 +1,2 @@
+{"cpu_utilization_pct": 96.5, "nic_drops": 412, "nic_errors": 0, "queue_drops": 88,
+ "reported_interval_secs": 15.84, "requested_interval_secs": 10.0, "clock_offset_ms": 2.1}

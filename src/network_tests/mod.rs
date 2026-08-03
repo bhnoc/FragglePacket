@@ -60,6 +60,8 @@ pub mod fleet_orchestrator;
 pub mod probe_preflight;
 pub mod clock_guard;
 pub mod policy_manifest;
+pub mod circuit_workflow;
+pub mod reference_endpoint;
 
 pub use https::{test_https_stages, HttpsTestResult, HttpsDiagnosis, diagnose_mtu_blackhole, CertInfo};
 pub use upload_sweep::{UploadSizeSweepTest, DEFAULT_SIZES as UPLOAD_SWEEP_DEFAULT_SIZES};

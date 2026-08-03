@@ -63,3 +63,5 @@ pub mod fleet_orchestrator;
 pub mod probe_preflight;
 pub mod clock_guard;
 pub mod policy_manifest;
+pub mod circuit_compare;
+pub mod reference_endpoint;

@@ -158,6 +158,10 @@ pub enum Commands {
     DhcpLifecycle(commands::dhcp_lifecycle::DhcpLifecycleArgs),
     /// Decomposed IPv6/NAT64/DNS64 validation with separate IPv4 and IPv6 verdicts, plus Happy Eyeballs timing (GAP-056/GAP-015)
     Ipv6Validate(commands::ipv6_validate::Ipv6ValidateArgs),
+    /// Compare WAN A-only, B-only, and dual-active phases from an operator manifest; never changes routing (GAP-029)
+    CircuitCompare(commands::circuit_compare::CircuitCompareArgs),
+    /// Reference-endpoint calibration and client-result acceptance: the endpoint can invalidate a client's measurement (GAP-053)
+    ReferenceEndpoint(commands::reference_endpoint::ReferenceEndpointArgs),
     /// Authentication/captive-portal/policy-assignment workflow: separately timed phases, portal detection without login automation (GAP-049)
     AuthPortal(commands::auth_portal::AuthPortalArgs),
     /// Infrastructure dependency health bundle: DNS/NTP/cert/OCSP/controller checks distinguishing blocked-by-policy from unhealthy (GAP-059)
@@ -244,6 +248,8 @@ pub fn dispatch(args: Args) {
         Some(Commands::ProviderPath(a)) => commands::provider_path::run(&a),
         Some(Commands::DhcpLifecycle(a)) => commands::dhcp_lifecycle::run(&a),
         Some(Commands::Ipv6Validate(a)) => commands::ipv6_validate::run(&a),
+        Some(Commands::CircuitCompare(a)) => commands::circuit_compare::run(&a),
+        Some(Commands::ReferenceEndpoint(a)) => commands::reference_endpoint::run(&a),
         Some(Commands::AuthPortal(a)) => commands::auth_portal::run(&a),
         Some(Commands::DependencyHealth(a)) => commands::dependency_health::run(&a),
         Some(Commands::MulticastIsolation(a)) => commands::multicast_isolation::run(&a),
