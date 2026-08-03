@@ -18,6 +18,7 @@ pub mod wdutil;
 pub mod roaming;
 pub mod multiclient_fairness;
 pub mod wired_control;
+pub mod process_model;
 
 pub use ap_identity::{compare as compare_ap_identity, label_for_bssid, load_or_create_salt, ApComparison, ApIdentity};
 pub use budget::{AbortThresholds, BudgetError, LoadBudget, RunMode};
@@ -43,3 +44,8 @@ pub use multiclient_fairness::{
     CrossClientVerdict, PhaseMark, RoleDescriptor,
 };
 pub use wired_control::{attribute as attribute_wired_vs_wifi, FaultAttribution, PathResult};
+pub use process_model::{
+    from_external as receive_path_from_external, judge_collapse, parse_linux_tcp_rcv_collapsed,
+    sample_live as sample_receive_path_live, CollapseVerdict, ExternalReceivePathTelemetry, ProcessModel,
+    ProcessModelTrial, ReceivePathCounters,
+};
