@@ -3,6 +3,7 @@
 use colored::*;
 use std::fs;
 
+use fraggle_packet::network_tests::freshness::staleness_note;
 use fraggle_packet::network_tests::phy_normalized::{
     attribute_cohort_difference, normalize, stratify, AttributionVerdict, PhaseMeasurement,
 };
@@ -83,17 +84,29 @@ pub fn run(args: &PhyNormalizedArgs) {
 
     println!("{}", "== PHY-normalized fleet comparison ==".cyan().bold());
     for m in &normalized {
+        // GAP-075: a withheld fraction prints as "withheld", never as a number.
+        let frac = match m.offered_phy_fraction {
+            Some(f) => format!("{:.1}% of PHY", f * 100.0),
+            None => "PHY fraction withheld".to_string(),
+        };
         println!(
-            "  {} [{:?}/{}/{}]: offered {:.1} Mbps of {:.1} Mbps capacity ({:.1}% of PHY), loss {:.2}%, rf={:?} directional={}",
+            "  {} [{:?}/{}/{}]: offered {:.1} Mbps of {:.1} Mbps capacity ({}), loss {:.2}%, rf={:?} directional={}",
             m.node_id, m.phy_generation, m.driver, m.kernel,
-            m.offered_mbps, m.phy_capacity_mbps, m.offered_phy_fraction * 100.0, m.loss_percent, m.rf_quality, m.directional_control
+            m.offered_mbps, m.phy_capacity_mbps, frac, m.loss_percent, m.rf_quality, m.directional_control
         );
+        if let Some(note) = staleness_note("offered_phy_fraction", &m.freshness) {
+            println!("    {} {}", "stale input:".yellow(), note);
+        }
     }
     println!("{}", "-- Strata (generation/driver/kernel) --".white().bold());
     for s in &strata {
+        let mean = match s.mean_offered_phy_fraction {
+            Some(f) => format!("{f:.2}"),
+            None => "withheld".to_string(),
+        };
         println!(
-            "  {:?}/{}/{}: n={} mean_phy_fraction={:.2} mean_loss={:.2}%",
-            s.phy_generation, s.driver, s.kernel, s.sample_count, s.mean_offered_phy_fraction, s.mean_loss_percent
+            "  {:?}/{}/{}: n={} mean_phy_fraction={} (from {} usable) mean_loss={:.2}%",
+            s.phy_generation, s.driver, s.kernel, s.sample_count, mean, s.fraction_sample_count, s.mean_loss_percent
         );
     }
     if let Some(a) = &attribution {

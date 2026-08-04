@@ -24,6 +24,7 @@ pub mod dns_secure;
 pub mod scenario;
 pub mod corroboration;
 pub mod coverage;
+pub mod freshness;
 pub mod pcap_report;
 pub mod probe_rate;
 pub mod firsthop;
