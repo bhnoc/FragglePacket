@@ -57,6 +57,11 @@ pub fn CommandsPanel(state: Signal<AppState>, panel: PanelId) -> Element {
     let mut output = use_signal(String::new);
     let mut output_kind = use_signal(String::new);
     let mut running = use_signal(|| false);
+    // Values for the selected command's required inputs, in order. Cleared when
+    // the selection changes so one command's hostname cannot become another's
+    // interface name.
+    let mut inputs = use_signal(Vec::<String>::new);
+    let mut input_errors = use_signal(Vec::<String>::new);
     let _ = state;
 
     let bucket = *selected_bucket.read();
@@ -107,7 +112,12 @@ pub fn CommandsPanel(state: Signal<AppState>, panel: PanelId) -> Element {
                                     key: "{c.name}",
                                     class: if is_sel { "list-item selected" } else { "list-item" },
                                     style: "cursor: pointer; padding: 6px;",
-                                    onclick: move |_| selected_cmd.set(Some(c.name)),
+                                    onclick: move |_| {
+                                selected_cmd.set(Some(c.name));
+                                inputs.set(vec![String::new(); c.required_inputs.len()]);
+                                input_errors.set(Vec::new());
+                                output.set(String::new());
+                            },
                                     div { style: "display: flex; justify-content: space-between; gap: 8px;",
                                         span { style: "font-family: monospace;", "{c.name}" }
                                         span { class: "{cls}", "{label}" }
@@ -134,7 +144,6 @@ pub fn CommandsPanel(state: Signal<AppState>, panel: PanelId) -> Element {
                             let (blabel, bcls, reason) = badge(c);
                             let blocked = c.availability().is_blocked();
                             let needs_input = !c.required_inputs.is_empty();
-                            let inputs = c.required_inputs.join(", ");
                             rsx! {
                                 div { class: "panel-header",
                                     span { class: "panel-title", "{c.name}" }
@@ -146,8 +155,30 @@ pub fn CommandsPanel(state: Signal<AppState>, panel: PanelId) -> Element {
                                         p { style: "opacity: 0.8;", "{reason}" }
                                     }
                                     if needs_input {
-                                        p { style: "opacity: 0.8;",
-                                            "Requires {inputs}. Run this from the CLI with those arguments."
+                                        div { style: "margin: 8px 0;",
+                                            for (i, (name, kind)) in c.typed_inputs().into_iter().enumerate() {
+                                                div { key: "{name}", style: "margin-bottom: 6px;",
+                                                    label { style: "display: block; font-size: 11px; opacity: 0.75;", "{name}" }
+                                                    input {
+                                                        r#type: "text",
+                                                        placeholder: "{kind.hint()}",
+                                                        value: "{inputs.read().get(i).cloned().unwrap_or_default()}",
+                                                        oninput: move |e| {
+                                                            let mut v = inputs.read().clone();
+                                                            if v.len() <= i { v.resize(i + 1, String::new()); }
+                                                            v[i] = e.value();
+                                                            inputs.set(v);
+                                                        },
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if !input_errors.read().is_empty() {
+                                        div { style: "margin: 8px 0;",
+                                            for err in input_errors.read().iter() {
+                                                div { class: "badge-error", style: "display: block; margin-bottom: 4px;", "{err}" }
+                                            }
                                         }
                                     }
                                     p { style: "font-size: 11px; opacity: 0.6;",
@@ -158,10 +189,19 @@ pub fn CommandsPanel(state: Signal<AppState>, panel: PanelId) -> Element {
                                         class: "btn primary",
                                         // Disabled rather than allowed-to-fail: the registry
                                         // already knows this cannot produce a result here.
-                                        disabled: blocked || needs_input || *running.read(),
+                                        disabled: blocked || *running.read(),
                                         onclick: move |_| {
+                                            let values = inputs.read().clone();
+                                            // Validate before spawning: an empty field or a
+                                            // missing file is caught here, not as a confusing
+                                            // CLI error the user has to decode.
+                                            if let Err(errs) = c.validate_inputs(&values) {
+                                                input_errors.set(errs);
+                                                return;
+                                            }
+                                            input_errors.set(Vec::new());
                                             running.set(true);
-                                            let args = c.invocation(&[]);
+                                            let args = c.invocation(&values);
                                             let o = run_subcommand(c.name, &args);
                                             let (kind, text) = render_outcome(&o);
                                             output_kind.set(kind);
@@ -252,4 +292,53 @@ mod tests {
             assert!(!registry::in_bucket(*b).is_empty(), "{b:?} would render empty");
         }
     }
+    /// The Run button is gated on validate_inputs, so a command needing input is
+    /// no longer permanently disabled -- it is disabled only until the values are
+    /// valid. Asserting the validation itself, since the button state is derived
+    /// from it.
+    #[test]
+    fn a_command_needing_input_is_runnable_once_values_are_valid() {
+        let c = registry::find("quick").expect("quick is registered");
+        assert!(!c.required_inputs.is_empty(), "quick needs a target");
+        assert!(c.validate_inputs(&[]).is_err(), "must not run with nothing entered");
+        assert!(
+            c.validate_inputs(&["1.1.1.1".to_string()]).is_ok(),
+            "a valid target must permit the run"
+        );
+    }
+
+    #[test]
+    fn an_empty_field_blocks_the_run_with_a_named_error() {
+        let c = registry::find("quick").unwrap();
+        let errs = c.validate_inputs(&[String::new()]).unwrap_err();
+        assert!(!errs.is_empty());
+        assert!(
+            errs.iter().any(|e| e.contains("TARGET")),
+            "error must name the field: {errs:?}"
+        );
+    }
+
+    /// A file input must be rejected before the run when the path does not exist,
+    /// rather than surfacing as a CLI error the user has to decode.
+    #[test]
+    fn a_missing_file_input_blocks_the_run() {
+        let c = registry::find("wired-edge").expect("wired-edge is registered");
+        if !c.required_inputs.is_empty() {
+            let errs = c.validate_inputs(&["/nonexistent/bracket.json".to_string()]).unwrap_err();
+            assert!(errs.iter().any(|e| e.contains("no file at")), "{errs:?}");
+        }
+    }
+
+    /// Values are passed positionally ahead of --json, so the command sees its
+    /// arguments in the right order.
+    #[test]
+    fn entered_values_precede_the_json_flag() {
+        let c = registry::find("quick").unwrap();
+        let inv = c.invocation(&["1.1.1.1".to_string()]);
+        assert_eq!(inv[0], "1.1.1.1");
+        if c.emits_json {
+            assert_eq!(inv.last().unwrap(), "--json");
+        }
+    }
+
 }

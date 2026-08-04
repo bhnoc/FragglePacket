@@ -42,6 +42,11 @@ pub struct CommandPanelState {
     pub last_output: Option<String>,
     pub last_command: Option<String>,
     pub running: bool,
+    /// Values typed for the selected command's required inputs, one per
+    /// placeholder in order. Empty until the user starts entering them.
+    pub input_values: Vec<String>,
+    /// Which required input is being edited, when in input mode.
+    pub editing_input: Option<usize>,
 }
 
 impl Default for CommandPanelState {
@@ -53,6 +58,8 @@ impl Default for CommandPanelState {
             last_output: None,
             last_command: None,
             running: false,
+            input_values: Vec::new(),
+            editing_input: None,
         }
     }
 }
@@ -80,6 +87,8 @@ impl CommandPanelState {
     pub fn next_bucket(&mut self) {
         self.selected_bucket = (self.selected_bucket + 1) % Bucket::ALL.len();
         self.selected_command = 0;
+        self.input_values.clear();
+        self.editing_input = None;
     }
 
     pub fn prev_bucket(&mut self) {
@@ -89,9 +98,13 @@ impl CommandPanelState {
             self.selected_bucket - 1
         };
         self.selected_command = 0;
+        self.input_values.clear();
+        self.editing_input = None;
     }
 
     pub fn next_command(&mut self) {
+        self.input_values.clear();
+        self.editing_input = None;
         let n = self.commands().len();
         if n > 0 {
             self.selected_command = (self.selected_command + 1) % n;
@@ -99,10 +112,64 @@ impl CommandPanelState {
     }
 
     pub fn prev_command(&mut self) {
+        self.input_values.clear();
+        self.editing_input = None;
         let n = self.commands().len();
         if n > 0 {
             self.selected_command = if self.selected_command == 0 { n - 1 } else { self.selected_command - 1 };
         }
+    }
+
+    /// Begins entering values for the selected command, sizing the buffer to its
+    /// required inputs. Called instead of running when a command needs input.
+    pub fn begin_input(&mut self) {
+        if let Some(c) = self.current_command() {
+            if c.required_inputs.is_empty() {
+                return;
+            }
+            if self.input_values.len() != c.required_inputs.len() {
+                self.input_values = vec![String::new(); c.required_inputs.len()];
+            }
+            self.editing_input = Some(0);
+        }
+    }
+
+    pub fn cancel_input(&mut self) {
+        self.editing_input = None;
+    }
+
+    /// Moves to the next field, or returns true when the last field is done and
+    /// the caller should attempt the run.
+    pub fn advance_input(&mut self) -> bool {
+        let Some(i) = self.editing_input else { return false };
+        let n = self.input_values.len();
+        if i + 1 < n {
+            self.editing_input = Some(i + 1);
+            false
+        } else {
+            self.editing_input = None;
+            true
+        }
+    }
+
+    pub fn push_char(&mut self, ch: char) {
+        if let Some(i) = self.editing_input {
+            if let Some(v) = self.input_values.get_mut(i) {
+                v.push(ch);
+            }
+        }
+    }
+
+    pub fn pop_char(&mut self) {
+        if let Some(i) = self.editing_input {
+            if let Some(v) = self.input_values.get_mut(i) {
+                v.pop();
+            }
+        }
+    }
+
+    pub fn is_editing(&self) -> bool {
+        self.editing_input.is_some()
     }
 
     pub fn toggle_focus(&mut self) {
@@ -261,10 +328,36 @@ fn render_detail(f: &mut Frame, app: &App, area: Rect) {
             }
 
             if !c.required_inputs.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    format!("  requires: {}", c.required_inputs.join(", ")),
-                    Style::default().fg(TERM_AMBER),
-                )));
+                if st.is_editing() || !st.input_values.is_empty() {
+                    // Show one line per field so the user can see what has been
+                    // entered and which field is active.
+                    for (i, (name, kind)) in c.typed_inputs().iter().enumerate() {
+                        let val = st.input_values.get(i).cloned().unwrap_or_default();
+                        let active = st.editing_input == Some(i);
+                        let shown = if val.is_empty() { kind.hint().to_string() } else { val };
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  {} {name}: ", if active { ">" } else { " " }),
+                                Style::default().fg(if active { TERM_CYAN } else { TERM_GREEN_DARK }),
+                            ),
+                            Span::styled(
+                                shown,
+                                Style::default().fg(if active { TERM_GREEN } else { TERM_GREEN_DIM }),
+                            ),
+                        ]));
+                    }
+                    if st.is_editing() {
+                        lines.push(Line::from(Span::styled(
+                            "  [Enter] next field  [ESC] cancel",
+                            Style::default().fg(TERM_GREEN_DARK),
+                        )));
+                    }
+                } else {
+                    lines.push(Line::from(Span::styled(
+                        format!("  requires: {} -- press [i] to enter", c.required_inputs.join(", ")),
+                        Style::default().fg(TERM_AMBER),
+                    )));
+                }
             }
         }
     }
@@ -413,4 +506,109 @@ mod tests {
             }
         }
     }
+    /// Entering values for a single-input command must complete on the first
+    /// Enter, and for a two-input command only on the second. The pty test that
+    /// first exercised this landed on burst-analysis (INTERFACE + TARGET) and
+    /// advanced instead of running, which was correct behaviour but looked like a
+    /// bug -- so the sequencing is asserted here rather than through the terminal.
+    #[test]
+    fn a_single_input_command_completes_on_the_first_enter() {
+        let mut st = CommandPanelState::default();
+        // Find a command needing exactly one input.
+        let (bi, ci) = find_command_with_inputs(1).expect("some command needs one input");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        assert_eq!(st.editing_input, Some(0));
+        for ch in "1.1.1.1".chars() {
+            st.push_char(ch);
+        }
+        assert_eq!(st.input_values[0], "1.1.1.1");
+        assert!(st.advance_input(), "one field means Enter should run");
+        assert!(!st.is_editing());
+    }
+
+    #[test]
+    fn a_two_input_command_advances_before_running() {
+        let mut st = CommandPanelState::default();
+        let (bi, ci) = find_command_with_inputs(2).expect("some command needs two inputs");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        for ch in "en0".chars() {
+            st.push_char(ch);
+        }
+        assert!(!st.advance_input(), "first of two fields must not run");
+        assert_eq!(st.editing_input, Some(1));
+        for ch in "1.1.1.1".chars() {
+            st.push_char(ch);
+        }
+        assert!(st.advance_input(), "second field completes");
+        assert_eq!(st.input_values, vec!["en0".to_string(), "1.1.1.1".to_string()]);
+    }
+
+    fn find_command_with_inputs(n: usize) -> Option<(usize, usize)> {
+        for (bi, b) in Bucket::ALL.iter().enumerate() {
+            for (ci, c) in registry::in_bucket(*b).iter().enumerate() {
+                if c.required_inputs.len() == n {
+                    return Some((bi, ci));
+                }
+            }
+        }
+        None
+    }
+
+    /// A command needing no input must not enter edit mode at all, or Enter would
+    /// silently do nothing instead of running.
+    #[test]
+    fn begin_input_is_a_noop_for_a_command_needing_nothing() {
+        let mut st = CommandPanelState::default();
+        let (bi, ci) = find_command_with_inputs(0).expect("some command needs nothing");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        assert!(!st.is_editing(), "must not prompt for a command with no inputs");
+    }
+
+    /// Values must not leak between commands: typing a hostname for one command
+    /// and then moving the selection must not silently reuse it as another
+    /// command's interface name.
+    #[test]
+    fn changing_selection_clears_entered_values() {
+        let mut st = CommandPanelState::default();
+        let (bi, ci) = find_command_with_inputs(1).expect("one-input command");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        st.push_char('x');
+        st.next_command();
+        assert!(st.input_values.is_empty(), "stale value survived a selection change");
+        assert!(!st.is_editing());
+    }
+
+    #[test]
+    fn backspace_removes_the_last_character() {
+        let mut st = CommandPanelState::default();
+        let (bi, ci) = find_command_with_inputs(1).expect("one-input command");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        for ch in "abc".chars() {
+            st.push_char(ch);
+        }
+        st.pop_char();
+        assert_eq!(st.input_values[0], "ab");
+    }
+
+    #[test]
+    fn cancel_leaves_edit_mode_without_running() {
+        let mut st = CommandPanelState::default();
+        let (bi, ci) = find_command_with_inputs(1).expect("one-input command");
+        st.selected_bucket = bi;
+        st.selected_command = ci;
+        st.begin_input();
+        st.cancel_input();
+        assert!(!st.is_editing());
+    }
+
 }

@@ -155,3 +155,53 @@ check_ok "cargo test proves the desktop never badges a blocked command as ready"
 # Every command must be reachable by navigation, not merely present in the data.
 check_ok "cargo test proves every registered command is reachable in the TUI" \
     bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::every_registered_command_is_reachable 2>&1 | grep -q '1 passed'"
+
+# --- commands needing arguments must be runnable from the UIs, not just named ---
+# Before input prompting, both UIs reported "needs TARGET; run from the CLI",
+# which meant 30+ commands were listed but not usable. The guard that matters is
+# that an empty or invalid value is refused BEFORE spawning, so a bad run never
+# reaches the CLI as a confusing error.
+check_ok "cargo test proves typed inputs line up with required_inputs" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --lib ui_bridge::registry::tests::typed_inputs_match_required_inputs_in_order 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves an empty value is rejected for every input kind" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --lib ui_bridge::registry::tests::an_empty_value_is_rejected_for_every_kind 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves a missing file is rejected before the run" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --lib ui_bridge::registry::tests::a_nonexistent_file_is_rejected_before_the_run 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves file inputs prompt for a file, not free text" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --lib ui_bridge::registry::tests::file_inputs_are_classified_as_files_not_free_text 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves the TUI completes a single-input command on one Enter" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::a_single_input_command_completes_on_the_first_enter 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves the TUI advances between fields on a two-input command" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::a_two_input_command_advances_before_running 2>&1 | grep -q '1 passed'"
+
+# Entered values must not leak between commands: a hostname typed for one command
+# silently becoming another's interface name would be a wrong-argument bug the
+# user cannot see.
+check_ok "cargo test proves entered values are cleared when the selection changes" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::changing_selection_clears_entered_values 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves the desktop enables Run once values are valid" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins components::commands_panel::tests::a_command_needing_input_is_runnable_once_values_are_valid 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves entered values precede the --json flag" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins components::commands_panel::tests::entered_values_precede_the_json_flag 2>&1 | grep -q '1 passed'"
+
+# Only the 6 structurally-incapable commands may lack --json. If that count grows,
+# a new command shipped without structured output and the UIs can only show text.
+no_json="$(
+    for c in $(cat "$actual"); do
+        "$BIN" "$c" --help 2>&1 | grep -q -- "--json" || printf '%s ' "$c"
+    done
+)"
+expected_no_json="dsl-demo fuzz probe replay serve tui"
+if [ "$(echo $no_json | tr ' ' '\n' | sort | tr '\n' ' ')" = "$(echo $expected_no_json | tr ' ' '\n' | sort | tr '\n' ' ')" ]; then
+    pass "only the 6 structurally text-only commands lack --json"
+else
+    fail "only the 6 structurally text-only commands lack --json" \
+        "got: $no_json (expected: $expected_no_json)"
+fi

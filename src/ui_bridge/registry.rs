@@ -94,6 +94,91 @@ impl Availability {
     }
 }
 
+
+/// What kind of value a required input wants, so a UI can prompt appropriately
+/// and validate before spending a run.
+///
+/// Derived from the input's name in the command's own usage line. The names are
+/// not arbitrary -- `<INTERFACE>` always means a local NIC and `<BRACKET>` always
+/// means an operator-supplied JSON file -- so one mapping covers all 79 commands
+/// without a per-command table to keep in sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputKind {
+    /// A hostname or IP to probe.
+    Target,
+    /// A comma-separated list of hosts.
+    TargetList,
+    /// A local network interface name.
+    Interface,
+    /// A path to a file that must already exist (operator telemetry, manifest,
+    /// capture, scenario).
+    ExistingFile,
+    /// A TCP/UDP port number.
+    Port,
+    /// Anything else: a free-text value the command interprets itself.
+    Text,
+}
+
+impl InputKind {
+    /// Classifies a usage-line placeholder such as `TARGET` or `BRACKET`.
+    pub fn from_placeholder(name: &str) -> InputKind {
+        match name {
+            "TARGET" | "HOST" | "GATEWAY" | "REMOTE" | "AFFECTED_HOST" | "CONTROL_HOST" | "NAME" => {
+                InputKind::Target
+            }
+            "TARGETS" | "RESOLVERS" => InputKind::TargetList,
+            "INTERFACE" | "IFACE" => InputKind::Interface,
+            "PCAP" | "FILE" | "FILES" | "MANIFEST" | "MANIFEST_FILE" | "BRACKET" | "RUN"
+            | "MEASUREMENTS_FILE" => InputKind::ExistingFile,
+            "PORT" => InputKind::Port,
+            _ => InputKind::Text,
+        }
+    }
+
+    /// Placeholder text for a prompt or form field.
+    pub fn hint(&self) -> &'static str {
+        match self {
+            InputKind::Target => "hostname or IP",
+            InputKind::TargetList => "comma-separated hosts",
+            InputKind::Interface => "interface name, e.g. en0",
+            InputKind::ExistingFile => "path to an existing file",
+            InputKind::Port => "port number",
+            InputKind::Text => "value",
+        }
+    }
+
+    /// Rejects a value that cannot possibly work, so the UI catches it before
+    /// spawning a run. Deliberately shallow: this is not a substitute for the
+    /// command's own validation, only a guard against obviously empty or wrong
+    /// input.
+    pub fn validate(&self, value: &str) -> Result<(), String> {
+        let v = value.trim();
+        if v.is_empty() {
+            return Err(format!("{} is required", self.hint()));
+        }
+        match self {
+            InputKind::Port => v
+                .parse::<u16>()
+                .map(|_| ())
+                .map_err(|_| "port must be a number from 0 to 65535".to_string()),
+            InputKind::ExistingFile => {
+                if std::path::Path::new(v).is_file() {
+                    Ok(())
+                } else {
+                    Err(format!("no file at {v}"))
+                }
+            }
+            InputKind::Target | InputKind::TargetList | InputKind::Interface | InputKind::Text => {
+                if v.split_whitespace().count() > 1 {
+                    Err("must not contain spaces".to_string())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
 /// One subcommand.
 #[derive(Debug, Clone, Copy)]
 pub struct Cmd {
@@ -114,6 +199,41 @@ pub struct Cmd {
 }
 
 impl Cmd {
+    /// Required inputs paired with the kind of value each wants, so a UI can
+    /// build a prompt without hardcoding anything per command.
+    pub fn typed_inputs(&self) -> Vec<(&'static str, InputKind)> {
+        self.required_inputs
+            .iter()
+            .map(|n| (*n, InputKind::from_placeholder(n)))
+            .collect()
+    }
+
+    /// Validates supplied values positionally against `required_inputs`.
+    /// Returns every problem rather than just the first, so a form can show all
+    /// of its errors at once.
+    pub fn validate_inputs(&self, values: &[String]) -> Result<(), Vec<String>> {
+        let typed = self.typed_inputs();
+        let mut errors = Vec::new();
+        if values.len() < typed.len() {
+            errors.push(format!("expected {} value(s), got {}", typed.len(), values.len()));
+        }
+        for (i, (name, kind)) in typed.iter().enumerate() {
+            match values.get(i) {
+                Some(v) => {
+                    if let Err(e) = kind.validate(v) {
+                        errors.push(format!("{name}: {e}"));
+                    }
+                }
+                None => errors.push(format!("{name}: {} is required", kind.hint())),
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
     /// Availability on the host this binary is running on.
     pub fn availability(&self) -> Availability {
         let darwin = cfg!(target_os = "macos");
@@ -332,4 +452,108 @@ mod tests {
         assert!(find("diagnose").unwrap().required_inputs.contains(&"TARGET"));
         assert!(find("endpoints").unwrap().required_inputs.is_empty());
     }
+    /// Every placeholder across all 79 commands must classify to something a UI
+    /// can prompt for. An unmapped name silently becoming Text is acceptable;
+    /// what is not acceptable is a placeholder nobody noticed needs a file
+    /// picker.
+    #[test]
+    fn file_inputs_are_classified_as_files_not_free_text() {
+        for (cmd, ph) in [
+            ("circuit-compare", "MANIFEST"),
+            ("wired-edge", "BRACKET"),
+            ("phy-normalized", "MEASUREMENTS_FILE"),
+            ("scenario", "FILE"),
+            ("replay", "PCAP"),
+        ] {
+            let c = find(cmd).expect(cmd);
+            if c.required_inputs.contains(&ph) {
+                assert_eq!(
+                    InputKind::from_placeholder(ph),
+                    InputKind::ExistingFile,
+                    "{cmd}'s {ph} must prompt for a file"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn interface_inputs_are_classified_as_interfaces() {
+        assert_eq!(InputKind::from_placeholder("INTERFACE"), InputKind::Interface);
+        assert_eq!(InputKind::from_placeholder("IFACE"), InputKind::Interface);
+    }
+
+    #[test]
+    fn an_empty_value_is_rejected_for_every_kind() {
+        for k in [
+            InputKind::Target,
+            InputKind::TargetList,
+            InputKind::Interface,
+            InputKind::ExistingFile,
+            InputKind::Port,
+            InputKind::Text,
+        ] {
+            assert!(k.validate("").is_err(), "{k:?} accepted an empty value");
+            assert!(k.validate("   ").is_err(), "{k:?} accepted whitespace");
+        }
+    }
+
+    #[test]
+    fn a_nonexistent_file_is_rejected_before_the_run() {
+        let e = InputKind::ExistingFile.validate("/nonexistent/xyz.json").unwrap_err();
+        assert!(e.contains("no file at"), "{e}");
+    }
+
+    #[test]
+    fn a_nonnumeric_port_is_rejected() {
+        assert!(InputKind::Port.validate("https").is_err());
+        assert!(InputKind::Port.validate("443").is_ok());
+        assert!(InputKind::Port.validate("99999").is_err(), "must not exceed u16");
+    }
+
+    /// Shell metacharacters are not a concern (no shell is involved -- args go
+    /// straight to exec), but a value with spaces is always a mistake here and
+    /// would silently become the wrong argument.
+    #[test]
+    fn a_value_with_spaces_is_rejected() {
+        assert!(InputKind::Target.validate("a b").is_err());
+        assert!(InputKind::Target.validate("example.com").is_ok());
+    }
+
+    #[test]
+    fn validation_reports_every_problem_not_just_the_first() {
+        let c = find("site-ab").expect("site-ab is registered");
+        if c.required_inputs.len() >= 2 {
+            let errs = c.validate_inputs(&["".to_string(), "".to_string()]).unwrap_err();
+            assert!(errs.len() >= 2, "expected one error per field, got {errs:?}");
+        }
+    }
+
+    #[test]
+    fn too_few_values_is_an_error_not_a_partial_run() {
+        let c = find("dns-steering").expect("dns-steering is registered");
+        if c.required_inputs.len() >= 2 {
+            assert!(c.validate_inputs(&["1.1.1.1".to_string()]).is_err());
+        }
+    }
+
+    #[test]
+    fn a_command_needing_nothing_validates_with_no_values() {
+        let c = find("endpoints").unwrap();
+        assert!(c.required_inputs.is_empty());
+        assert!(c.validate_inputs(&[]).is_ok());
+    }
+
+    /// Typed inputs must line up with required_inputs positionally, since the UI
+    /// passes values by position.
+    #[test]
+    fn typed_inputs_match_required_inputs_in_order() {
+        for c in COMMANDS {
+            let t = c.typed_inputs();
+            assert_eq!(t.len(), c.required_inputs.len(), "{}", c.name);
+            for (i, (name, _)) in t.iter().enumerate() {
+                assert_eq!(*name, c.required_inputs[i], "{} input {i} out of order", c.name);
+            }
+        }
+    }
+
 }

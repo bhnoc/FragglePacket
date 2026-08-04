@@ -12,8 +12,13 @@ concludes a capability exists when it does not:
    command browser (TUI `[C]`, desktop **Commands** tab), grouped by the same
    buckets used above. Availability is declared per command, so one whose live
    sampling needs macOS shows as ingest-only and one that cannot run on this host
-   is disabled with the reason rather than failing when clicked.
-3. **1053 harness checks** (`harness/acid.sh`) — the ratchet that proves the
+   is disabled with the reason rather than failing when clicked. Commands that
+   need arguments are prompted for them (TUI `[i]`, desktop form fields) and
+   validated before the run, so an empty field or a missing file is refused up
+   front instead of becoming a CLI error to decode. **73 of 79** emit `--json`;
+   the other six (`tui`, `serve`, `dsl-demo`, `fuzz`, `replay`, `probe`) are
+   interactive, long-running, or produce a file rather than a result document.
+3. **1063 harness checks** (`harness/acid.sh`) — the ratchet that proves the
    above behave as documented. Only grows, never shrinks.
 
 Full flag-level reference for every subcommand is in [CLI.md](CLI.md). This page

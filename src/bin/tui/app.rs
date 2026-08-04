@@ -928,17 +928,26 @@ impl App {
             return;
         }
 
+        // Validate supplied values before spawning anything: an empty field or a
+        // missing file is caught here rather than becoming a confusing CLI error.
+        let user_values: Vec<String> = self.command_panel.input_values.clone();
         if !cmd.required_inputs.is_empty() {
-            let needs = cmd.required_inputs.join(", ");
-            self.command_panel.last_command = Some(cmd.name.to_string());
-            self.command_panel.last_output =
-                Some(format!("needs {needs}; run from the CLI with those arguments"));
-            self.log_messages.push(format!("{}: needs {needs}", cmd.name));
-            return;
+            match cmd.validate_inputs(&user_values) {
+                Ok(()) => {}
+                Err(errors) => {
+                    self.command_panel.last_command = Some(cmd.name.to_string());
+                    self.command_panel.last_output = Some(format!(
+                        "cannot run yet:\n  {}\npress [i] to enter values",
+                        errors.join("\n  ")
+                    ));
+                    self.log_messages.push(format!("{}: {}", cmd.name, errors.join("; ")));
+                    return;
+                }
+            }
         }
 
         self.command_panel.running = true;
-        let args = cmd.invocation(&[]);
+        let args = cmd.invocation(&user_values);
         let outcome = run_subcommand(cmd.name, &args);
         self.command_panel.running = false;
         self.command_panel.last_command = Some(format!("{} {}", cmd.name, args.join(" ")));
@@ -1877,7 +1886,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     // Context-aware help hints
     let help_hint = match app.mode {
         AppMode::TestPanel => " [1-0]Select [Enter]Run [A]All [Tab]Toggle [ESC]Back [?]Help ",
-        AppMode::CommandPanel => " [↑/↓]Move [Tab]Switch pane [Enter]Run [ESC]Back [?]Help ",
+        AppMode::CommandPanel => " [↑/↓]Move [Tab]Pane [i]Inputs [Enter]Run [ESC]Back [?]Help ",
         AppMode::FuzzingPanel => " [↑/↓]Select [Enter]Run [A]All [ESC]Back [?]Help ",
         AppMode::HttpsPanel => " [↑/↓]Select [Enter]Test [A]All [ESC]Back [?]Help ",
         _ => " [?]Help [1]Dash [C]Commands [F]Fuzz [H]HTTPS [T]Tests [3]Sim [t]Trace [q]Quit ",
@@ -1966,6 +1975,22 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
             }
             
             match key.code {
+                // While a command input is being typed, characters go to the
+                // field. Without this, typing "cloudflare.com" would hit the
+                // 'q' shortcut and quit mid-hostname.
+                _ if matches!(app.mode, AppMode::CommandPanel) && app.command_panel.is_editing() => {
+                    match key.code {
+                        KeyCode::Char(ch) => app.command_panel.push_char(ch),
+                        KeyCode::Backspace => app.command_panel.pop_char(),
+                        KeyCode::Esc => app.command_panel.cancel_input(),
+                        KeyCode::Enter => {
+                            if app.command_panel.advance_input() {
+                                app.run_selected_registry_command();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 KeyCode::Char('q') => app.should_quit = true,
                 KeyCode::Char('?') | KeyCode::Char('h') => app.mode = AppMode::Help,
                 // Number keys: context-aware (Test Panel takes priority)
@@ -2028,6 +2053,9 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('T') => app.mode = AppMode::TestPanel,  // Uppercase T for Test Panel
                 KeyCode::Char('H') => app.mode = AppMode::HttpsPanel,
                 KeyCode::Char('C') | KeyCode::Char('c') => app.mode = AppMode::CommandPanel,
+                KeyCode::Char('i') if matches!(app.mode, AppMode::CommandPanel) => {
+                    app.command_panel.begin_input();
+                }
                 KeyCode::Tab => {
                     if matches!(app.mode, AppMode::CommandPanel) {
                         app.command_panel.toggle_focus();
