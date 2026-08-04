@@ -2,7 +2,7 @@
 
 FragglePacket is a Rust network diagnostics suite that combines active path probing, packet fuzzing, PCAP replay, staged HTTPS analysis, and a rule-based diagnosis engine behind a CLI, a terminal UI, and a Dioxus desktop GUI.
 
-**79 subcommands**, 56 of which close a specific gap found during real network investigations. **1032 harness checks** gate the behaviour.
+**79 subcommands**, 56 of which close a specific gap found during real network investigations. **1034 harness checks** gate the behaviour.
 
 The design rule everything else follows: *a figure that cannot be substantiated is withheld, not printed with a caveat.* A silent probe is missing evidence, never a passing result; two sources that disagree produce a finding rather than a winner; and a figure derived from a stale input is not reported as current. See [docs/TESTS.md](docs/TESTS.md) for the full capability map, including [what this tool deliberately cannot do](docs/TESTS.md#what-this-tool-deliberately-cannot-do).
 

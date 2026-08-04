@@ -63,6 +63,60 @@ for doc in README.md docs/CLI.md docs/TESTS.md; do
     fi
 done
 
+# --- CLI.md's recorded usage strings must still match the binary ---
+# Naming every command is not enough: a doc that records
+# `capture [OPTIONS] --iface <IFACE>` after the flag became required-optional is
+# wrong in the way that actually wastes someone's afternoon. The index is
+# generated from `--help`, so it must be regenerated when a signature changes.
+usage_drift="$(
+    python3 - "$REPO_ROOT" <<'PY'
+import re, subprocess, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+binp = str(root / "target" / "release" / "fraggle-packet")
+doc = (root / "docs" / "CLI.md").read_text()
+rows = dict(re.findall(r'^\| `([a-z0-9-]+)`(?:\s*\[[^\]]*\]\([^)]*\))?\s*\| `([^`]+)` \|', doc, re.M))
+bad = []
+for name, recorded in sorted(rows.items()):
+    h = subprocess.run([binp, name, "--help"], capture_output=True, text=True).stdout
+    actual = next((l.replace("Usage: fraggle-packet ", "").strip()
+                   for l in h.splitlines() if l.startswith("Usage:")), None)
+    if actual and actual != recorded:
+        bad.append(name)
+print(" ".join(bad))
+PY
+)"
+if [ -z "${usage_drift// /}" ]; then
+    pass "docs/CLI.md's recorded usage strings match the binary"
+else
+    fail "docs/CLI.md's recorded usage strings match the binary" \
+        "drifted: $usage_drift -- regenerate the index from --help"
+fi
+
+# --- flags named in the detailed sections must still exist ---
+flag_drift="$(
+    python3 - "$REPO_ROOT" <<'PY'
+import re, subprocess, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+binp = str(root / "target" / "release" / "fraggle-packet")
+doc = (root / "docs" / "CLI.md").read_text()
+detail = doc.split('## Detailed reference')[1] if '## Detailed reference' in doc else ''
+blocks = re.split(r'^### ([a-z0-9-]+)\s*$', detail, flags=re.M)[1:]
+bad = []
+for i in range(0, len(blocks) - 1, 2):
+    name, body = blocks[i], blocks[i + 1]
+    h = subprocess.run([binp, name, "--help"], capture_output=True, text=True).stdout
+    for flag in sorted(set(re.findall(r'`(--[a-z][a-z0-9-]*)', body))):
+        if flag not in h:
+            bad.append(f"{name}:{flag}")
+print(" ".join(bad))
+PY
+)"
+if [ -z "${flag_drift// /}" ]; then
+    pass "flags documented in CLI.md's detailed sections still exist"
+else
+    fail "flags documented in CLI.md's detailed sections still exist" "$flag_drift"
+fi
+
 # --- every NetworkTest impl must appear in TESTS.md ---
 impls="$(mktemp)"; doc_impls="$(mktemp)"
 trap 'rm -f "$actual" "$documented" "$missing" "$impls" "$doc_impls"' EXIT
