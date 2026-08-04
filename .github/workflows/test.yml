@@ -98,7 +98,7 @@ jobs:
       - name: Generate test coverage report
         run: |
           cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
-          cargo llvm-cov --workspace --all-targets report --summary-only
+          cargo llvm-cov report --summary-only
 
       - name: Upload coverage report artifact
         uses: actions/upload-artifact@v4
@@ -111,5 +111,5 @@ jobs:
         run: |
           echo "# Test Coverage Summary" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cargo llvm-cov --workspace --all-targets report --summary-only >> "$GITHUB_STEP_SUMMARY" || true
+          cargo llvm-cov report --summary-only >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
