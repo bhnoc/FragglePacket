@@ -118,6 +118,14 @@ require_bin() {
     fi
 }
 
+# True only where live interface counters can actually be sampled.
+# load_guard::counters::snapshot_live shells out to `netstat -I <iface> -b`,
+# which is BSD/Darwin syntax. On Linux that yields no usable row, so any check
+# that needs a real nonzero counter baseline cannot run there.
+counters_available() {
+    [ "$(uname -s)" = "Darwin" ]
+}
+
 # Marks a check as needing live network. Set FP_HARNESS_OFFLINE=1 to skip these.
 net_guard() {
     if [ "${FP_HARNESS_OFFLINE:-0}" = "1" ]; then return 1; fi

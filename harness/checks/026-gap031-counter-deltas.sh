@@ -92,8 +92,13 @@ else
 fi
 
 # --- injected wrap/reset must be qualified as such and withhold the rate ---
-wrap_out="$(cd_json --assume-isolated --inject-wrap)"
-if [ -z "$wrap_out" ]; then
+# Needs a real first sample to go backwards FROM: --inject-wrap only fails the
+# second read. Where snapshot_live cannot read counters at all (non-Darwin),
+# both samples fail and there is no wrap to detect.
+if ! counters_available; then
+    skip "injected counter wrap is qualified CounterWrappedOrReset with no normalized rate" \
+        "netstat -I -b is Darwin-only; no live counter baseline on $(uname -s)"
+elif wrap_out="$(cd_json --assume-isolated --inject-wrap)"; [ -z "$wrap_out" ]; then
     fail "injected counter wrap is qualified CounterWrappedOrReset with no normalized rate" "no output"
 else
     wrap_qual="$(printf '%s' "$wrap_out" | json_get qualification)"
