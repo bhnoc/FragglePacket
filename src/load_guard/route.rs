@@ -61,4 +61,21 @@ mod tests {
         assert_eq!(info.interface, "en0");
         assert!(!info.is_tunnel);
     }
+
+    #[test]
+    fn test_is_tunnel_interface_variants() {
+        for tunnel in ["utun0", "tun1", "ppp0", "ipsec0"] {
+            assert!(is_tunnel_interface(tunnel), "expected {tunnel} to be identified as tunnel");
+        }
+        for physical in ["en0", "en1", "eth0", "wlan0", "lo0"] {
+            assert!(!is_tunnel_interface(physical), "expected {physical} to be identified as non-tunnel");
+        }
+    }
+
+    #[test]
+    fn test_parse_default_route_missing_interface() {
+        const NO_IFACE: &str = "   route to: default\ndestination: default\n";
+        assert!(parse_default_route(NO_IFACE).is_none());
+        assert!(parse_default_route("").is_none());
+    }
 }

@@ -189,4 +189,45 @@ mod tests {
         b.ramp_steps = 0;
         assert_eq!(b.validate(), Err(BudgetError::ZeroRamp));
     }
+
+    #[test]
+    fn test_duration_exceeds_cap() {
+        let b = LoadBudget::live_event(10.0, LIVE_EVENT_MAX_DURATION_SECS + 1, 1);
+        assert!(matches!(b.validate(), Err(BudgetError::DurationExceedsCap { .. })));
+    }
+
+    #[test]
+    fn test_concurrency_exceeds_cap() {
+        let b = LoadBudget::live_event(10.0, 10, LIVE_EVENT_MAX_CONCURRENCY + 1);
+        assert!(matches!(b.validate(), Err(BudgetError::ConcurrencyExceedsCap { .. })));
+    }
+
+    #[test]
+    fn test_budget_error_display_formatting() {
+        let err_rate = BudgetError::RateExceedsCap {
+            requested: "100.0".to_string(),
+            cap: "50.0".to_string(),
+            mode: RunMode::LiveEvent,
+        };
+        assert!(err_rate.to_string().contains("exceeds LiveEvent cap"));
+
+        let err_dur = BudgetError::DurationExceedsCap {
+            requested: 100,
+            cap: 30,
+            mode: RunMode::LiveEvent,
+        };
+        assert!(err_dur.to_string().contains("exceeds LiveEvent cap"));
+
+        let err_conc = BudgetError::ConcurrencyExceedsCap {
+            requested: 10,
+            cap: 2,
+            mode: RunMode::LiveEvent,
+        };
+        assert!(err_conc.to_string().contains("exceeds LiveEvent cap"));
+
+        assert_eq!(
+            BudgetError::ZeroRamp.to_string(),
+            "ramp_steps must be >= 1 (no starting at full rate)"
+        );
+    }
 }
