@@ -2,7 +2,6 @@
 
 pub mod app;
 pub mod colors;
-pub mod dashboard;
 pub mod fuzzing_panel;
 pub mod https_panel;
 pub mod test_panel;

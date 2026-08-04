@@ -153,14 +153,12 @@ pub fn binary_search_mtu_icmp(target: IpAddr, min: usize, max: usize, timeout_ms
     let mut low = min;
     let mut high = max;
     let mut best = min;
-    let mut iterations = 0;
 
     while low <= high {
         let mid = (low + high) / 2;
         let payload = mid.saturating_sub(IP_HEADER_SIZE + ICMP_HEADER_SIZE);
 
         let probe_result = probe_icmp(target, payload, timeout_ms, retries);
-        iterations += 1;
         
         if probe_result {
             best = mid;
@@ -294,17 +292,12 @@ pub fn binary_search_mtu_udp(target: IpAddr, min: usize, max: usize, timeout_ms:
     let mut low = min;
     let mut high = max;
     let mut best = min;
-    let mut iterations = 0;
 
     while low <= high {
         let mid = (low + high) / 2;
         let payload = mid.saturating_sub(IP_HEADER_SIZE + UDP_HEADER_SIZE);
 
         let probe_result = probe_udp(target, payload, timeout_ms, retries);
-        iterations += 1;
-        
-        // DEBUG: Uncomment to see binary search progress
-        // eprintln!("UDP {} iter={} mid={} payload={} result={}", target, iterations, mid, payload, probe_result);
         
         if probe_result {
             best = mid;
@@ -317,7 +310,6 @@ pub fn binary_search_mtu_udp(target: IpAddr, min: usize, max: usize, timeout_ms:
         }
     }
 
-    // eprintln!("UDP {} final={} iterations={}", target, best, iterations);
     Some(best)
 }
 

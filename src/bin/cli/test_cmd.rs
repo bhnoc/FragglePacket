@@ -1,6 +1,6 @@
 //! CLI command for running test framework tests
 
-use fraggle_packet::framework::{TestOrchestrator, TestCategory, TestStatus};
+use fraggle_packet::framework::{TestOrchestrator, TestStatus};
 use fraggle_packet::network_tests::https::HttpsTest;
 use fraggle_packet::network_tests::tcp_segmentation::TcpSegmentationTest;
 use fraggle_packet::network_tests::rtt::RttTest;
