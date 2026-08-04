@@ -70,7 +70,6 @@ impl Drop for CaptureHandle {
 /// receiver whenever `filter` returns true.
 #[cfg(target_os = "linux")]
 pub fn start_capture(iface: &str, filter: FilterFn) -> Result<CaptureHandle, CaptureError> {
-    use std::os::fd::AsRawFd;
     let sock = unsafe {
         libc::socket(
             libc::AF_PACKET,
@@ -152,7 +151,6 @@ pub fn start_capture(iface: &str, filter: FilterFn) -> Result<CaptureHandle, Cap
         }
         unsafe { libc::close(fd) };
     });
-    let _ = AsRawFd::as_raw_fd;
     Ok(CaptureHandle {
         rx,
         stop_tx,

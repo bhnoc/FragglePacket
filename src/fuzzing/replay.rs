@@ -207,7 +207,6 @@ trait RawSender {
 
 #[cfg(target_os = "linux")]
 fn build_sender(opts: &ReplayOptions) -> Result<Box<dyn RawSender>, ReplayError> {
-    use std::os::fd::AsRawFd;
     let iface = opts
         .iface
         .as_deref()
@@ -269,7 +268,6 @@ fn build_sender(opts: &ReplayOptions) -> Result<Box<dyn RawSender>, ReplayError>
             }
         }
     }
-    let _ = AsRawFd::as_raw_fd;
     Ok(Box::new(Linux { fd: sock }))
 }
 

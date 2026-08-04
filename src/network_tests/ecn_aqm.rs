@@ -296,7 +296,13 @@ mod tests {
 
     #[test]
     fn tos_byte_masking_matches_libc_ecn_constants() {
-        assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_NOTECT), EcnCodepoint::NotEct);
+        // Not-ECT has no portable libc name: the BSDs (and macOS) export
+        // IPTOS_ECN_NOTECT, glibc exports nothing, and hurd/l4re spell it
+        // IPTOS_ECN_NOT_ECT. The value is 0x00 in RFC 3168 everywhere, so
+        // asserting the literal keeps this test compiling on every target
+        // instead of only the one it was written on.
+        const NOT_ECT: u8 = 0x00;
+        assert_eq!(EcnCodepoint::from_tos_byte(NOT_ECT), EcnCodepoint::NotEct);
         assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT1), EcnCodepoint::Ect1);
         assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_ECT0), EcnCodepoint::Ect0);
         assert_eq!(EcnCodepoint::from_tos_byte(libc::IPTOS_ECN_CE), EcnCodepoint::Ce);
