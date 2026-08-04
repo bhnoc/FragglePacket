@@ -24,18 +24,22 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const SALT_FILE_NAME: &str = "fraggle-packet-fleet-node-salt";
+static FLEET_SALT_LOCK: Mutex<()> = Mutex::new(());
 
 fn salt_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join(SALT_FILE_NAME))
 }
 
 pub fn load_or_create_node_salt() -> Result<String, String> {
+    let _guard = FLEET_SALT_LOCK.lock().map_err(|e| format!("failed to acquire fleet salt lock: {e}"))?;
     let path = salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
     if let Ok(existing) = std::fs::read_to_string(&path) {
         let trimmed = existing.trim().to_string();
@@ -47,8 +51,23 @@ pub fn load_or_create_node_salt() -> Result<String, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("failed to create config dir: {e}"))?;
     }
-    std::fs::write(&path, &salt).map_err(|e| format!("failed to persist fleet-node salt: {e}"))?;
-    Ok(salt)
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut f) => {
+            f.write_all(salt.as_bytes()).map_err(|e| format!("failed to write fleet-node salt: {e}"))?;
+            Ok(salt)
+        }
+        Err(_) => {
+            let existing = std::fs::read_to_string(&path)
+                .map_err(|e| format!("failed to read fleet-node salt after concurrent creation: {e}"))?;
+            let trimmed = existing.trim().to_string();
+            if !trimmed.is_empty() {
+                Ok(trimmed)
+            } else {
+                std::fs::write(&path, &salt).map_err(|e| format!("failed to persist fleet-node salt: {e}"))?;
+                Ok(salt)
+            }
+        }
+    }
 }
 
 fn generate_node_salt() -> String {
