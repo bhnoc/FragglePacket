@@ -61,6 +61,15 @@ pub fn run(args: &FleetOrchestratorArgs) {
     }
     let nodes = build_fleet_labels(&entries, &salt);
 
+    // Which label belongs to the first test node, so the demo can time out
+    // exactly that one. Selecting by identity rather than by a property of the
+    // hash keeps the fixture shape independent of the (per-machine, random)
+    // node salt.
+    let timeout_label: Option<String> = nodes
+        .iter()
+        .find(|n| n.role == NodeRole::TestNode)
+        .map(|n| n.label.clone());
+
     let plan = FleetPlan { nodes, max_concurrency: args.max_concurrency, per_node_timeout_secs: args.per_node_timeout_secs };
     if let Err(e) = plan.validate() {
         eprintln!("{} {}", "✗".red(), e);
@@ -69,13 +78,11 @@ pub fn run(args: &FleetOrchestratorArgs) {
 
     let digest = run_descriptor_digest(&plan);
 
-    let mock_node_count = args.mock_node_count;
     let results = run_fleet_fanout(&plan, move |label| {
-        // Fixture behavior: the first mock node "times out", others succeed
-        // quickly. Deterministic from the label's own byte sum so a given
-        // mock inventory always produces the same demo shape.
-        let byte_sum: u32 = label.bytes().map(|b| b as u32).sum();
-        if mock_node_count > 0 && byte_sum % 7 == 0 {
+        // Fixture behavior: the first mock test node "times out", the rest
+        // succeed quickly, so the demo always shows one excluded node beside
+        // several completed ones.
+        if Some(label) == timeout_label.as_deref() {
             std::thread::sleep(Duration::from_secs(60));
             Ok((None, None))
         } else {
