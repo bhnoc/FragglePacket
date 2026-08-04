@@ -23,6 +23,8 @@
 //!   any JSON, so the payload starts at the first line beginning with `{` or `[`.
 //!   This mirrors the `sed -n '/^{/,$p'` the harness has always used.
 
+pub mod registry;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

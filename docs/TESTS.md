@@ -8,7 +8,7 @@ concludes a capability exists when it does not:
    acceptance criteria in their `--help` and module doc comment.
 2. **19 `NetworkTest` trait impls** — the older in-process framework driven by
    `fraggle-packet test`, the TUI Test Panel, and the desktop Tests panel.
-3. **1034 harness checks** (`harness/acid.sh`) — the ratchet that proves the
+3. **1046 harness checks** (`harness/acid.sh`) — the ratchet that proves the
    above behave as documented. Only grows, never shrinks.
 
 Full flag-level reference for every subcommand is in [CLI.md](CLI.md). This page
