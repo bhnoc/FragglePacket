@@ -56,7 +56,7 @@ case "${1:-}" in
         echo "All tests work without root."
         echo "Note: ICMP MTU uses Linux-specific flags (use TCP MTU on macOS)."
         echo ""
-        echo "TUI Controls: [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
+        echo "TUI Controls: [C]=Commands [T]=Tests [H]=HTTPS [F]=Fuzzing [?]=Help [q]=Quit"
         echo ""
         exec "$BINARY" tui
         ;;
@@ -191,7 +191,8 @@ Test Categories (for -6):
   dns, mtu, https, tcp-health, rtt, packet-loss, path-analysis, ipv6, application, fuzzing
 
 TUI Keybindings:
-  [T]     - Open Test Panel (11 test categories)
+  [C]     - Open Commands browser (all 79 subcommands by area)
+  [T]     - Open Test Panel (11 legacy test categories)
   [1-0]   - Select test category (1=DNS, 2=MTU, etc.)
   [Enter] - Run selected test (smart: single/all targets)
   [A]     - Run ALL tests on current target

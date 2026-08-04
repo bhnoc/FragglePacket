@@ -5,6 +5,7 @@
 use super::fuzzing_panel::render_fuzzing_panel;
 use super::https_panel::render_https_panel;
 use super::test_registration::register_all_tests;
+use super::command_panel::render_command_panel;
 use super::test_panel::render_test_panel;
 
 #[path = "../../../tests/test_runner.rs"]
@@ -145,6 +146,9 @@ pub enum AppMode {
     FuzzingPanel,
     HttpsPanel,
     TestPanel,      // NEW - test framework panel
+    /// Registry-driven browser over every CLI subcommand (all 79), grouped by
+    /// area. TestPanel covers only the 19 legacy NetworkTest impls.
+    CommandPanel,
     Help,
 }
 
@@ -173,6 +177,8 @@ pub struct App {
     pub https_testing: bool,
     pub orchestrator: TestOrchestrator,  // NEW - test framework orchestrator
     pub framework_results: std::collections::HashMap<String, Vec<FrameworkTestResult>>,  // NEW
+    /// Navigation state for the registry-driven command browser.
+    pub command_panel: super::command_panel::CommandPanelState,
 }
 
 #[derive(Debug, Clone)]
@@ -258,6 +264,7 @@ impl App {
             https_testing: false,
             orchestrator,
             framework_results: std::collections::HashMap::new(),
+            command_panel: super::command_panel::CommandPanelState::default(),
         }
     }
     
@@ -896,6 +903,62 @@ impl App {
         }
     }
     
+    /// Runs the command highlighted in the registry browser.
+    ///
+    /// Refuses to launch a command this host cannot run, rather than spawning it
+    /// to fail: the registry already knows, and a hollow result is worse than a
+    /// clear refusal. Likewise a command needing input it has not been given is
+    /// reported rather than run half-configured.
+    ///
+    /// Runs synchronously. Every gap command is bounded (GAP-047's budget guard),
+    /// so this blocks briefly rather than needing the async plumbing the legacy
+    /// test runner uses.
+    pub fn run_selected_registry_command(&mut self) {
+        use fraggle_packet::ui_bridge::registry::Availability;
+        use fraggle_packet::ui_bridge::{run_subcommand, Outcome};
+
+        let Some(cmd) = self.command_panel.current_command() else {
+            return;
+        };
+
+        if let Availability::Unavailable(reason) = cmd.availability() {
+            self.command_panel.last_command = Some(cmd.name.to_string());
+            self.command_panel.last_output = Some(format!("not run on this host: {reason}"));
+            self.log_messages.push(format!("{}: skipped -- {reason}", cmd.name));
+            return;
+        }
+
+        if !cmd.required_inputs.is_empty() {
+            let needs = cmd.required_inputs.join(", ");
+            self.command_panel.last_command = Some(cmd.name.to_string());
+            self.command_panel.last_output =
+                Some(format!("needs {needs}; run from the CLI with those arguments"));
+            self.log_messages.push(format!("{}: needs {needs}", cmd.name));
+            return;
+        }
+
+        self.command_panel.running = true;
+        let args = cmd.invocation(&[]);
+        let outcome = run_subcommand(cmd.name, &args);
+        self.command_panel.running = false;
+        self.command_panel.last_command = Some(format!("{} {}", cmd.name, args.join(" ")));
+
+        // A refusal arrives as Json and must read as a result, not an error.
+        self.command_panel.last_output = Some(match &outcome {
+            Outcome::Json(v) => serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string()),
+            Outcome::TextOnly(t) => t.clone(),
+            Outcome::Failed { exit_code, stderr } => {
+                format!("failed (exit {:?}): {}", exit_code, stderr.trim())
+            }
+            Outcome::NotRun(why) => format!("could not run: {why}"),
+        });
+        self.log_messages.push(format!(
+            "{}: {}",
+            cmd.name,
+            if outcome.is_failure() { "failed" } else { "completed" }
+        ));
+    }
+
     pub fn run_selected_fuzzer(&mut self) {
         let modes = vec!["segment-size", "length-mismatch", "tcp-options", "fragmentation", "checksum"];
         let mode_str = modes[self.selected_fuzz_mode];
@@ -1027,6 +1090,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
         AppMode::FuzzingPanel => render_fuzzing_panel(frame, chunks[1], app),
         AppMode::HttpsPanel => render_https_panel(frame, chunks[1], app),
         AppMode::TestPanel => render_test_panel(frame, app, chunks[1]),
+        AppMode::CommandPanel => render_command_panel(frame, app, chunks[1]),
         AppMode::Help => render_help(frame, chunks[1]),
     }
     
@@ -1698,6 +1762,10 @@ fn render_help(frame: &mut Frame, area: Rect) {
         Line::from(""),
         Line::from(Span::styled("VIEWS", Style::default().fg(TERM_AMBER))),
         Line::from(vec![
+            Span::styled("  C      ", Style::default().fg(TERM_CYAN)),
+            Span::styled("Commands: all 79 subcommands by area", Style::default().fg(TERM_GREEN)),
+        ]),
+        Line::from(vec![
             Span::styled("  1      ", Style::default().fg(TERM_CYAN)),
             Span::styled("Dashboard", Style::default().fg(TERM_GREEN)),
         ]),
@@ -1802,15 +1870,17 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
                 "TESTS (All)"
             }
         }
+        AppMode::CommandPanel => "COMMANDS",
         AppMode::Help => "HELP",
     };
     
     // Context-aware help hints
     let help_hint = match app.mode {
         AppMode::TestPanel => " [1-0]Select [Enter]Run [A]All [Tab]Toggle [ESC]Back [?]Help ",
+        AppMode::CommandPanel => " [↑/↓]Move [Tab]Switch pane [Enter]Run [ESC]Back [?]Help ",
         AppMode::FuzzingPanel => " [↑/↓]Select [Enter]Run [A]All [ESC]Back [?]Help ",
         AppMode::HttpsPanel => " [↑/↓]Select [Enter]Test [A]All [ESC]Back [?]Help ",
-        _ => " [?]Help [1]Dash [F]Fuzz [H]HTTPS [T]Tests [3]Sim [t]Trace [r]Retest [s]Save [q]Quit ",
+        _ => " [?]Help [1]Dash [C]Commands [F]Fuzz [H]HTTPS [T]Tests [3]Sim [t]Trace [q]Quit ",
     };
     
     let footer = Paragraph::new(Line::from(vec![
@@ -1957,7 +2027,11 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Char('f') | KeyCode::Char('F') => app.mode = AppMode::FuzzingPanel,
                 KeyCode::Char('T') => app.mode = AppMode::TestPanel,  // Uppercase T for Test Panel
                 KeyCode::Char('H') => app.mode = AppMode::HttpsPanel,
+                KeyCode::Char('C') | KeyCode::Char('c') => app.mode = AppMode::CommandPanel,
                 KeyCode::Tab => {
+                    if matches!(app.mode, AppMode::CommandPanel) {
+                        app.command_panel.toggle_focus();
+                    }
                     // Toggle view mode in Test Panel
                     if matches!(app.mode, AppMode::TestPanel) {
                         app.view_mode = match app.view_mode {
@@ -1974,7 +2048,9 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                     }
                 }
                 KeyCode::Enter => {
-                    if matches!(app.mode, AppMode::Dashboard) {
+                    if matches!(app.mode, AppMode::CommandPanel) {
+                        app.run_selected_registry_command();
+                    } else if matches!(app.mode, AppMode::Dashboard) {
                         app.mode = AppMode::TargetDetail;
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.run_selected_fuzzer();
@@ -2040,6 +2116,11 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.show_popup && (app.tracepath_running || !app.tracepath_output.is_empty()) {
                         app.popup_scroll = app.popup_scroll.saturating_sub(1);
+                    } else if matches!(app.mode, AppMode::CommandPanel) {
+                        match app.command_panel.focus {
+                            super::command_panel::Focus::Buckets => app.command_panel.prev_bucket(),
+                            super::command_panel::Focus::Commands => app.command_panel.prev_command(),
+                        }
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.prev_fuzz_mode();
                     } else if matches!(app.mode, AppMode::HttpsPanel) {
@@ -2051,6 +2132,11 @@ pub fn handle_events(app: &mut App) -> io::Result<bool> {
                 KeyCode::Down | KeyCode::Char('j') => {
                     if app.show_popup && (app.tracepath_running || !app.tracepath_output.is_empty()) {
                         app.popup_scroll = app.popup_scroll.saturating_add(1);
+                    } else if matches!(app.mode, AppMode::CommandPanel) {
+                        match app.command_panel.focus {
+                            super::command_panel::Focus::Buckets => app.command_panel.next_bucket(),
+                            super::command_panel::Focus::Commands => app.command_panel.next_command(),
+                        }
                     } else if matches!(app.mode, AppMode::FuzzingPanel) {
                         app.next_fuzz_mode();
                     } else if matches!(app.mode, AppMode::HttpsPanel) {
@@ -2215,6 +2301,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         AppMode::FuzzingPanel => render_fuzzing_panel(frame, chunks[1], app),
         AppMode::HttpsPanel => render_https_panel(frame, chunks[1], app),
         AppMode::TestPanel => render_test_panel(frame, app, chunks[1]),
+        AppMode::CommandPanel => render_command_panel(frame, app, chunks[1]),
         AppMode::Help => render_help(frame, chunks[1]),
     }
     
