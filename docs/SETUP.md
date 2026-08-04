@@ -111,7 +111,7 @@ Automated CI and test coverage are configured in `.github/workflows/test.yml`. O
 | `cargo fmt --all -- --check` | No — advisory. The tree carries ~2,200 rustfmt diffs; gating on them would make every PR red for pre-existing reasons. |
 | `cargo clippy --all-targets` | Only on hard errors. The ~190 existing warnings do not block, but deny-by-default lints (e.g. `unused_io_amount`) do, because those are bugs rather than style. |
 | `cargo build --release` | Yes. The harness runs the release binary directly. |
-| `cargo test --all-targets` | Yes — 589 tests. |
+| `cargo test --all-targets` | Yes — 628 tests. |
 | `harness/smoke.sh` | Yes. |
 | `harness/acid.sh` (with `FP_HARNESS_OFFLINE=1`) | Yes — this is the ratchet, so it is deliberately allowed to break the build. |
 | `cargo-llvm-cov` coverage report | Yes, on report failure; the LCOV artifact is uploaded either way. |
