@@ -22,6 +22,7 @@ pub mod tcp_options_echo;
 pub mod quic_pmtud;
 pub mod dns_secure;
 pub mod scenario;
+pub mod coverage;
 pub mod pcap_report;
 pub mod probe_rate;
 pub mod firsthop;

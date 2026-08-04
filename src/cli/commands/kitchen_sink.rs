@@ -6,6 +6,9 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use fraggle_packet::network_tests::coverage::{
+    classify_coverage, coverage_note, Coverage, CoverageVerdict, MissReason, DEFAULT_REQUIRED_COVERAGE,
+};
 use fraggle_packet::probe::{
     binary_search_mtu_icmp, binary_search_mtu_tcp, binary_search_mtu_udp, check_tracepath_available,
     probe_icmp, probe_tcp_mss, probe_quic_mtu, resolve_hostname, run_tracepath,
@@ -92,6 +95,13 @@ struct MtuTestResult {
     udp_mtu: Option<usize>,
     tcp_mss: Option<usize>,
     quic_mtu: Option<usize>,
+    /// Which probes were applicable to this target, so GAP-073's denominator
+    /// counts "ran and got nothing" without also counting "never applied".
+    /// UDP is DNS-targets-only, TCP/MSS need a port, QUIC needs 443.
+    icmp_applicable: bool,
+    tcp_applicable: bool,
+    udp_applicable: bool,
+    quic_applicable: bool,
 }
 
 fn load_targets() -> Vec<(String, String, u16)> {
@@ -165,10 +175,21 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
             udp_mtu: None,
             tcp_mss: None,
             quic_mtu: None,
+            // Applicability is a property of the target, not of the outcome, so
+            // it is decided here and not adjusted by whether a probe answered.
+            icmp_applicable: false,
+            tcp_applicable: *port > 0,
+            udp_applicable: false,
+            quic_applicable: *port == 443,
         };
 
         // Resolve hostname once
         let ip = resolve_hostname(target).ok();
+        // Name resolution gates every IP probe: unresolvable means ICMP and UDP
+        // were never applicable, while a resolved host that stays silent is a
+        // real miss.
+        result.icmp_applicable = ip.is_some();
+        result.udp_applicable = ip.is_some() && *port == 0;
 
         // ICMP test
         if let Some(ip) = ip {
@@ -234,9 +255,32 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     }
     println!();
 
-    // Collect all successful MTU measurements
+    // Collect MTU measurements AND the probes that produced nothing. GAP-073:
+    // a target that never answered must stay in the denominator, or the pass
+    // rate is computed over survivors and a dead network reads as healthy.
     let mut all_mtus: Vec<(String, String, usize)> = Vec::new();
     let mut all_mss: Vec<(String, usize)> = Vec::new();
+
+    // Coverage is counted per TARGET, not per probe. Path MTU is a property of
+    // a path, so a target is characterized once ANY transport returns a value:
+    // ICMP being filtered while TCP answers 1500 is a fully characterized path,
+    // not a 50% one. Counting probe types instead would fail every network that
+    // filters ICMP -- which is most of them.
+    let mut coverage = Coverage::new();
+    for r in &results {
+        let any_applicable = r.icmp_applicable || r.tcp_applicable || r.udp_applicable || r.quic_applicable;
+        let any_measured =
+            r.icmp_mtu.is_some() || r.tcp_mtu.is_some() || r.udp_mtu.is_some() || r.quic_mtu.is_some();
+        if any_measured {
+            coverage.record_measured();
+        } else if any_applicable {
+            // Resolved and probed, nothing came back: a real miss.
+            coverage.record_miss(MissReason::NoAnswer);
+        } else {
+            // Never probed at all (e.g. name resolution failed and no port).
+            coverage.record_miss(MissReason::NotAttempted);
+        }
+    }
 
     for r in &results {
         if let Some(m) = r.icmp_mtu {
@@ -257,7 +301,22 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     }
 
     if all_mtus.is_empty() {
-        println!("{}", "ERROR: No successful MTU tests. Check network connectivity.".red());
+        // GAP-073: the vacuous case takes the same shape as the low-coverage
+        // case below. It must state what was attempted versus characterized and
+        // name coverage as the reason, not just print a bare connectivity hint
+        // that reads like a transient blip.
+        println!("{}", "=".repeat(70).blue());
+        println!("{}", " VERDICT ".white().on_blue().bold());
+        println!("{}", "=".repeat(70).blue());
+        println!();
+        println!("  {} No target was characterized", "NO VERDICT".red().bold());
+        println!();
+        println!("  {}", coverage_note(&coverage));
+        println!();
+        println!("  Not one probe returned a usable path MTU, so this run says");
+        println!("  nothing about the network's path MTU. Zero measurements is");
+        println!("  missing evidence, never a passing result.");
+        println!("  Check reachability, then re-run.");
         return;
     }
 
@@ -334,14 +393,20 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     let max_mtu_found = *mtu_values.last().unwrap();
     let median_mtu = mtu_values[total_tests / 2];
 
-    // Count how many are at 1500
+    // GAP-073: `pct_ok` describes only the paths that were characterized, so it
+    // may be quoted as a network-wide figure ONLY when coverage supports a
+    // conclusion. The coverage gate below enforces that; without it, a single
+    // surviving target reads as 100% healthy.
     let at_1500 = mtu_values.iter().filter(|&&m| m >= 1500).count();
     let below_1500 = total_tests - at_1500;
-    let pct_ok = (at_1500 as f64 / total_tests as f64) * 100.0;
+    let cov_verdict = classify_coverage(&coverage, DEFAULT_REQUIRED_COVERAGE);
+    let pct_ok = (at_1500 as f64 / total_tests.max(1) as f64) * 100.0;
 
-    println!("  Total tests:    {}", total_tests);
-    println!("  At 1500:        {} ({:.0}%)", at_1500, pct_ok);
-    println!("  Below 1500:     {}", below_1500);
+    println!("  Targets probed:  {}", coverage.attempted);
+    println!("  Characterized:   {} ({})", coverage.measured, coverage_note(&coverage));
+    println!("  Measurements:    {} across those targets", total_tests);
+    println!("  At 1500:         {} ({:.0}% of measurements)", at_1500, pct_ok);
+    println!("  Below 1500:      {}", below_1500);
     println!("  Median MTU:     {}", median_mtu);
     println!("  Range:          {} - {}", min_mtu_found, max_mtu_found);
     println!();
@@ -428,6 +493,32 @@ fn run_kitchen_sink(timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: us
     println!("{}", " VERDICT ".white().on_blue().bold());
     println!("{}", "=".repeat(70).blue());
     println!();
+
+    // GAP-073: a verdict about the network requires enough of the network to
+    // have answered. Too few responses describes the surviving sample only, so
+    // the run reports what it could not measure instead of a recommendation.
+    if !cov_verdict.supports_conclusion() {
+        match &cov_verdict {
+            CoverageVerdict::Vacuous => {
+                println!("  {} No probe returned a usable value", "NO VERDICT".red().bold());
+            }
+            CoverageVerdict::Degraded { measured_pct, required_pct } => {
+                println!("  {} Coverage too low for a network-wide conclusion", "NO VERDICT".red().bold());
+                println!();
+                println!("  {}% of targets were characterized ({}% required)", measured_pct, required_pct);
+            }
+            CoverageVerdict::Sufficient => unreachable!("guarded by supports_conclusion"),
+        }
+        println!();
+        println!("  {}", coverage_note(&coverage));
+        println!();
+        println!("  The MTU figures above describe only the probes that answered.");
+        println!("  They are NOT a statement about this network's path MTU: a");
+        println!("  silent target is missing evidence, not a passing result.");
+        println!("  Re-run once reachability is restored, or narrow the target");
+        println!("  list to endpoints that are expected to respond.");
+        return;
+    }
 
     if pct_ok >= 95.0 && min_mtu_found >= 1400 {
         // Nearly everything at 1500, no significant issues
