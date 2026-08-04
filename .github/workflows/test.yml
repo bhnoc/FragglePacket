@@ -2,9 +2,9 @@ name: Test Coverage
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'feature/**', 'feat/**', 'fix/**', 'docs/**' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, 'feature/**', 'feat/**', 'fix/**' ]
   workflow_dispatch:
 
 permissions:
@@ -74,7 +74,9 @@ jobs:
         run: cargo build --release
 
       - name: Run unit and integration tests
-        run: cargo test --all-targets --verbose
+        run: |
+          cargo test --workspace --all-targets --verbose
+          cargo test --workspace --doc --verbose
 
       - name: Run smoke harness tests
         run: |
@@ -95,7 +97,7 @@ jobs:
 
       - name: Generate test coverage report
         run: |
-          cargo llvm-cov --all-targets --lcov --output-path lcov.info
+          cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
           cargo llvm-cov report --summary-only
 
       - name: Upload coverage report artifact

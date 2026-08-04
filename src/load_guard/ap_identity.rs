@@ -302,4 +302,42 @@ mod tests {
         let label_b = label_for_bssid(bssid, salt_b);
         assert_ne!(label_a, label_b, "Different salt must produce different label for same BSSID");
     }
+
+    #[test]
+    fn test_compare_with_none_bands_and_same_label() {
+        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: None, channel: None };
+        let b = ApIdentity { label: "ap-deadbeef".to_string(), band: None, channel: Some(6) };
+        assert_eq!(compare(&Some(a), &Some(b)), ApComparison::SameApSameRadio);
+    }
+
+    #[test]
+    fn test_compare_with_one_none_band() {
+        let a = ApIdentity { label: "ap-deadbeef".to_string(), band: Some("6GHz".to_string()), channel: Some(37) };
+        let b = ApIdentity { label: "ap-deadbeef".to_string(), band: None, channel: Some(37) };
+        assert_eq!(compare(&Some(a), &Some(b)), ApComparison::SameApDifferentRadio);
+    }
+
+    #[test]
+    fn test_ap_identity_serde_roundtrip() {
+        let original = ApIdentity {
+            label: "ap-12345678".to_string(),
+            band: Some("5GHz".to_string()),
+            channel: Some(149),
+        };
+        let json = serde_json::to_string(&original).expect("serialize ApIdentity");
+        let deserialized: ApIdentity = serde_json::from_str(&json).expect("deserialize ApIdentity");
+        assert_eq!(original, deserialized);
+
+        let comp = ApComparison::SameApDifferentRadio;
+        let json_comp = serde_json::to_string(&comp).expect("serialize ApComparison");
+        let des_comp: ApComparison = serde_json::from_str(&json_comp).expect("deserialize ApComparison");
+        assert_eq!(comp, des_comp);
+    }
+
+    #[test]
+    fn test_label_for_bssid_empty_inputs() {
+        let label = label_for_bssid("", "");
+        assert!(label.starts_with("ap-"));
+        assert_eq!(label.len(), 11);
+    }
 }

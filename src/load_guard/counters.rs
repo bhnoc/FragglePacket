@@ -127,4 +127,62 @@ mod tests {
         };
         assert!(!after.usable_delta_from(&before));
     }
+
+    #[test]
+    fn test_zero_counters_initialization() {
+        let zero = InterfaceCounters::zero();
+        assert_eq!(zero.rx_packets, 0);
+        assert_eq!(zero.tx_packets, 0);
+        assert_eq!(zero.rx_bytes, 0);
+        assert_eq!(zero.tx_bytes, 0);
+        assert_eq!(zero.rx_errors, 0);
+        assert_eq!(zero.tx_errors, 0);
+    }
+
+    #[test]
+    fn test_usable_delta_from_equal_or_increasing() {
+        let c1 = InterfaceCounters {
+            rx_packets: 100,
+            tx_packets: 100,
+            rx_bytes: 1000,
+            tx_bytes: 1000,
+            rx_errors: 0,
+            tx_errors: 0,
+        };
+        let c2 = InterfaceCounters {
+            rx_packets: 150,
+            tx_packets: 150,
+            rx_bytes: 1500,
+            tx_bytes: 1500,
+            rx_errors: 1,
+            tx_errors: 1,
+        };
+        assert!(c1.usable_delta_from(&c1));
+        assert!(c2.usable_delta_from(&c1));
+    }
+
+    #[test]
+    fn test_unusable_backwards_tx_and_bytes() {
+        let base = InterfaceCounters {
+            rx_packets: 100,
+            tx_packets: 100,
+            rx_bytes: 1000,
+            tx_bytes: 1000,
+            rx_errors: 0,
+            tx_errors: 0,
+        };
+        let bad_tx = InterfaceCounters { tx_packets: 50, ..base };
+        let bad_rx_bytes = InterfaceCounters { rx_bytes: 500, ..base };
+        let bad_tx_bytes = InterfaceCounters { tx_bytes: 500, ..base };
+        assert!(!bad_tx.usable_delta_from(&base));
+        assert!(!bad_rx_bytes.usable_delta_from(&base));
+        assert!(!bad_tx_bytes.usable_delta_from(&base));
+    }
+
+    #[test]
+    fn test_parse_netstat_ib_malformed() {
+        assert!(parse_netstat_ib("", "en0").is_none());
+        const BAD_HEADER: &str = "Name Mtu Network\nen0 1500 <Link#1>\n";
+        assert!(parse_netstat_ib(BAD_HEADER, "en0").is_none());
+    }
 }

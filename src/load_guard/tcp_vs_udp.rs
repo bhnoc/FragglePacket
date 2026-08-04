@@ -165,4 +165,33 @@ mod tests {
         };
         assert!(comparison.achieved_mbps_delta().is_none());
     }
+
+    #[test]
+    fn test_achieved_mbps_delta_when_both_usable() {
+        let tcp_forward = parse_iperf_json(&load_fixture("tcp-forward-3.21.json"));
+        let udp_reverse = parse_iperf_json(&load_fixture("udp-reverse-3.21.json"));
+
+        let comparison = TcpVsUdpComparison {
+            endpoint: "example.test".to_string(),
+            tcp: tcp_result(5201, 100.0, &tcp_forward),
+            udp: udp_result(5202, 100.0, &udp_reverse),
+        };
+        let delta = comparison.achieved_mbps_delta();
+        assert!(delta.is_some());
+        let expected_delta = comparison.tcp.achieved_mbps.unwrap() - comparison.udp.achieved_mbps.unwrap();
+        assert_eq!(delta.unwrap(), expected_delta);
+    }
+
+    #[test]
+    fn test_unusable_result_fields() {
+        let u = unusable(Protocol::Tcp, 5201, 100.0, "test failure".to_string());
+        assert!(!u.usable);
+        assert_eq!(u.protocol, Protocol::Tcp);
+        assert_eq!(u.port, 5201);
+        assert_eq!(u.target_mbps, 100.0);
+        assert!(u.achieved_mbps.is_none());
+        assert!(u.loss_percent.is_none());
+        assert!(u.reordered_packets.is_none());
+        assert_eq!(u.unusable_reason.as_deref(), Some("test failure"));
+    }
 }
