@@ -20,10 +20,14 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 const SALT_FILE_NAME: &str = "fraggle-packet-ap-salt";
+static SALT_LOCK: Mutex<()> = Mutex::new(());
 
 fn salt_path() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join(SALT_FILE_NAME))
@@ -35,6 +39,7 @@ fn salt_path() -> Option<PathBuf> {
 /// process state. The file is created mode 0600 so only this user's
 /// processes can read it back out.
 pub fn load_or_create_salt() -> Result<String, String> {
+    let _guard = SALT_LOCK.lock().map_err(|e| format!("failed to acquire salt lock: {e}"))?;
     let path = salt_path().ok_or_else(|| "no config directory available on this platform".to_string())?;
     if let Ok(existing) = std::fs::read_to_string(&path) {
         let trimmed = existing.trim().to_string();
@@ -46,14 +51,35 @@ pub fn load_or_create_salt() -> Result<String, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("failed to create config dir: {e}"))?;
     }
-    std::fs::write(&path, &salt).map_err(|e| format!("failed to persist AP-identity salt: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| format!("failed to restrict AP-identity salt permissions: {e}"))?;
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut f) => {
+            f.write_all(salt.as_bytes()).map_err(|e| format!("failed to write AP-identity salt: {e}"))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|e| format!("failed to restrict AP-identity salt permissions: {e}"))?;
+            }
+            Ok(salt)
+        }
+        Err(_) => {
+            let existing = std::fs::read_to_string(&path)
+                .map_err(|e| format!("failed to read AP-identity salt after concurrent creation: {e}"))?;
+            let trimmed = existing.trim().to_string();
+            if !trimmed.is_empty() {
+                Ok(trimmed)
+            } else {
+                std::fs::write(&path, &salt).map_err(|e| format!("failed to persist AP-identity salt: {e}"))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                        .map_err(|e| format!("failed to restrict AP-identity salt permissions: {e}"))?;
+                }
+                Ok(salt)
+            }
+        }
     }
-    Ok(salt)
 }
 
 fn generate_salt() -> Result<String, String> {
@@ -234,5 +260,46 @@ mod tests {
             let mode = meta.permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "salt file must be 0600, got {mode:o}");
         }
+    }
+
+    #[test]
+    fn load_or_create_salt_is_thread_safe_and_stable_concurrently() {
+        let mut handles = vec![];
+        for _ in 0..10 {
+            handles.push(std::thread::spawn(|| {
+                load_or_create_salt()
+            }));
+        }
+        let mut results = vec![];
+        for handle in handles {
+            if let Ok(Ok(salt)) = handle.join() {
+                results.push(salt);
+            }
+        }
+        if !results.is_empty() {
+            let first = &results[0];
+            for res in &results[1..] {
+                assert_eq!(first, res, "All concurrently spawned threads must receive identical salt");
+            }
+        }
+    }
+
+    #[test]
+    fn label_for_bssid_is_deterministic() {
+        let bssid = "00:11:22:33:44:55";
+        let salt = "test-deterministic-salt-12345678";
+        let first = label_for_bssid(bssid, salt);
+        let second = label_for_bssid(bssid, salt);
+        assert_eq!(first, second, "Same BSSID and salt must yield identical label");
+    }
+
+    #[test]
+    fn label_for_bssid_differs_when_salt_differs() {
+        let bssid = "00:11:22:33:44:55";
+        let salt_a = "salt-a-1111111111111111111111111";
+        let salt_b = "salt-b-2222222222222222222222222";
+        let label_a = label_for_bssid(bssid, salt_a);
+        let label_b = label_for_bssid(bssid, salt_b);
+        assert_ne!(label_a, label_b, "Different salt must produce different label for same BSSID");
     }
 }
