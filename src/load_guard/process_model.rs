@@ -20,7 +20,7 @@
 //! "zero collapses occurred." Reporting a bare `0` on a platform that lacks
 //! the counter would read as "no receive collapse" and falsely exonerate the
 //! paired-process method -- the exact "number with no referent" failure mode
-//! `HANDOFF.md` documents repeatedly. `ReceivePathCounter` is `Metric`-shaped
+//! the field investigation documents repeatedly. `ReceivePathCounter` is `Metric`-shaped
 //! (see `network_tests::rf_survey::Metric`) for exactly that reason: every
 //! counter states whether it was measured, is platform-limited here, or was
 //! ingested from an operator-supplied Linux export.

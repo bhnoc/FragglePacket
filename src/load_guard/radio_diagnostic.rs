@@ -4,7 +4,7 @@
 //! Field evidence: manual inspection found strong 6 GHz RF, but retry
 //! counters, WMM state, and channel utilization required elevated tools --
 //! and even the elevated `wdutil info` output never carried retry or WMM
-//! counters (`docs/GAP_LIST.md`'s 2026-08-01 note). This module's
+//! counters (the 2026-08-01 field investigation note). This module's
 //! `platform_limitations` field is not a courtesy footnote; it is the
 //! deliverable GAP-011 explicitly asks for, and it is populated whenever a
 //! counter genuinely cannot be obtained on this platform rather than left

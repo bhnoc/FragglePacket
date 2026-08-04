@@ -23,7 +23,7 @@
 //! implementation would otherwise report hitting *this machine's* file
 //! descriptor limit as "found the firewall's concurrent-state ceiling" --
 //! a fabricated infrastructure finding from a client-side resource limit,
-//! exactly the failure mode `HANDOFF.md` catalogs repeatedly.
+//! exactly the failure mode the field investigation catalogs repeatedly.
 
 use std::io::ErrorKind;
 use std::net::{IpAddr, SocketAddr, TcpStream};

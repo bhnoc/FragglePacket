@@ -218,8 +218,7 @@ mod tests {
 
     #[test]
     fn packet_rate_ceiling_and_byte_rate_policing_produce_distinguishable_verdicts() {
-        // Ground truth from the field investigation (docs/GAP_LIST.md /
-        // duplex-threshold characterization): at a fixed ~350 Mbps each way,
+        // Ground truth from the field investigation (the field investigation /        // duplex-threshold characterization): at a fixed ~350 Mbps each way,
         // Wi-Fi downstream loss went from 16.3% at 1,472-byte payloads to
         // 65.1% at 200-byte payloads -- same byte rate, ~7.4x the packet
         // rate (7360 vs 1000 offered at the smaller size), ~4x the loss.

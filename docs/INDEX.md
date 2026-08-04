@@ -12,7 +12,5 @@
 | [PLATFORMS.md](PLATFORMS.md) | Per-OS feature matrix |
 | [SCENARIOS.md](SCENARIOS.md) | Declarative scenario DSL |
 | [METRICS.md](METRICS.md) | Prometheus exporter |
-| [GAP_LIST.md](GAP_LIST.md) | Living field-investigation capability backlog and acceptance criteria |
-| [CANARY.md](CANARY.md) | Peer-impact companion TUI (`scripts/canary`) — dual-client load runs |
 
 See the [project README](../README.md) for quickstart, CLI summary, and privileges guidance.

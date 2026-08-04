@@ -3,7 +3,7 @@
 //! A hotspot rerun is the fastest way to separate client behavior from
 //! Wi-Fi infrastructure: if the same symptom reproduces on a different
 //! network, the client (or its default route/VPN state -- see
-//! `HANDOFF.md`'s gotcha #1) is implicated instead. This module saves a
+//! the investigation's first recorded gotcha) is implicated instead. This module saves a
 //! connection fingerprint plus a named-metric test bundle to disk, then
 //! diffs two saved bundles after the operator switches networks.
 //!

@@ -3,7 +3,7 @@
 # platform-limitation reporting. Field evidence: manual inspection found
 # strong 6 GHz RF, but retry counters, WMM, and channel utilization required
 # elevated tools -- and even elevated wdutil output never carried retry or
-# WMM counters (docs/GAP_LIST.md's 2026-08-01 note). This gate locks:
+# WMM counters (the 2026-08-01 field investigation note). This gate locks:
 #   1. retries/WMM read as unavailable, listed as a platform limitation,
 #      never a fabricated 0 (the GAP-043 frozen-counter trap in a new shape).
 #   2. A missing privilege names the exact elevation command, never invokes

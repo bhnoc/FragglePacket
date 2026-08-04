@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # GAP-032: independently rate-controlled, time-aligned simultaneous
 # upload/download sweep. Field evidence (ported from
-# scripts/bhusa-peer-impact-test.zsh): a single iperf3 --bidir session hides
+# the original peer-impact zsh harness): a single iperf3 --bidir session hides
 # directional asymmetry that independent listeners exposed. This gate locks:
 #   1. The two sessions are time-aligned -- their windows genuinely overlap,
 #      not merely launched close together.

@@ -2,7 +2,7 @@
 
 Real captured platform output, used so parsers are tested against what the
 tools actually emit rather than what we assume they emit. Several gaps in
-`docs/GAP_LIST.md` exist specifically because a parser was written against one
+the field investigation notes exist specifically because a parser was written against one
 platform's format and silently produced zeros on another.
 
 Every fixture here is scrubbed of SSID, BSSID, MAC, and hostname identifiers

@@ -1,5 +1,5 @@
 //! GAP-032: independently rate-controlled simultaneous upload/download
-//! (`independent-rates`). Ports `scripts/bhusa-peer-impact-test.zsh`'s
+//! (`independent-rates`). Ports the original peer-impact zsh harness's
 //! method: two independent iperf3 client sessions against separate listener
 //! ports, explicit source binding, and a shared start barrier.
 

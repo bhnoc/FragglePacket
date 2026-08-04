@@ -27,7 +27,7 @@ pub struct WdutilFields {
     pub noise_dbm: Option<i32>,
     /// CCA (Clear Channel Assessment) percentage -- the channel-utilization
     /// figure this platform's unprivileged and privileged tools both
-    /// expose; see `docs/GAP_LIST.md`'s 2026-08-01 note that even elevated
+    /// expose; see the 2026-08-01 field investigation note that even elevated
     /// diagnostics did not carry retry or WMM counters.
     pub cca_percent: Option<f64>,
     pub tx_rate_mbps: Option<f64>,

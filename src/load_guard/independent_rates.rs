@@ -1,6 +1,6 @@
 //! GAP-032: independently rate-controlled simultaneous upload/download.
 //!
-//! Field evidence (`scripts/bhusa-peer-impact-test.zsh`, whose method this
+//! Field evidence (the original peer-impact zsh harness, whose method this
 //! ports): a single `iperf3 --bidir` session applies the same target rate in
 //! both directions, which hides asymmetric behavior. Independent listeners
 //! per direction exposed a sharp cliff: with download fixed at 350 Mbps,
@@ -10,7 +10,7 @@
 //! criteria is "the first lossy rate in each direction" -- a threshold
 //! crossing, not an average -- and it must never be extrapolated: reporting
 //! it requires having actually measured both a clean rate below it and a
-//! lossy rate at it (see `HANDOFF.md`'s "recurring failure mode" -- a rate
+//! lossy rate at it (see the recurring failure mode -- a rate
 //! inferred rather than measured is instance #9 of the same bug).
 //!
 //! Ported from the zsh script: two independent client sessions against

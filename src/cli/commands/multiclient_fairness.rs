@@ -1,6 +1,6 @@
 //! GAP-051: coordinated multi-client capacity/fairness (`multiclient-fairness`).
 //!
-//! Ported from `scripts/bhusa-peer-impact-test.zsh`'s method: a role writes
+//! Ported from the original peer-impact zsh harness's method: a role writes
 //! its own descriptor file (JSON, not the script's tab-separated log, but
 //! the same idea) so a second invocation on another machine can be
 //! combined offline. This command never coordinates the actual load itself

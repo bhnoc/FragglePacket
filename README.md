@@ -227,4 +227,3 @@ Automated test coverage and verification run in GitHub Actions on every pull req
 | [docs/PLATFORMS.md](docs/PLATFORMS.md) | OS feature matrix |
 | [docs/SCENARIOS.md](docs/SCENARIOS.md) | Scenario DSL syntax |
 | [docs/METRICS.md](docs/METRICS.md) | Prometheus exporter |
-| [docs/CANARY.md](docs/CANARY.md) | Peer-impact companion TUI (`scripts/canary`) |

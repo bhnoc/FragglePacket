@@ -13,7 +13,7 @@
 //! the same logic, so `jain_fairness_index` requires at least two
 //! independently-sourced per-client rate series.
 //!
-//! Ported from `scripts/bhusa-peer-impact-test.zsh`'s method, not its code:
+//! Ported from the original peer-impact zsh harness's method, not its code:
 //! a `start_epoch` barrier so independently-launched clients begin their
 //! loaded phase at the same wall-clock instant, and UTC phase markers
 //! (`PhaseMark`) mirroring the script's `mark_phase` tab-separated log so
