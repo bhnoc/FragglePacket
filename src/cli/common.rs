@@ -22,6 +22,29 @@ pub const VPN_OVERHEAD_GRE: usize = 24;            // Basic GRE
 pub const VPN_OVERHEAD_VXLAN: usize = 50;          // VXLAN encap
 pub const VPN_OVERHEAD_GENEVE: usize = 50;         // Geneve (similar to VXLAN)
 
+/// Emits a `TestResult` as JSON, or as the human table when `json` is false.
+///
+/// Added so every command that already produces a `TestResult` gains a `--json`
+/// mode without hand-writing a serializer each time. `TestResult` derives
+/// Serialize, so the structured form is the whole result -- status, metrics,
+/// metadata, and diagnoses -- rather than a lossy summary a UI would then have
+/// to re-interpret.
+pub fn emit_test_result(res: &fraggle_packet::framework::TestResult, json: bool) {
+    if json {
+        match serde_json::to_string_pretty(res) {
+            Ok(s) => println!("{s}"),
+            // Never silently drop the result: fall back to the human form so the
+            // operator still sees what ran.
+            Err(e) => {
+                eprintln!("failed to serialize result: {e}");
+                print_test_result(res);
+            }
+        }
+    } else {
+        print_test_result(res);
+    }
+}
+
 pub fn print_test_result(res: &fraggle_packet::framework::TestResult) {
     use colored::*;
     use fraggle_packet::framework::TestStatus;

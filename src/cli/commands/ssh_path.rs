@@ -1,6 +1,6 @@
 use colored::*;
 
-use crate::cli::common::print_test_result;
+use crate::cli::common::emit_test_result;
 
 #[derive(clap::Args, Debug)]
 pub struct SshPathArgs {
@@ -12,6 +12,10 @@ pub struct SshPathArgs {
     /// SSH user for the optional exec stage (also enables it)
     #[arg(short, long)]
     pub user: Option<String>,
+
+    /// Emit the full result as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn run(args: &SshPathArgs) {
@@ -22,7 +26,7 @@ pub fn run(args: &SshPathArgs) {
         t = t.with_user(u.clone());
     }
     match t.run(&args.target) {
-        Ok(res) => print_test_result(&res),
+        Ok(res) => emit_test_result(&res, args.json),
         Err(e) => eprintln!("{} ssh-path error: {}", "✗".red(), e),
     }
 }

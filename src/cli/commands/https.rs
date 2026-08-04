@@ -10,27 +10,41 @@ pub struct HttpsArgs {
     /// Show diagnosis and recommendations
     #[arg(short = 'd', long)]
     pub diagnose: bool,
+
+    /// Emit the staged result as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn run(args: &HttpsArgs) {
-    run_https_test(&args.target, args.timeout, args.diagnose);
+    run_https_test(&args.target, args.timeout, args.diagnose, args.json);
 }
 
 /// Run HTTPS test from CLI
-fn run_https_test(target: &str, timeout: u64, diagnose: bool) {
+fn run_https_test(target: &str, timeout: u64, diagnose: bool, json: bool) {
     use fraggle_packet::network_tests::{test_https_stages, diagnose_mtu_blackhole};
     use fraggle_packet::diagnosis::{DiagnosisEngine, DiagnosisEvidence};
 
-    println!("============================================================");
-    println!(" HTTPS Testing - Stage-by-Stage Analysis");
-    println!("============================================================\n");
-
-    println!("Target: {}", target);
-    println!("Timeout: {}s\n", timeout);
-
-    println!("Running HTTPS test...\n");
+    if !json {
+        println!("============================================================");
+        println!(" HTTPS Testing - Stage-by-Stage Analysis");
+        println!("============================================================\n");
+        println!("Target: {}", target);
+        println!("Timeout: {}s\n", timeout);
+        println!("Running HTTPS test...\n");
+    }
 
     let result = test_https_stages(target, timeout);
+
+    if json {
+        // Per-stage timings stay Option: a stage that never ran reports null
+        // rather than 0 ms, which would read as an instant success.
+        match serde_json::to_string_pretty(&result) {
+            Ok(s) => println!("{s}"),
+            Err(e) => eprintln!("failed to serialize result: {e}"),
+        }
+        return;
+    }
 
     // Display results
     println!("┌─────────────────────────────────────┐");

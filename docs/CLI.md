@@ -44,7 +44,7 @@ fraggle-packet <cmd> --help
 | `dependency-health` | `dependency-health [OPTIONS]` | Infrastructure dependency health bundle: DNS/NTP/cert/OCSP/controller checks distinguishing blocked-by-policy from unhealthy (GAP-059) |
 | `dhcp-lifecycle` | `dhcp-lifecycle [OPTIONS] --interface <INTERFACE>` | DHCP address-lifecycle and pool-capacity test: safe existing-lease read by default, authorization-gated fresh-lease test (GAP-048) |
 | `diagnose` [↓](#diagnose) | `diagnose [OPTIONS] <TARGET>` | Full diagnostic against a hostname (DNS, TCP, HTTP, ICMP comparison) |
-| `dns-secure` [↓](#dns-secure) | `dns-secure <TARGET>` | DoH/DoT vs plain DNS comparison |
+| `dns-secure` [↓](#dns-secure) | `dns-secure [OPTIONS] <TARGET>` | DoH/DoT vs plain DNS comparison |
 | `dns-steering` | `dns-steering [OPTIONS] --resolver <RESOLVERS> <NAME>` | Compare A/AAAA/HTTPS/SVCB answers across resolvers to detect steering divergence (GAP-014) |
 | `dsl-demo` [↓](#dsl-demo) | `dsl-demo [OPTIONS]` | Print a hexdump of a packet described by our DSL (demo helper) |
 | `ecmp-nat` | `ecmp-nat [OPTIONS]` | Multi-uplink ECMP/LAG hash and NAT-affinity diagnostic via fixed-5-tuple port sweeps (GAP-028) |
@@ -64,7 +64,7 @@ fraggle-packet <cmd> --help
 | `load-guard` | `load-guard [OPTIONS]` | Run a budget-guarded, radio-monitored load phase (GAP-027/GAP-047) |
 | `media-quality` | `media-quality [OPTIONS] --interface <INTERFACE> --target <TARGET>` | Synthetic RTP/WebRTC media-quality probe: setup/ICE, burst-derived concealment/freeze risk, MOS-style estimate (GAP-052) |
 | `mss-evidence` | `mss-evidence [OPTIONS]` | SYN/SYN-ACK MSS evidence (local/peer/middlebox) and multi-destination MSS clustering vs route MTU (GAP-010/GAP-026) |
-| `multi` [↓](#multi) | `multi <TARGETS>` | Test multiple targets and compare path MTUs |
+| `multi` [↓](#multi) | `multi [OPTIONS] <TARGETS>` | Test multiple targets and compare path MTUs |
 | `multicast-isolation` | `multicast-isolation [OPTIONS]` | Discovery/multicast/peer-isolation policy diagnostic: declared expected-reachable/expected-blocked verdicts, name-free responder tallies (GAP-057) |
 | `multiclient-fairness` | `multiclient-fairness [OPTIONS]` | Coordinated multi-client capacity/fairness: refuses a cross-client verdict until both role descriptors exist and their phase windows overlap (GAP-051/GAP-072) |
 | `nat-capacity` | `nat-capacity [OPTIONS] --target <TARGET>` | Firewall/NAT/session-state capacity matrix: authorization-gated disruptive probing, safe-by-default idle-mapping observation (GAP-054) |
@@ -82,22 +82,22 @@ fraggle-packet <cmd> --help
 | `protocol-compare` | `protocol-compare [OPTIONS] <HOST>` | Controlled H1/H2/H3 comparison with directional vs simultaneous isolation (GAP-003/GAP-004) |
 | `provider-path` | `provider-path [OPTIONS] <TARGET>` | Provider/geography/path-stability comparison with non-response distinguished from loss (GAP-061) |
 | `quic` [↓](#quic) | `quic [OPTIONS] <TARGET>` | QUIC/UDP PMTUD probe |
-| `quick` [↓](#quick) | `quick <TARGET>` | Quick ICMP-only MTU test |
+| `quick` [↓](#quick) | `quick [OPTIONS] <TARGET>` | Quick ICMP-only MTU test |
 | `radio-diagnostic` | `radio-diagnostic [OPTIONS]` | Wi-Fi radio/retry diagnostic with safe elevation and explicit platform-limitation reporting (GAP-011) |
 | `reference-endpoint` | `reference-endpoint [OPTIONS]` | Reference-endpoint calibration and client-result acceptance: the endpoint can invalidate a client's measurement (GAP-053) |
 | `replay` [↓](#replay) | `replay [OPTIONS] <PCAP>` | Replay a PCAP file onto the wire (requires root) |
-| `report` [↓](#report) | `report <TARGET>` | Render a unified README_FIRST-style diagnosis of a target |
+| `report` [↓](#report) | `report [OPTIONS] <TARGET>` | Render a unified README_FIRST-style diagnosis of a target |
 | `resilience` | `resilience [OPTIONS] --run <RUN>` | Controlled resilience/failover validation: observes and labels an operator-performed component change, never initiates one (GAP-062) |
 | `rf-survey` | `rf-survey [OPTIONS]` | Bounded time-series RF survey with platform-limited metric qualification and change-point correlation (GAP-055) |
 | `roaming` | `roaming [OPTIONS]` | Controlled roaming/session-continuity test: privacy-safe AP transitions, handoff duration, and VLAN/public-identity continuity (GAP-050) |
-| `scenario` [↓](#scenario) | `scenario <FILE>` | Run a declarative scenario from a file or stdin |
+| `scenario` [↓](#scenario) | `scenario [OPTIONS] <FILE>` | Run a declarative scenario from a file or stdin |
 | `second-network` | `second-network [OPTIONS]` | Second-network control workflow: save/compare a connection fingerprint and test bundle across a network switch (GAP-013) |
 | `serve` [↓](#serve) | `serve [OPTIONS]` | Expose a Prometheus metrics scrape endpoint |
 | `site-ab` | `site-ab [OPTIONS] --affected-host <AFFECTED_HOST> --control-host <CONTROL_HOST>` | Affected-site vs known-good-control A/B workflow: forced protocol, IP pinning, repeated samples, redirect-aware verdict (GAP-012) |
 | `size-rate-matrix` | `size-rate-matrix [OPTIONS] --interface <INTERFACE> --target <TARGET>` | Datagram-size/packet-rate pressure matrix distinguishing packet-rate ceilings from byte-rate policing (GAP-033) |
 | `ssh-path` [↓](#ssh-path) | `ssh-path [OPTIONS] <TARGET>` | SSH banner + optional authenticated echo data-path test |
 | `stun-turn` | `stun-turn [OPTIONS]` | Repeated STUN binding requests with validation/RTT, mapped-address change detection, and TURN allocation checks (GAP-005) |
-| `tcp` [↓](#tcp) | `tcp <TARGET>` | TCP-based MTU discovery (no ICMP required) |
+| `tcp` [↓](#tcp) | `tcp [OPTIONS] <TARGET>` | TCP-based MTU discovery (no ICMP required) |
 | `tcp-options` [↓](#tcp-options) | `tcp-options [OPTIONS] <TARGET>` | Query actual negotiated TCP MSS and detect middlebox rewriting |
 | `tcp-vs-udp` | `tcp-vs-udp [OPTIONS]` | Controlled TCP-versus-UDP throughput/loss comparison against a user-supplied endpoint (GAP-006) |
 | `test` [↓](#test) | `test [OPTIONS] <TARGET>` | Run test framework tests (DNS, HTTPS, TCP, RTT, Loss) |

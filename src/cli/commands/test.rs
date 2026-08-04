@@ -11,6 +11,10 @@ pub struct TestArgs {
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
+
+    /// Emit every test result as one JSON array
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn run(args: &TestArgs) {
@@ -19,5 +23,6 @@ pub fn run(args: &TestArgs) {
         categories: args.categories.clone(),
         count: args.count,
         verbose: args.verbose,
+        json: args.json,
     });
 }

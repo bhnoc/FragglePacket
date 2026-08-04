@@ -1,8 +1,10 @@
 //! Diagnosis Engine - Correlate test results and provide recommendations
 
+use serde::{Deserialize, Serialize};
+
 use crate::network_tests::{HttpsTestResult, HttpsDiagnosis};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diagnosis {
     pub issue: DiagnosisIssue,
     pub severity: Severity,
@@ -11,7 +13,7 @@ pub struct Diagnosis {
     pub related_tests: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DiagnosisIssue {
     MtuBlackhole,
     TcpSegmentationLimit,
@@ -23,7 +25,7 @@ pub enum DiagnosisIssue {
     BlackholeScore,
 }
 
-#[derive(Debug, Clone, PartialEq, Ord, PartialOrd, Eq)]
+#[derive(Debug, Clone, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
 pub enum Severity {
     Critical,  // Service unusable
     High,      // Major functionality broken

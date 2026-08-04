@@ -12,13 +12,17 @@ pub struct VpnArgs {
     /// Base MTU to calculate from (default: auto-detect)
     #[arg(short, long)]
     pub base_mtu: Option<usize>,
+
+    /// Emit the calculation as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn run(args: &VpnArgs, global: &GlobalArgs) {
-    run_vpn_calculator(&args.vpn_type, args.base_mtu, global.timeout_ms, global.min, global.max, global.retries);
+    run_vpn_calculator(&args.vpn_type, args.base_mtu, global.timeout_ms, global.min, global.max, global.retries, args.json);
 }
 
-fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
+fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize, json: bool) {
     let (overhead, proto_desc) = match vpn_type.to_lowercase().as_str() {
         // Traditional VPNs
         "wireguard" | "wg" => (VPN_OVERHEAD_WIREGUARD, "WireGuard (UDP)"),
@@ -93,6 +97,29 @@ fn run_vpn_calculator(vpn_type: &str, base_mtu: Option<usize>, timeout_ms: u64, 
     };
 
     println!();
+    let tunnel_mtu_early = base.saturating_sub(overhead);
+    if json {
+        let inner = tunnel_mtu_early.saturating_sub(40);
+        let safe = if overhead >= 80 { tunnel_mtu_early.saturating_sub(20) } else { tunnel_mtu_early };
+        let doc = serde_json::json!({
+            "vpn_type": vpn_type,
+            "solution": proto_desc,
+            "protocol_overhead_bytes": overhead,
+            "base_path_mtu": base,
+            "tunnel_interface_mtu": tunnel_mtu_early,
+            "safe_conservative_mtu": safe,
+            "inner_tcp_mss": inner,
+            // An inner MTU below the IPv6 minimum breaks paths that look fine in
+            // a calculator, so it is flagged rather than left for the reader.
+            "below_ipv6_minimum": tunnel_mtu_early < 1280,
+        });
+        match serde_json::to_string_pretty(&doc) {
+            Ok(s) => println!("{s}"),
+            Err(e) => eprintln!("failed to serialize calculation: {e}"),
+        }
+        return;
+    }
+
     println!("{}", "=".repeat(60).blue());
     println!("{}", " VPN/TUNNEL MTU CALCULATOR ".white().on_blue().bold());
     println!("{}", "=".repeat(60).blue());

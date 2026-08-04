@@ -17,6 +17,7 @@ pub struct TestCommand {
     pub categories: String,
     pub count: usize,
     pub verbose: bool,
+    pub json: bool,
 }
 
 pub fn run_tests(cmd: TestCommand) {
@@ -68,11 +69,24 @@ pub fn run_tests(cmd: TestCommand) {
     }
     
     let test_count = orchestrator.available_categories().len();
-    println!("Running {} test categories...\n", test_count);
-    
+    if !cmd.json {
+        println!("Running {} test categories...\n", test_count);
+    }
+
     // Run tests
     let results = orchestrator.run_all(&cmd.target);
-    
+
+    if cmd.json {
+        // One array so a consumer parses a single document. Every result is
+        // included, Skipped ones too: a skipped test that vanished would read as
+        // a suite that never covered it.
+        match serde_json::to_string_pretty(&results) {
+            Ok(s) => println!("{s}"),
+            Err(e) => eprintln!("failed to serialize results: {e}"),
+        }
+        return;
+    }
+
     // Display results
     for result in &results {
         let status_str = match result.status {

@@ -13,9 +13,13 @@ pub struct DiagnoseArgs {
     /// Port to test TCP on
     #[arg(short, long, default_value_t = 443)]
     pub port: u16,
+
+    /// Emit every stage result plus recommendations as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct TestResult {
     protocol: String,
     target: String,
@@ -26,12 +30,14 @@ struct TestResult {
 }
 
 pub fn run(args: &DiagnoseArgs, global: &GlobalArgs) {
-    run_full_diagnostic(&args.target, args.port, global.timeout_ms, global.min, global.max, global.retries);
+    run_full_diagnostic(&args.target, args.port, global.timeout_ms, global.min, global.max, global.retries, args.json);
 }
 
-fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize) {
-    println!("{}", format!("Running full diagnostic against: {}", target).cyan().bold());
-    println!();
+fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize, max_mtu: usize, retries: usize, json: bool) {
+    if !json {
+        println!("{}", format!("Running full diagnostic against: {}", target).cyan().bold());
+        println!();
+    }
 
     let mut results: Vec<TestResult> = Vec::new();
     let mut recommendations: Vec<String> = Vec::new();
@@ -233,6 +239,21 @@ fn run_full_diagnostic(target: &str, port: u16, timeout_ms: u64, min_mtu: usize,
             recommendations.push(format!("SET INTERFACE MTU: {}", mtu));
         }
         recommendations.push(format!("TCP MSS CLAMP: {}", mtu - 40));
+    }
+
+    if json {
+        let doc = serde_json::json!({
+            "target": target,
+            "port": port,
+            "stages": results,
+            "safe_mtu": safe_mtu,
+            "recommendations": recommendations,
+        });
+        match serde_json::to_string_pretty(&doc) {
+            Ok(s) => println!("{s}"),
+            Err(e) => eprintln!("failed to serialize diagnostic: {e}"),
+        }
+        return;
     }
 
     print_summary(&results, &recommendations);

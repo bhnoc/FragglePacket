@@ -13,9 +13,10 @@ use crate::framework::{NetworkTest, TestCategory, TestResult, TestStatus, Diagno
 use std::time::{Duration, Instant};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::io::{Write, Read};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpsTestResult {
     pub target: String,
     pub dns_time_ms: Option<u64>,
@@ -35,14 +36,14 @@ pub struct HttpsTestResult {
 }
 
 /// Summary of a single certificate in the peer chain.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CertInfo {
     pub subject: String,
     pub issuer: String,
     pub der_len: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum HttpsDiagnosis {
     Success,
     DnsFailure,
