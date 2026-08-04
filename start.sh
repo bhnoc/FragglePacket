@@ -120,13 +120,13 @@ case "${1:-}" in
         CATEGORY="${1:-dns}"
         TARGET="${2:-github.com}"
         echo "Running $CATEGORY test on $TARGET..."
-        "$BINARY" test --category "$CATEGORY" "$TARGET"
+        "$BINARY" test --categories "$CATEGORY" "$TARGET"
         ;;
     -7|--test-all)
         shift
         TARGET="${1:-github.com}"
         echo "Running ALL tests on $TARGET..."
-        "$BINARY" test --all "$TARGET"
+        "$BINARY" test --categories all "$TARGET"
         ;;
     -8|--https)
         shift

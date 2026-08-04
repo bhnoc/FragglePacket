@@ -153,14 +153,12 @@ pub fn binary_search_mtu_icmp(target: IpAddr, min: usize, max: usize, timeout_ms
     let mut low = min;
     let mut high = max;
     let mut best = min;
-    let mut iterations = 0;
 
     while low <= high {
         let mid = (low + high) / 2;
         let payload = mid.saturating_sub(IP_HEADER_SIZE + ICMP_HEADER_SIZE);
 
         let probe_result = probe_icmp(target, payload, timeout_ms, retries);
-        iterations += 1;
         
         if probe_result {
             best = mid;
@@ -242,32 +240,28 @@ fn probe_tcp(addr: &SocketAddr, payload_size: usize, timeout: Duration) -> bool 
         }
     }
     
-    // TCP MTU testing via binary search is limited because TCP fragments automatically
-    // We can detect PMTUD black holes by sending data and checking for errors
-    // But exact MTU detection is better done via TCP MSS
-    
     // Try to send data and see if we get EMSGSIZE (MTU exceeded)
     let test_data = vec![0u8; payload_size.min(1460)];  // Limit to reasonable size
-    let start = Instant::now();
     
     match stream.write_all(&test_data) {
         Ok(_) => {
             // Data sent successfully - try to flush
             if stream.flush().is_ok() {
                 // Wait a bit to see if we get an ICMP error back
-                // If we get EMSGSIZE on next operation, MTU is too large
                 thread::sleep(Duration::from_millis(50));
                 
-                // Try to read - if we get EMSGSIZE, MTU exceeded. Only EMSGSIZE
-                // disproves the size; a timeout, a peer close (Ok(0)), or any
-                // other error says nothing about it either way, so all of those
-                // read as "not disproven". The byte count is deliberately
-                // ignored rather than unhandled: nothing here inspects payload.
+                // Try to read - if we get EMSGSIZE, MTU exceeded
                 let mut buf = [0u8; 1];
                 match stream.read(&mut buf) {
-                    Ok(0) => true,
-                    Ok(_n) => true,
-                    Err(e) => e.raw_os_error() != Some(libc::EMSGSIZE),
+                    Ok(_) => true,  // Got response, MTU works
+                    Err(e) => {
+                        if e.raw_os_error() == Some(libc::EMSGSIZE) {
+                            false  // MTU exceeded
+                        } else {
+                            // Other error - assume it worked (timeout is OK)
+                            true
+                        }
+                    }
                 }
             } else {
                 false
@@ -279,7 +273,6 @@ fn probe_tcp(addr: &SocketAddr, payload_size: usize, timeout: Duration) -> bool 
                 false
             } else {
                 // Other errors might be network issues, not MTU
-                // Be conservative - if we can't send, assume MTU issue
                 false
             }
         }
@@ -294,17 +287,12 @@ pub fn binary_search_mtu_udp(target: IpAddr, min: usize, max: usize, timeout_ms:
     let mut low = min;
     let mut high = max;
     let mut best = min;
-    let mut iterations = 0;
 
     while low <= high {
         let mid = (low + high) / 2;
         let payload = mid.saturating_sub(IP_HEADER_SIZE + UDP_HEADER_SIZE);
 
         let probe_result = probe_udp(target, payload, timeout_ms, retries);
-        iterations += 1;
-        
-        // DEBUG: Uncomment to see binary search progress
-        // eprintln!("UDP {} iter={} mid={} payload={} result={}", target, iterations, mid, payload, probe_result);
         
         if probe_result {
             best = mid;
@@ -317,7 +305,6 @@ pub fn binary_search_mtu_udp(target: IpAddr, min: usize, max: usize, timeout_ms:
         }
     }
 
-    // eprintln!("UDP {} final={} iterations={}", target, best, iterations);
     Some(best)
 }
 
@@ -358,12 +345,9 @@ fn send_udp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> std::i
     // Try to send - EMSGSIZE means packet too large for path MTU
     match socket.send_to(&payload, dest) {
         Ok(_) => {
-            // Packet sent successfully - path can handle this size
-            // For UDP we don't expect a reply, so timeout is normal
-            // Just wait briefly to see if we get ICMP error back
             let mut buf = [0u8; 1024];
             match socket.recv_from(&mut buf) {
-                Ok(_) => Ok(true),  // Got a reply (unexpected but good)
+                Ok(_) => Ok(true),  // Got a reply
                 Err(e) => {
                     if e.raw_os_error() == Some(libc::EMSGSIZE) {
                         Ok(false)  // MTU exceeded
@@ -375,11 +359,9 @@ fn send_udp_probe(target: IpAddr, payload_len: usize, timeout_ms: u64) -> std::i
             }
         }
         Err(e) => {
-            // Send failed - check if it's MTU related
             if e.raw_os_error() == Some(libc::EMSGSIZE) {
-                Ok(false)  // MTU exceeded - this is what we want to detect
+                Ok(false)  // MTU exceeded
             } else {
-                // Other error (network unreachable, etc)
                 Err(e)
             }
         }
@@ -397,7 +379,6 @@ pub fn probe_tcp_mss(target: &str, timeout_ms: u64) -> Option<usize> {
     {
         use std::os::unix::io::AsRawFd;
         
-        // Try to get TCP_MAXSEG (negotiated MSS)
         let mut mss: libc::c_int = 0;
         let mut len: libc::socklen_t = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
         
@@ -411,13 +392,9 @@ pub fn probe_tcp_mss(target: &str, timeout_ms: u64) -> Option<usize> {
             );
             
             if ret == 0 && mss > 0 {
-                // Also try to test actual data transfer for HTTPS
                 if addr.port() == 443 {
-                    // For HTTPS, try a simple data transfer to validate path
-                    // This helps detect PMTUD black holes
-                    let test_data = vec![0u8; 1000];  // Reasonable size
+                    let test_data = vec![0u8; 1000];
                     if stream.write_all(&test_data).is_ok() {
-                        // Successful write confirms path works
                         drop(stream);
                         return Some(mss as usize);
                     }
@@ -434,23 +411,14 @@ pub fn probe_tcp_mss(target: &str, timeout_ms: u64) -> Option<usize> {
 }
 
 pub fn probe_quic_mtu(target: &str, port: u16, timeout_ms: u64) -> Option<usize> {
-    // QUIC uses UDP port 443 for HTTP/3
-    // We can do a basic UDP probe to see if QUIC endpoint responds
-    // Real QUIC has built-in PMTUD, but we'll estimate based on UDP
-    
-    // First resolve the target
     let ip = if let Ok(ip) = target.parse::<IpAddr>() {
         ip
     } else {
         resolve_hostname(target).ok()?
     };
     
-    // Try different QUIC packet sizes
-    // QUIC minimum is 1200 bytes (RFC 9000)
-    // Test from 1200 up to 1500
     let timeout = Duration::from_millis(timeout_ms);
     
-    // Binary search for max QUIC packet size
     let mut low = 1200;  // QUIC minimum
     let mut high = 1500;
     let mut best = 1200;
@@ -458,12 +426,10 @@ pub fn probe_quic_mtu(target: &str, port: u16, timeout_ms: u64) -> Option<usize>
     while low <= high {
         let mid = (low + high) / 2;
         
-        // Try to send UDP packet to QUIC port (443)
         if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
             socket.set_read_timeout(Some(timeout)).ok();
             socket.set_write_timeout(Some(timeout)).ok();
             
-            // Set DF bit for PMTUD
             #[cfg(target_os = "linux")]
             {
                 use std::os::unix::io::AsRawFd;
@@ -479,28 +445,23 @@ pub fn probe_quic_mtu(target: &str, port: u16, timeout_ms: u64) -> Option<usize>
                 }
             }
             
-            // Create a QUIC-like initial packet (simplified)
-            let payload = vec![0xc0u8; mid];  // 0xc0 = QUIC long header
+            let payload = vec![0xc0u8; mid];
             let dest = std::net::SocketAddr::new(ip, port);
             
             match socket.send_to(&payload, dest) {
                 Ok(_) => {
-                    // Packet sent successfully
                     best = mid;
                     low = mid + 1;
                 }
                 Err(e) => {
-                    // Check for EMSGSIZE (MTU exceeded)
                     if e.raw_os_error() == Some(libc::EMSGSIZE) {
                         high = mid - 1;
                     } else {
-                        // Other error - assume path doesn't support this size
                         high = mid - 1;
                     }
                 }
             }
         } else {
-            // Can't create socket
             return None;
         }
     }
@@ -508,7 +469,7 @@ pub fn probe_quic_mtu(target: &str, port: u16, timeout_ms: u64) -> Option<usize>
     if best > 1200 {
         Some(best)
     } else {
-        None  // Couldn't establish baseline
+        None
     }
 }
 
@@ -576,28 +537,21 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
         error: None,
     };
 
-    // Resolve hostname once
-    // If target is already an IP, parse it directly
     let ip = if let Ok(ip) = target.parse::<IpAddr>() {
         ip
     } else {
-        // Try DNS resolution
         match resolve_hostname(target) {
             Ok(ip) => ip,
             Err(e) => {
-                // DNS failed - return empty result with error
                 result.error = Some(format!("DNS resolution failed: {}", e));
                 return result;
             }
         }
     };
 
-    // Run all protocols in PARALLEL using threads
-    use std::sync::mpsc;
     let (tx, rx) = mpsc::channel();
     
     let ip_clone = ip;
-    let target_clone = target.to_string();
     let tx_icmp = tx.clone();
     thread::spawn(move || {
         if probe_icmp(ip_clone, 64, timeout_ms, 1) {
@@ -615,7 +569,6 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
         let _ = tx_udp.send(("udp", mtu));
     });
     
-    // TCP tests (if port specified)
     if port > 0 {
         let tcp_target = format!("{}:{}", target, port);
         let tcp_target_clone = tcp_target.clone();
@@ -632,7 +585,6 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
             let _ = tx_mss.send(("mss", mss));
         });
         
-        // QUIC (if HTTPS port)
         if port == 443 {
             let target_clone = target.to_string();
             let tx_quic = tx.clone();
@@ -643,11 +595,10 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
         }
     }
     
-    // Collect all results (wait for all threads)
-    drop(tx); // Close sender so receiver knows when done
+    drop(tx);
     let expected = if port > 0 && port == 443 { 5 } else if port > 0 { 4 } else { 2 };
     let mut received = 0;
-    let deadline = Instant::now() + Duration::from_secs(60); // Max 60s total
+    let deadline = Instant::now() + Duration::from_secs(60);
     
     while received < expected && Instant::now() < deadline {
         match rx.recv_timeout(Duration::from_millis(100)) {
@@ -663,11 +614,9 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
                 received += 1;
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                // Continue waiting
                 continue;
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                // All senders closed, break
                 break;
             }
         }
@@ -675,4 +624,3 @@ pub fn test_single_target(target: &str, desc: &str, port: u16, min_mtu: usize, m
 
     result
 }
-

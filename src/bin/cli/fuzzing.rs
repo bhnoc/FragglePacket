@@ -1,6 +1,6 @@
 //! CLI command handlers for fuzzing
 
-use crate::fuzzing::{FuzzError, FuzzMode, PacketContext, run_campaign};
+use crate::fuzzing::{run_campaign, FuzzError, FuzzMode, PacketContext};
 use colored::*;
 
 /// Handle the fuzz command from CLI
@@ -10,13 +10,13 @@ pub fn handle_fuzz_command(
     mode_str: &str,
 ) -> Result<(), FuzzError> {
     println!("{}", "╔════════════════════════════════════════╗".green());
-    println!("{}", "║     RustPacketFuzz - Packet Fuzzer    ║".green());
+    println!("{}", "║      RustPacketFuzz - Packet Fuzzer    ║".green());
     println!("{}", "╚════════════════════════════════════════╝".green());
     println!();
 
     // Parse fuzzing mode
     let mode = FuzzMode::from_str(mode_str)?;
-    
+
     println!("{} {}", "Target:".cyan(), target);
     println!("{} {}", "Mode:".cyan(), mode.name());
     println!("{} {}", "Output:".cyan(), output);
@@ -25,12 +25,12 @@ pub fn handle_fuzz_command(
     // Create packet context
     let ctx = PacketContext::for_target(target)
         .map_err(|e| FuzzError::PacketBuild(e.to_string()))?;
-    
+
     println!("{}", "Generating packets...".yellow());
-    
+
     // Run fuzzing campaign
     let result = run_campaign(&ctx, mode, output)?;
-    
+
     println!();
     println!("{}", "✓ Fuzzing complete!".green().bold());
     println!();
@@ -47,28 +47,37 @@ pub fn handle_fuzz_command(
     println!("  3. Replay to network:");
     println!("     {}", format!("tcpreplay -i eth0 {}", output).bright_black());
     println!();
-    
+
     Ok(())
 }
 
 /// Print available fuzzing modes
+#[allow(dead_code)]
 pub fn print_modes() {
     println!("{}", "Available Fuzzing Modes:".yellow().bold());
     println!();
-    println!("  {} - Test TCP segment sizes (0-65535 bytes)", "segment-size".cyan());
+    println!(
+        "  {} - Test TCP segment sizes (0-65535 bytes)",
+        "segment-size".cyan()
+    );
     println!("    Detects: Buffer underruns, integer overflows");
     println!();
-    println!("  {} - IP header length mismatches", "length-mismatch".cyan());
+    println!(
+        "  {} - IP header length mismatches",
+        "length-mismatch".cyan()
+    );
     println!("    Detects: Heartbleed-style buffer over-reads");
     println!();
     println!("  {} - Corrupt TCP options", "tcp-options".cyan());
     println!("    Detects: Option parser bugs, division by zero");
     println!();
-    println!("  {} - IP fragmentation edge cases", "fragmentation".cyan());
+    println!(
+        "  {} - IP fragmentation edge cases",
+        "fragmentation".cyan()
+    );
     println!("    Detects: Reassembly bugs, resource exhaustion");
     println!();
     println!("  {} - Valid and invalid checksums", "checksum".cyan());
     println!("    Detects: Validation bypass vulnerabilities");
     println!();
 }
-

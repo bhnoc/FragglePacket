@@ -11,6 +11,7 @@ use ratatui::{
 use super::app::{App, TestStatus};
 use super::colors::*;
 
+#[allow(dead_code)]
 pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
     let state = app.state.lock().unwrap();
     
@@ -197,4 +198,3 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, app: &mut App) {
     
     frame.render_widget(sparkline, right_chunks[2]);
 }
-
