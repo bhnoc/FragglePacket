@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use futures_util::StreamExt;
 use crate::state::{AppState, PanelId, ToastType, LogLevel};
 use crate::state::test_runner::TestUpdate;
-use crate::components::{Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel, ProbesPanel, ReportPanel};
+use crate::components::{CommandsPanel, Dashboard, TestPanel, HttpsPanel, FuzzingPanel, PathPanel, Simulator, LogsPanel, HistoryPanel, ProbesPanel, ReportPanel};
 use crate::window_manager::{reattach_panel, use_reattach_listener};
 
 /// Suggested re-launch hint shown in the privileges banner. Linux uses setcap
@@ -206,6 +206,7 @@ fn render_active_panel(
             // Panel content - each panel includes its own detach button in header
             match active {
                 PanelId::Dashboard => rsx! { Dashboard { state: state, update_tx: update_tx, panel: active } },
+                PanelId::Commands => rsx! { CommandsPanel { state: state, panel: active } },
                 PanelId::Tests => rsx! { TestPanel { state: state, update_tx: update_tx, panel: active } },
                 PanelId::Https => rsx! { HttpsPanel { state: state, update_tx: update_tx, panel: active } },
                 PanelId::Fuzzing => rsx! { FuzzingPanel { state: state, update_tx: update_tx, panel: active } },

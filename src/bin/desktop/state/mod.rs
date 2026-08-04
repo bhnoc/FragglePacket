@@ -17,6 +17,8 @@ use test_runner::{TestRunner, TestUpdate};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PanelId {
     Dashboard,
+    /// Registry-driven browser over every CLI subcommand.
+    Commands,
     Tests,
     Https,
     Fuzzing,
@@ -34,6 +36,7 @@ impl PanelId {
     pub fn label(&self) -> &'static str {
         match self {
             PanelId::Dashboard => "Dashboard",
+            PanelId::Commands => "Commands",
             PanelId::Tests => "Tests",
             PanelId::Https => "HTTPS",
             PanelId::Fuzzing => "Fuzzing",
@@ -53,6 +56,7 @@ impl PanelId {
     pub fn all() -> Vec<PanelId> {
         vec![
             PanelId::Dashboard,
+            PanelId::Commands,
             PanelId::Tests,
             PanelId::Probes,
             PanelId::Report,

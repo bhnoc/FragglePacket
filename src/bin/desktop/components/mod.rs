@@ -1,5 +1,6 @@
 //! UI Components for FragglePacket Desktop
 
+pub mod commands_panel;
 pub mod dashboard;
 pub mod test_panel;
 pub mod https_panel;
@@ -13,6 +14,7 @@ pub mod target_input;
 pub mod probes_panel;
 pub mod report_panel;
 
+pub use commands_panel::CommandsPanel;
 pub use dashboard::Dashboard;
 pub use test_panel::TestPanel;
 pub use https_panel::HttpsPanel;

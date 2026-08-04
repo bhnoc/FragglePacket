@@ -115,3 +115,43 @@ done
 # An empty bucket renders as a dead tab in both UIs.
 check_ok "cargo test proves no bucket is empty" \
     bash -c "cd '$REPO_ROOT' && cargo test --release --lib ui_bridge::registry::tests::every_bucket_has_at_least_one_command 2>&1 | grep -q '1 passed'"
+
+# --- both UIs must source their command list from the registry ---
+# The original bug was two hardcoded lists drifting from the binary. If a UI
+# stops reading the registry, it silently goes stale again.
+for ui in "src/bin/tui/command_panel.rs" "src/bin/desktop/components/commands_panel/mod.rs"; do
+    path="$REPO_ROOT/$ui"
+    if [ ! -f "$path" ]; then
+        fail "$(basename "$(dirname "$ui")")/$(basename "$ui") exists" "file absent"
+    elif grep -q "ui_bridge::registry" "$path"; then
+        pass "$ui reads the shared command registry"
+    else
+        fail "$ui reads the shared command registry" "no registry import: it has a hardcoded list"
+    fi
+done
+
+# Both panels must be reachable, or the work is invisible to users.
+if grep -q "AppMode::CommandPanel" "$REPO_ROOT/src/bin/tui/app.rs"; then
+    pass "the TUI dispatches the registry command panel"
+else
+    fail "the TUI dispatches the registry command panel" "AppMode::CommandPanel never rendered"
+fi
+
+if grep -q "PanelId::Commands" "$REPO_ROOT/src/bin/desktop/state/mod.rs" \
+    && grep -q "PanelId::Commands =>" "$REPO_ROOT/src/bin/desktop/app.rs"; then
+    pass "the desktop registers and dispatches the Commands panel"
+else
+    fail "the desktop registers and dispatches the Commands panel" "PanelId::Commands not wired"
+fi
+
+# A blocked command must never render as runnable in either UI. Both panels
+# assert this in their own tests; run them here so the gate owns the guarantee.
+check_ok "cargo test proves the TUI marks every blocked command" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::every_command_resolves_to_a_known_marker 2>&1 | grep -q '1 passed'"
+
+check_ok "cargo test proves the desktop never badges a blocked command as ready" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins components::commands_panel::tests::a_blocked_command_never_renders_as_ready 2>&1 | grep -q '1 passed'"
+
+# Every command must be reachable by navigation, not merely present in the data.
+check_ok "cargo test proves every registered command is reachable in the TUI" \
+    bash -c "cd '$REPO_ROOT' && cargo test --release --bins tui_app::command_panel::tests::every_registered_command_is_reachable 2>&1 | grep -q '1 passed'"

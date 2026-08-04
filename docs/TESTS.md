@@ -8,7 +8,12 @@ concludes a capability exists when it does not:
    acceptance criteria in their `--help` and module doc comment.
 2. **19 `NetworkTest` trait impls** — the older in-process framework driven by
    `fraggle-packet test`, the TUI Test Panel, and the desktop Tests panel.
-3. **1046 harness checks** (`harness/acid.sh`) — the ratchet that proves the
+   Both UIs additionally expose **all 79 subcommands** through a registry-driven
+   command browser (TUI `[C]`, desktop **Commands** tab), grouped by the same
+   buckets used above. Availability is declared per command, so one whose live
+   sampling needs macOS shows as ingest-only and one that cannot run on this host
+   is disabled with the reason rather than failing when clicked.
+3. **1053 harness checks** (`harness/acid.sh`) — the ratchet that proves the
    above behave as documented. Only grows, never shrinks.
 
 Full flag-level reference for every subcommand is in [CLI.md](CLI.md). This page
