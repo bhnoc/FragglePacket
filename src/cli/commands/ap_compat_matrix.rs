@@ -5,8 +5,8 @@ use colored::*;
 use fraggle_packet::load_guard::radio::snapshot_live;
 use fraggle_packet::load_guard::{ap_identity, wdutil};
 use fraggle_packet::network_tests::ap_compat_matrix::{
-    client_association_from_snapshot, run_descriptor_digest, verdict, ApContext, ClientHardwareGeneration,
-    CompatibilityMatrix, CompatibilityVerdict, MatrixCell,
+    ap_client_disagreements, client_association_from_snapshot, run_descriptor_digest, verdict, ApContext,
+    ClientHardwareGeneration, CompatibilityMatrix, CompatibilityVerdict, MatrixCell,
 };
 
 #[derive(clap::Args, Debug)]
@@ -180,6 +180,12 @@ pub fn run(args: &ApCompatMatrixArgs) {
             cell.ap.power_mode_raw.as_deref().unwrap_or("unavailable"),
         );
         println!("    run descriptor digest: {:016x}", digest);
+        // GAP-074: the AP advertises what the client then negotiates. Where the
+        // two disagree, the disagreement is the finding -- neither side is
+        // silently preferred.
+        for d in ap_client_disagreements(cell) {
+            println!("    {} {}", "source disagreement:".red().bold(), d);
+        }
     }
     println!();
     match result {

@@ -242,6 +242,57 @@ pub enum CompatibilityVerdict {
     InsufficientCells { missing: Vec<String> },
 }
 
+/// GAP-074: the AP advertises a width/NSS the client then negotiates. Those are
+/// two independent sources describing one property, and until now they were
+/// recorded side by side without ever being compared.
+///
+/// A disagreement here is a real finding: an AP advertising 160 MHz while the
+/// client negotiated 80 MHz means either the client cannot use what is offered
+/// or the AP is not offering what it claims, and those have opposite fixes.
+/// Reported as its own finding rather than resolved to a winner.
+///
+/// Compared as exact integers, not with a relative tolerance: channel width and
+/// spatial-stream count come from a fixed set (20/40/80/160/320 MHz, 1-8 NSS),
+/// so "close" is meaningless -- 80 is not an approximation of 160.
+pub fn ap_client_disagreements(cell: &MatrixCell) -> Vec<String> {
+    let mut findings = Vec::new();
+
+    if let (Some(adv), Some(neg)) = (cell.ap.width_advertised_mhz, cell.client.width_mhz) {
+        if adv != neg {
+            findings.push(format!(
+                "channel width: AP advertises {adv} MHz but the client negotiated {neg} MHz. \
+                 Either this client cannot use the advertised width or the radio is not \
+                 offering it; any width-derived capacity figure is withheld."
+            ));
+        }
+    }
+
+    if let (Some(adv), Some(neg)) = (cell.ap.nss_advertised, cell.client.nss) {
+        if adv != neg {
+            findings.push(format!(
+                "spatial streams: AP advertises {adv} but the client negotiated {neg}. \
+                 A stream-count shortfall caps throughput independently of RF quality; \
+                 any NSS-derived capacity figure is withheld."
+            ));
+        }
+    }
+
+    // Band is free-form vendor text on both sides, so compare case- and
+    // whitespace-insensitively to avoid reporting "6GHz" vs "6 GHz" as a fault.
+    if let (Some(adv), Some(neg)) = (cell.ap.band_advertised.as_deref(), cell.client.band.as_deref()) {
+        let norm = |s: &str| s.to_ascii_lowercase().replace(char::is_whitespace, "");
+        if !adv.is_empty() && !neg.is_empty() && norm(adv) != norm(neg) {
+            findings.push(format!(
+                "band: AP advertises {adv} but the client associated on {neg}. \
+                 The client is not on the radio whose telemetry describes this cell, \
+                 so cross-referencing the two is invalid."
+            ));
+        }
+    }
+
+    findings
+}
+
 pub fn verdict(matrix: &CompatibilityMatrix) -> CompatibilityVerdict {
     let missing: Vec<String> = REQUIRED_CELLS
         .iter()
@@ -320,6 +371,17 @@ mod tests {
             noise_dbm: Some(-94),
             tx_rate_mbps: Some(680.0),
             mcs_index: Some(7),
+        }
+    }
+
+    /// A cell whose AP and client fields are both blank, for the GAP-074
+    /// comparison tests to fill in one property at a time.
+    fn sample_cell(label: &str) -> MatrixCell {
+        MatrixCell {
+            label: label.to_string(),
+            client: client_association_from_snapshot(&snapshot("802.11ax"), None),
+            ap: empty_ap(),
+            client_hardware_generation: Some(ClientHardwareGeneration::Wifi6e),
         }
     }
 
@@ -488,4 +550,70 @@ mod tests {
         assert!(!debug.to_lowercase().contains("bssid"));
         assert!(!debug.to_lowercase().contains("ssid"));
     }
+    /// GAP-074: an AP advertising 160 MHz while the client negotiated 80 MHz is
+    /// a finding, not a value to be silently resolved.
+    #[test]
+    fn advertised_and_negotiated_width_disagreement_is_reported() {
+        let mut cell = sample_cell("w");
+        cell.ap.width_advertised_mhz = Some(160);
+        cell.client.width_mhz = Some(80);
+        let f = ap_client_disagreements(&cell);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert!(f[0].contains("160"), "{:?}", f[0]);
+        assert!(f[0].contains("80"), "{:?}", f[0]);
+        assert!(f[0].contains("withheld"), "{:?}", f[0]);
+    }
+
+    #[test]
+    fn advertised_and_negotiated_nss_disagreement_is_reported() {
+        let mut cell = sample_cell("n");
+        cell.ap.nss_advertised = Some(4);
+        cell.client.nss = Some(2);
+        let f = ap_client_disagreements(&cell);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert!(f[0].contains("spatial streams"), "{:?}", f[0]);
+    }
+
+    #[test]
+    fn agreeing_ap_and_client_values_produce_no_finding() {
+        let mut cell = sample_cell("ok");
+        cell.ap.width_advertised_mhz = Some(80);
+        cell.client.width_mhz = Some(80);
+        cell.ap.nss_advertised = Some(2);
+        cell.client.nss = Some(2);
+        cell.ap.band_advertised = Some("6 GHz".to_string());
+        cell.client.band = Some("6GHz".to_string());
+        assert!(ap_client_disagreements(&cell).is_empty());
+    }
+
+    /// One side absent is not a disagreement: nothing to compare.
+    #[test]
+    fn a_missing_side_is_not_a_disagreement() {
+        let mut cell = sample_cell("m");
+        cell.ap.width_advertised_mhz = Some(160);
+        cell.client.width_mhz = None;
+        cell.ap.nss_advertised = None;
+        cell.client.nss = Some(2);
+        assert!(ap_client_disagreements(&cell).is_empty());
+    }
+
+    /// Vendor band text differs in case and spacing without differing in fact.
+    #[test]
+    fn band_text_formatting_is_not_reported_as_a_fault() {
+        let mut cell = sample_cell("b");
+        cell.ap.band_advertised = Some("5 GHz".to_string());
+        cell.client.band = Some("5ghz".to_string());
+        assert!(ap_client_disagreements(&cell).is_empty());
+    }
+
+    #[test]
+    fn a_genuine_band_mismatch_is_reported() {
+        let mut cell = sample_cell("b2");
+        cell.ap.band_advertised = Some("6 GHz".to_string());
+        cell.client.band = Some("2.4 GHz".to_string());
+        let f = ap_client_disagreements(&cell);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert!(f[0].contains("invalid"), "{:?}", f[0]);
+    }
+
 }
